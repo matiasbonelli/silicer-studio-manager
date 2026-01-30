@@ -8,7 +8,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
-import { Trash2, Upload, FileText, Image, ExternalLink } from 'lucide-react';
+import { Trash2, Upload, ExternalLink, Loader2, X } from 'lucide-react';
 
 interface StudentModalProps {
   student: Student | null;
@@ -75,6 +75,74 @@ export default function StudentModal({ student, isOpen, onClose, onSave, isNew =
     };
     fetchSchedules();
   }, []);
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Validate file type
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'];
+    if (!allowedTypes.includes(file.type)) {
+      toast({
+        title: 'Tipo de archivo no permitido',
+        description: 'Solo se permiten imágenes (JPG, PNG, WEBP) o PDF',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    // Validate file size (max 5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      toast({
+        title: 'Archivo muy grande',
+        description: 'El tamaño máximo es 5MB',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    setUploading(true);
+
+    try {
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
+      const filePath = `receipts/${fileName}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from('receipts')
+        .upload(filePath, file);
+
+      if (uploadError) {
+        throw uploadError;
+      }
+
+      const { data: urlData } = supabase.storage
+        .from('receipts')
+        .getPublicUrl(filePath);
+
+      setFormData(prev => ({ ...prev, payment_receipt_url: urlData.publicUrl }));
+
+      toast({
+        title: 'Archivo subido',
+        description: 'El comprobante se cargó correctamente',
+      });
+    } catch (error) {
+      toast({
+        title: 'Error al subir',
+        description: 'No se pudo subir el archivo. Verificá que el bucket "receipts" exista en Supabase Storage.',
+        variant: 'destructive',
+      });
+    }
+
+    setUploading(false);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
+  const handleRemoveReceipt = () => {
+    setFormData(prev => ({ ...prev, payment_receipt_url: '' }));
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -243,29 +311,44 @@ export default function StudentModal({ student, isOpen, onClose, onSave, isNew =
 
           <div className="space-y-2">
             <Label>Comprobante de Pago</Label>
-            <div className="flex items-center gap-2">
-              <Input
-                placeholder="URL del comprobante (imagen o PDF)"
-                value={formData.payment_receipt_url}
-                onChange={(e) => setFormData(prev => ({ ...prev, payment_receipt_url: e.target.value }))}
-                className="flex-1"
-              />
-              {formData.payment_receipt_url && (
+            {formData.payment_receipt_url ? (
+              <div className="flex items-center gap-2 p-3 bg-muted rounded-lg">
+                <div className="flex-1 truncate text-sm">
+                  Comprobante cargado
+                </div>
                 <Button
                   type="button"
                   variant="outline"
-                  size="icon"
+                  size="sm"
                   onClick={() => window.open(formData.payment_receipt_url, '_blank')}
                 >
-                  <ExternalLink className="w-4 h-4" />
+                  <ExternalLink className="w-4 h-4 mr-1" /> Ver
                 </Button>
-              )}
-            </div>
-            {formData.payment_receipt_url && (
-              <p className="text-xs text-muted-foreground">
-                Comprobante cargado. Hacé clic en el botón para ver.
-              </p>
+                <Button
+                  type="button"
+                  variant="destructive"
+                  size="sm"
+                  onClick={handleRemoveReceipt}
+                >
+                  <X className="w-4 h-4" />
+                </Button>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2">
+                <Input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp,application/pdf"
+                  onChange={handleFileUpload}
+                  disabled={uploading}
+                  className="flex-1"
+                />
+                {uploading && <Loader2 className="w-4 h-4 animate-spin" />}
+              </div>
             )}
+            <p className="text-xs text-muted-foreground">
+              Formatos: JPG, PNG, WEBP o PDF. Máximo 5MB.
+            </p>
           </div>
 
           <div className="space-y-2">
