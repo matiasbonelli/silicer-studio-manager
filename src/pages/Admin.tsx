@@ -9,6 +9,7 @@ import StudentsList from '@/components/admin/StudentsList';
 import StudentModal from '@/components/admin/StudentModal';
 import InventoryManager from '@/components/admin/InventoryManager';
 import SalesModule from '@/components/admin/SalesModule';
+import BirthdayModal from '@/components/admin/BirthdayModal';
 import { LogOut, Plus, Calendar, Users, Package, ShoppingCart, Loader2 } from 'lucide-react';
 
 export default function Admin() {
@@ -125,6 +126,9 @@ export default function Admin() {
         onSave={handleStudentSave}
         isNew={isNewStudent}
       />
+
+      {/* Birthday Modal */}
+      <BirthdayModal />
     </div>
   );
 }

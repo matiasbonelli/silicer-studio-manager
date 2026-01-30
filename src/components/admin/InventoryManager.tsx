@@ -12,6 +12,16 @@ import { Plus, Pencil, Trash2, Search, Loader2, AlertTriangle, ShoppingCart, Pac
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Switch } from '@/components/ui/switch';
 
+// Formato moneda pesos argentinos
+const formatCurrency = (amount: number): string => {
+  return new Intl.NumberFormat('es-AR', {
+    style: 'currency',
+    currency: 'ARS',
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  }).format(amount);
+};
+
 export default function InventoryManager() {
   const [items, setItems] = useState<InventoryItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -25,6 +35,7 @@ export default function InventoryManager() {
     unit: 'unidad',
     min_stock: 0,
     price: 0,
+    cost: 0,
     for_sale: false,
   });
   const [inventoryTab, setInventoryTab] = useState('all');
@@ -57,6 +68,7 @@ export default function InventoryManager() {
         unit: item.unit,
         min_stock: item.min_stock,
         price: item.price,
+        cost: item.cost ?? 0,
         for_sale: item.for_sale ?? false,
       });
     } else {
@@ -68,6 +80,7 @@ export default function InventoryManager() {
         unit: 'unidad',
         min_stock: 0,
         price: 0,
+        cost: 0,
         for_sale: false,
       });
     }
@@ -84,6 +97,7 @@ export default function InventoryManager() {
       unit: formData.unit,
       min_stock: formData.min_stock,
       price: formData.price,
+      cost: formData.cost,
       for_sale: formData.for_sale,
     };
 
@@ -188,7 +202,9 @@ export default function InventoryManager() {
               <TableHead>Producto</TableHead>
               <TableHead className="text-center">Tipo</TableHead>
               <TableHead className="text-center">Stock</TableHead>
+              <TableHead className="text-right">Costo</TableHead>
               <TableHead className="text-right">Precio</TableHead>
+              <TableHead className="text-right">Margen</TableHead>
               <TableHead className="text-center">Acciones</TableHead>
             </TableRow>
           </TableHeader>
@@ -218,8 +234,20 @@ export default function InventoryManager() {
                     </Badge>
                   </div>
                 </TableCell>
+                <TableCell className="text-right text-muted-foreground">
+                  {formatCurrency(item.cost || 0)}
+                </TableCell>
                 <TableCell className="text-right font-medium">
-                  ${item.price.toFixed(2)}
+                  {formatCurrency(item.price)}
+                </TableCell>
+                <TableCell className="text-right">
+                  {item.cost > 0 ? (
+                    <Badge variant={item.price - item.cost > 0 ? 'default' : 'destructive'}>
+                      {formatCurrency(item.price - item.cost)} ({Math.round(((item.price - item.cost) / item.cost) * 100)}%)
+                    </Badge>
+                  ) : (
+                    <span className="text-muted-foreground">-</span>
+                  )}
                 </TableCell>
                 <TableCell>
                   <div className="flex justify-center gap-2">
@@ -235,7 +263,7 @@ export default function InventoryManager() {
             ))}
             {filteredItems.length === 0 && (
               <TableRow>
-                <TableCell colSpan={5} className="text-center text-muted-foreground py-8">
+                <TableCell colSpan={7} className="text-center text-muted-foreground py-8">
                   No hay productos en el inventario
                 </TableCell>
               </TableRow>
@@ -299,15 +327,40 @@ export default function InventoryManager() {
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="price">Precio</Label>
+                <Label htmlFor="cost">Costo</Label>
+                <Input
+                  id="cost"
+                  type="number"
+                  min="0"
+                  step="1"
+                  value={formData.cost}
+                  onChange={(e) => setFormData(prev => ({ ...prev, cost: parseFloat(e.target.value) || 0 }))}
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <Label htmlFor="price">Precio de Venta</Label>
                 <Input
                   id="price"
                   type="number"
                   min="0"
-                  step="0.01"
+                  step="1"
                   value={formData.price}
                   onChange={(e) => setFormData(prev => ({ ...prev, price: parseFloat(e.target.value) || 0 }))}
                 />
+              </div>
+              <div className="space-y-2">
+                <Label>Margen</Label>
+                <div className="h-10 flex items-center px-3 rounded-md border bg-muted">
+                  {formData.cost > 0 ? (
+                    <span className={formData.price - formData.cost > 0 ? 'text-green-600' : 'text-red-600'}>
+                      {formatCurrency(formData.price - formData.cost)} ({Math.round(((formData.price - formData.cost) / formData.cost) * 100)}%)
+                    </span>
+                  ) : (
+                    <span className="text-muted-foreground">Ingresá el costo</span>
+                  )}
+                </div>
               </div>
             </div>
             <div className="flex items-center justify-between rounded-lg border p-3">

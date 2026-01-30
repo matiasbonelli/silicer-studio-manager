@@ -13,6 +13,16 @@ import { Plus, Minus, Trash2, ShoppingCart, Printer, Loader2, Search, History, T
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 
+// Formato moneda pesos argentinos
+const formatCurrency = (amount: number): string => {
+  return new Intl.NumberFormat('es-AR', {
+    style: 'currency',
+    currency: 'ARS',
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  }).format(amount);
+};
+
 interface CartItem {
   inventory: InventoryItem;
   quantity: number;
@@ -33,6 +43,7 @@ export default function SalesModule() {
   const [receiptData, setReceiptData] = useState<{sale: Sale, items: CartItem[]} | null>(null);
   const [salesHistory, setSalesHistory] = useState<SaleWithItems[]>([]);
   const [salesTab, setSalesTab] = useState('new');
+  const [historySearch, setHistorySearch] = useState('');
   const { toast } = useToast();
   const receiptRef = useRef<HTMLDivElement>(null);
 
@@ -162,7 +173,7 @@ export default function SalesModule() {
     } else {
       toast({
         title: 'Venta registrada',
-        description: `Total: $${total.toFixed(2)}`,
+        description: `Total: ${formatCurrency(total)}`,
       });
 
       setReceiptData({ sale: saleData as Sale, items: [...cart] });
@@ -237,10 +248,17 @@ export default function SalesModule() {
       day: '2-digit',
       month: '2-digit',
       year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
     });
   };
+
+  // Filtrar historial de ventas
+  const filteredSalesHistory = salesHistory.filter(sale => {
+    if (!historySearch) return true;
+    const searchLower = historySearch.toLowerCase();
+    const studentName = sale.student ? `${sale.student.first_name} ${sale.student.last_name}`.toLowerCase() : '';
+    const products = sale.sale_items?.map(item => item.inventory?.name?.toLowerCase() || '').join(' ') || '';
+    return studentName.includes(searchLower) || products.includes(searchLower);
+  });
 
   if (loading && inventory.length === 0) {
     return (
@@ -291,7 +309,7 @@ export default function SalesModule() {
                   <CardContent className="p-4">
                     <h4 className="font-medium truncate">{item.name}</h4>
                     <p className="text-sm text-muted-foreground">Stock: {item.quantity}</p>
-                    <p className="text-lg font-bold text-primary">${item.price.toFixed(2)}</p>
+                    <p className="text-lg font-bold text-primary">{formatCurrency(item.price)}</p>
                   </CardContent>
                 </Card>
               ))}
@@ -320,7 +338,7 @@ export default function SalesModule() {
                       <div className="flex-1 min-w-0">
                         <p className="font-medium truncate text-sm">{item.inventory.name}</p>
                         <p className="text-sm text-muted-foreground">
-                          ${item.inventory.price.toFixed(2)} x {item.quantity}
+                          {formatCurrency(item.inventory.price)} x {item.quantity}
                         </p>
                       </div>
                       <div className="flex items-center gap-1">
@@ -372,7 +390,7 @@ export default function SalesModule() {
                 </div>
 
                 <div className="text-right text-2xl font-bold text-primary">
-                  Total: ${total.toFixed(2)}
+                  Total: {formatCurrency(total)}
                 </div>
 
                 <Button className="w-full" size="lg" onClick={handleSale} disabled={loading || cart.length === 0}>
@@ -386,49 +404,69 @@ export default function SalesModule() {
 
       {/* Sales History Tab */}
       <TabsContent value="history">
-        <div className="rounded-lg border bg-card">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Fecha</TableHead>
-                <TableHead>Productos</TableHead>
-                <TableHead>Cliente</TableHead>
-                <TableHead>Método</TableHead>
-                <TableHead className="text-right">Total</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {salesHistory.map(sale => (
-                <TableRow key={sale.id}>
-                  <TableCell className="text-sm">{formatDate(sale.created_at)}</TableCell>
-                  <TableCell>
-                    <div className="space-y-1">
-                      {sale.sale_items?.map(item => (
-                        <div key={item.id} className="text-sm">
-                          <span className="font-medium">{item.inventory?.name || 'Producto eliminado'}</span>
-                          <span className="text-muted-foreground"> x{item.quantity}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </TableCell>
-                  <TableCell className="text-sm">
-                    {sale.student ? `${sale.student.first_name} ${sale.student.last_name}` : '-'}
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant="secondary">{PAYMENT_METHOD_LABELS[sale.payment_method]}</Badge>
-                  </TableCell>
-                  <TableCell className="text-right font-bold">${sale.total_amount.toFixed(2)}</TableCell>
-                </TableRow>
-              ))}
-              {salesHistory.length === 0 && (
+        <div className="space-y-4">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
+            <Input
+              placeholder="Buscar por producto o cliente..."
+              value={historySearch}
+              onChange={(e) => setHistorySearch(e.target.value)}
+              className="pl-10"
+            />
+          </div>
+          <div className="rounded-lg border bg-card">
+            <Table>
+              <TableHeader>
                 <TableRow>
-                  <TableCell colSpan={5} className="text-center text-muted-foreground py-8">
-                    No hay ventas registradas
-                  </TableCell>
+                  <TableHead>Fecha</TableHead>
+                  <TableHead>Producto</TableHead>
+                  <TableHead className="text-center">Cant.</TableHead>
+                  <TableHead>Cliente</TableHead>
+                  <TableHead>Método</TableHead>
+                  <TableHead className="text-right">Total</TableHead>
                 </TableRow>
-              )}
-            </TableBody>
-          </Table>
+              </TableHeader>
+              <TableBody>
+                {filteredSalesHistory.map(sale => (
+                  <TableRow key={sale.id}>
+                    <TableCell className="text-sm">{formatDate(sale.created_at)}</TableCell>
+                    <TableCell>
+                      <div className="space-y-1">
+                        {sale.sale_items?.map(item => (
+                          <div key={item.id} className="text-sm font-medium">
+                            {item.inventory?.name || 'Producto eliminado'}
+                          </div>
+                        ))}
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-center">
+                      <div className="space-y-1">
+                        {sale.sale_items?.map(item => (
+                          <div key={item.id} className="text-sm">
+                            {item.quantity}
+                          </div>
+                        ))}
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-sm">
+                      {sale.student ? `${sale.student.first_name} ${sale.student.last_name}` : '-'}
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant="secondary">{PAYMENT_METHOD_LABELS[sale.payment_method]}</Badge>
+                    </TableCell>
+                    <TableCell className="text-right font-bold">{formatCurrency(sale.total_amount)}</TableCell>
+                  </TableRow>
+                ))}
+                {filteredSalesHistory.length === 0 && (
+                  <TableRow>
+                    <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
+                      No hay ventas registradas
+                    </TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
+          </div>
         </div>
       </TabsContent>
 
@@ -442,7 +480,7 @@ export default function SalesModule() {
                 <CardTitle className="text-sm font-medium text-muted-foreground">Total Ventas</CardTitle>
               </CardHeader>
               <CardContent>
-                <p className="text-3xl font-bold text-primary">${totalSales.toFixed(2)}</p>
+                <p className="text-3xl font-bold text-primary">{formatCurrency(totalSales)}</p>
               </CardContent>
             </Card>
             <Card>
@@ -485,7 +523,7 @@ export default function SalesModule() {
                         <TableRow key={productName}>
                           <TableCell className="font-medium">{productName}</TableCell>
                           <TableCell className="text-center">{data.quantity}</TableCell>
-                          <TableCell className="text-right font-bold">${data.total.toFixed(2)}</TableCell>
+                          <TableCell className="text-right font-bold">{formatCurrency(data.total)}</TableCell>
                         </TableRow>
                       ))}
                     {Object.keys(productSales).length === 0 && (
@@ -527,13 +565,13 @@ export default function SalesModule() {
                   <tr key={item.inventory.id}>
                     <td>{item.inventory.name}</td>
                     <td>{item.quantity}</td>
-                    <td>${(item.inventory.price * item.quantity).toFixed(2)}</td>
+                    <td>{formatCurrency(item.inventory.price * item.quantity)}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
 
-            <p className="total">Total: ${receiptData?.sale.total_amount.toFixed(2)}</p>
+            <p className="total">Total: {formatCurrency(receiptData?.sale.total_amount || 0)}</p>
             <p className="footer">¡Gracias por tu compra!</p>
           </div>
 

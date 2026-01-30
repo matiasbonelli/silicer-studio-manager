@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
-import { Check, X, Search, Loader2 } from 'lucide-react';
+import { Check, X, Search, Loader2, MessageCircle, FileText } from 'lucide-react';
 
 interface StudentsListProps {
   onStudentClick: (student: Student) => void;
@@ -95,7 +95,9 @@ export default function StudentsList({ onStudentClick, refreshTrigger }: Student
               <TableHead>Nombre</TableHead>
               <TableHead>Horario</TableHead>
               <TableHead>Email</TableHead>
+              <TableHead className="text-center">WhatsApp</TableHead>
               <TableHead className="text-center">Cuota</TableHead>
+              <TableHead className="text-center">Comprobante</TableHead>
               <TableHead className="text-center">Acción</TableHead>
             </TableRow>
           </TableHeader>
@@ -120,9 +122,43 @@ export default function StudentsList({ onStudentClick, refreshTrigger }: Student
                 </TableCell>
                 <TableCell className="text-sm">{student.email || '-'}</TableCell>
                 <TableCell className="text-center">
+                  {student.phone ? (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="text-green-600 hover:text-green-700"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        const phone = student.phone?.replace(/\D/g, '');
+                        window.open(`https://wa.me/54${phone}`, '_blank');
+                      }}
+                    >
+                      <MessageCircle className="w-4 h-4" />
+                    </Button>
+                  ) : (
+                    <span className="text-muted-foreground">-</span>
+                  )}
+                </TableCell>
+                <TableCell className="text-center">
                   <Badge variant={student.payment_status === 'paid' ? 'default' : 'destructive'}>
                     {PAYMENT_STATUS_LABELS[student.payment_status]}
                   </Badge>
+                </TableCell>
+                <TableCell className="text-center">
+                  {student.payment_receipt_url ? (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        window.open(student.payment_receipt_url!, '_blank');
+                      }}
+                    >
+                      <FileText className="w-4 h-4" />
+                    </Button>
+                  ) : (
+                    <span className="text-muted-foreground">-</span>
+                  )}
                 </TableCell>
                 <TableCell className="text-center">
                   <Button
@@ -144,7 +180,7 @@ export default function StudentsList({ onStudentClick, refreshTrigger }: Student
             ))}
             {filteredStudents.length === 0 && (
               <TableRow>
-                <TableCell colSpan={5} className="text-center text-muted-foreground py-8">
+                <TableCell colSpan={7} className="text-center text-muted-foreground py-8">
                   No se encontraron alumnos
                 </TableCell>
               </TableRow>
