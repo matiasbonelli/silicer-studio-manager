@@ -73,7 +73,7 @@ export default function Admin() {
       <main className="container mx-auto px-4 py-6">
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-            <TabsList className="grid w-full sm:w-auto grid-cols-4 gap-1">
+            <TabsList className="grid w-full sm:w-auto grid-cols-5 gap-1">
               <TabsTrigger value="schedule" className="flex items-center gap-1.5">
                 <Calendar className="w-4 h-4" />
                 <span className="hidden sm:inline">Horarios</span>
@@ -89,6 +89,9 @@ export default function Admin() {
               <TabsTrigger value="sales" className="flex items-center gap-1.5">
                 <ShoppingCart className="w-4 h-4" />
                 <span className="hidden sm:inline">Ventas</span>
+              </TabsTrigger>
+              <TabsTrigger value="prueba" className="bg-red-500 text-white data-[state=active]:bg-red-600">
+                PRUEBA
               </TabsTrigger>
             </TabsList>
 
@@ -113,6 +116,13 @@ export default function Admin() {
 
           <TabsContent value="sales" className="mt-6">
             <SalesModule />
+          </TabsContent>
+
+          <TabsContent value="prueba" className="mt-6">
+            <div className="p-8 bg-red-100 border-4 border-red-500 rounded-lg text-center">
+              <h2 className="text-3xl font-bold text-red-600">TAB DE PRUEBA</h2>
+              <p className="text-xl mt-4">Si ves esto, la sincronización funciona!</p>
+            </div>
           </TabsContent>
         </Tabs>
       </main>
