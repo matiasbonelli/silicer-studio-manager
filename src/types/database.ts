@@ -16,9 +16,11 @@ export interface Student {
   first_name: string;
   last_name: string;
   email: string | null;
+  phone: string | null;
   birthday: string | null;
   schedule_id: string | null;
   payment_status: PaymentStatus;
+  payment_receipt_url: string | null;
   notes: string | null;
   created_at: string;
   updated_at: string;
@@ -33,6 +35,7 @@ export interface InventoryItem {
   unit: string;
   min_stock: number;
   price: number;
+  cost: number;
   for_sale: boolean;
   created_at: string;
   updated_at: string;
