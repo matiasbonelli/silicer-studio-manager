@@ -18,6 +18,7 @@ export default function Admin() {
   const [isStudentModalOpen, setIsStudentModalOpen] = useState(false);
   const [isNewStudent, setIsNewStudent] = useState(false);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
+  const [activeTab, setActiveTab] = useState('schedule');
 
   if (loading) {
     return (
@@ -70,7 +71,7 @@ export default function Admin() {
 
       {/* Main Content */}
       <main className="container mx-auto px-4 py-6">
-        <Tabs defaultValue="schedule" className="space-y-6">
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
             <TabsList className="grid w-full sm:w-auto grid-cols-4 gap-1">
               <TabsTrigger value="schedule" className="flex items-center gap-1.5">
@@ -91,9 +92,11 @@ export default function Admin() {
               </TabsTrigger>
             </TabsList>
 
-            <Button onClick={handleAddStudent}>
-              <Plus className="w-4 h-4 mr-2" /> Agregar Alumno
-            </Button>
+            {(activeTab === 'schedule' || activeTab === 'students') && (
+              <Button onClick={handleAddStudent}>
+                <Plus className="w-4 h-4 mr-2" /> Agregar Alumno
+              </Button>
+            )}
           </div>
 
           <TabsContent value="schedule" className="mt-6">

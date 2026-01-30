@@ -33,6 +33,7 @@ export interface InventoryItem {
   unit: string;
   min_stock: number;
   price: number;
+  for_sale: boolean;
   created_at: string;
   updated_at: string;
 }
