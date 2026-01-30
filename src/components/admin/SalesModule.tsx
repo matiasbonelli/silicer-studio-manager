@@ -9,11 +9,17 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
-import { Plus, Minus, Trash2, ShoppingCart, Printer, Loader2, Search } from 'lucide-react';
+import { Plus, Minus, Trash2, ShoppingCart, Printer, Loader2, Search, History, TrendingUp } from 'lucide-react';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Badge } from '@/components/ui/badge';
 
 interface CartItem {
   inventory: InventoryItem;
   quantity: number;
+}
+
+interface SaleWithItems extends Sale {
+  sale_items?: (SaleItem & { inventory: InventoryItem })[];
 }
 
 export default function SalesModule() {
@@ -25,8 +31,22 @@ export default function SalesModule() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [receiptData, setReceiptData] = useState<{sale: Sale, items: CartItem[]} | null>(null);
+  const [salesHistory, setSalesHistory] = useState<SaleWithItems[]>([]);
+  const [salesTab, setSalesTab] = useState('new');
   const { toast } = useToast();
   const receiptRef = useRef<HTMLDivElement>(null);
+
+  const fetchSalesHistory = async () => {
+    const { data } = await supabase
+      .from('sales')
+      .select('*, student:students(*), sale_items(*, inventory:inventory(*))')
+      .order('created_at', { ascending: false })
+      .limit(50);
+
+    if (data) {
+      setSalesHistory(data as SaleWithItems[]);
+    }
+  };
 
   useEffect(() => {
     const fetchData = async () => {
@@ -37,6 +57,8 @@ export default function SalesModule() {
 
       if (invRes.data) setInventory(invRes.data as InventoryItem[]);
       if (studRes.data) setStudents(studRes.data as Student[]);
+
+      await fetchSalesHistory();
       setLoading(false);
     };
     fetchData();
@@ -144,10 +166,12 @@ export default function SalesModule() {
       });
 
       setReceiptData({ sale: saleData as Sale, items: [...cart] });
-      
-      // Refresh inventory
+
+      // Refresh inventory and sales history
       const { data: newInv } = await supabase.from('inventory').select('*').order('name');
       if (newInv) setInventory(newInv as InventoryItem[]);
+
+      await fetchSalesHistory();
 
       setCart([]);
       setSelectedStudent('');
@@ -186,8 +210,37 @@ export default function SalesModule() {
   };
 
   const filteredInventory = inventory.filter(item =>
-    item.name.toLowerCase().includes(search.toLowerCase()) && item.quantity > 0
+    item.name.toLowerCase().includes(search.toLowerCase()) && item.quantity > 0 && item.for_sale
   );
+
+  // Calculate sales statistics
+  const totalSales = salesHistory.reduce((sum, sale) => sum + sale.total_amount, 0);
+  const totalItemsSold = salesHistory.reduce((sum, sale) =>
+    sum + (sale.sale_items?.reduce((itemSum, item) => itemSum + item.quantity, 0) || 0), 0
+  );
+
+  // Group sales by product
+  const productSales = salesHistory.reduce((acc, sale) => {
+    sale.sale_items?.forEach(item => {
+      const productName = item.inventory?.name || 'Producto eliminado';
+      if (!acc[productName]) {
+        acc[productName] = { quantity: 0, total: 0 };
+      }
+      acc[productName].quantity += item.quantity;
+      acc[productName].total += item.quantity * item.unit_price;
+    });
+    return acc;
+  }, {} as Record<string, { quantity: number; total: number }>);
+
+  const formatDate = (dateString: string) => {
+    return new Date(dateString).toLocaleDateString('es-AR', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  };
 
   if (loading && inventory.length === 0) {
     return (
@@ -198,119 +251,257 @@ export default function SalesModule() {
   }
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-      {/* Products */}
-      <div className="lg:col-span-2 space-y-4">
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
-          <Input
-            placeholder="Buscar producto..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="pl-10"
-          />
-        </div>
+    <Tabs value={salesTab} onValueChange={setSalesTab} className="space-y-4">
+      <TabsList>
+        <TabsTrigger value="new" className="flex items-center gap-1.5">
+          <ShoppingCart className="w-4 h-4" />
+          Nueva Venta
+        </TabsTrigger>
+        <TabsTrigger value="history" className="flex items-center gap-1.5">
+          <History className="w-4 h-4" />
+          Historial
+        </TabsTrigger>
+        <TabsTrigger value="stats" className="flex items-center gap-1.5">
+          <TrendingUp className="w-4 h-4" />
+          Resumen
+        </TabsTrigger>
+      </TabsList>
 
-        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-          {filteredInventory.map(item => (
-            <Card 
-              key={item.id} 
-              className="cursor-pointer hover:border-primary transition-colors"
-              onClick={() => addToCart(item)}
-            >
-              <CardContent className="p-4">
-                <h4 className="font-medium truncate">{item.name}</h4>
-                <p className="text-sm text-muted-foreground">Stock: {item.quantity}</p>
-                <p className="text-lg font-bold text-primary">${item.price.toFixed(2)}</p>
+      <TabsContent value="new">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Products */}
+          <div className="lg:col-span-2 space-y-4">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
+              <Input
+                placeholder="Buscar producto..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="pl-10"
+              />
+            </div>
+
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+              {filteredInventory.map(item => (
+                <Card
+                  key={item.id}
+                  className="cursor-pointer hover:border-primary transition-colors"
+                  onClick={() => addToCart(item)}
+                >
+                  <CardContent className="p-4">
+                    <h4 className="font-medium truncate">{item.name}</h4>
+                    <p className="text-sm text-muted-foreground">Stock: {item.quantity}</p>
+                    <p className="text-lg font-bold text-primary">${item.price.toFixed(2)}</p>
+                  </CardContent>
+                </Card>
+              ))}
+              {filteredInventory.length === 0 && (
+                <p className="col-span-full text-center text-muted-foreground py-8">
+                  No hay productos disponibles para venta
+                </p>
+              )}
+            </div>
+          </div>
+
+          {/* Cart */}
+          <Card className="h-fit sticky top-4">
+            <CardHeader className="pb-3">
+              <CardTitle className="flex items-center gap-2">
+                <ShoppingCart className="w-5 h-5" /> Carrito
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {cart.length === 0 ? (
+                <p className="text-center text-muted-foreground py-4">Carrito vacío</p>
+              ) : (
+                <div className="space-y-2">
+                  {cart.map(item => (
+                    <div key={item.inventory.id} className="flex items-center gap-2 p-2 bg-muted rounded-lg">
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium truncate text-sm">{item.inventory.name}</p>
+                        <p className="text-sm text-muted-foreground">
+                          ${item.inventory.price.toFixed(2)} x {item.quantity}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <Button size="icon" variant="outline" className="h-7 w-7" onClick={() => updateQuantity(item.inventory.id, -1)}>
+                          <Minus className="w-3 h-3" />
+                        </Button>
+                        <span className="w-6 text-center text-sm">{item.quantity}</span>
+                        <Button size="icon" variant="outline" className="h-7 w-7" onClick={() => updateQuantity(item.inventory.id, 1)}>
+                          <Plus className="w-3 h-3" />
+                        </Button>
+                        <Button size="icon" variant="destructive" className="h-7 w-7 ml-1" onClick={() => removeFromCart(item.inventory.id)}>
+                          <Trash2 className="w-3 h-3" />
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <div className="border-t pt-4 space-y-3">
+                <div className="space-y-2">
+                  <Label>Alumno (opcional)</Label>
+                  <Select value={selectedStudent} onValueChange={setSelectedStudent}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Seleccionar alumno" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {students.map(s => (
+                        <SelectItem key={s.id} value={s.id}>
+                          {s.first_name} {s.last_name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-2">
+                  <Label>Método de Pago</Label>
+                  <Select value={paymentMethod} onValueChange={(v: PaymentMethod) => setPaymentMethod(v)}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {Object.entries(PAYMENT_METHOD_LABELS).map(([key, label]) => (
+                        <SelectItem key={key} value={key}>{label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="text-right text-2xl font-bold text-primary">
+                  Total: ${total.toFixed(2)}
+                </div>
+
+                <Button className="w-full" size="lg" onClick={handleSale} disabled={loading || cart.length === 0}>
+                  {loading ? 'Procesando...' : 'Registrar Venta'}
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      </TabsContent>
+
+      {/* Sales History Tab */}
+      <TabsContent value="history">
+        <div className="rounded-lg border bg-card">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Fecha</TableHead>
+                <TableHead>Productos</TableHead>
+                <TableHead>Cliente</TableHead>
+                <TableHead>Método</TableHead>
+                <TableHead className="text-right">Total</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {salesHistory.map(sale => (
+                <TableRow key={sale.id}>
+                  <TableCell className="text-sm">{formatDate(sale.created_at)}</TableCell>
+                  <TableCell>
+                    <div className="space-y-1">
+                      {sale.sale_items?.map(item => (
+                        <div key={item.id} className="text-sm">
+                          <span className="font-medium">{item.inventory?.name || 'Producto eliminado'}</span>
+                          <span className="text-muted-foreground"> x{item.quantity}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </TableCell>
+                  <TableCell className="text-sm">
+                    {sale.student ? `${sale.student.first_name} ${sale.student.last_name}` : '-'}
+                  </TableCell>
+                  <TableCell>
+                    <Badge variant="secondary">{PAYMENT_METHOD_LABELS[sale.payment_method]}</Badge>
+                  </TableCell>
+                  <TableCell className="text-right font-bold">${sale.total_amount.toFixed(2)}</TableCell>
+                </TableRow>
+              ))}
+              {salesHistory.length === 0 && (
+                <TableRow>
+                  <TableCell colSpan={5} className="text-center text-muted-foreground py-8">
+                    No hay ventas registradas
+                  </TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
+        </div>
+      </TabsContent>
+
+      {/* Stats Tab */}
+      <TabsContent value="stats">
+        <div className="space-y-6">
+          {/* Summary Cards */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium text-muted-foreground">Total Ventas</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-3xl font-bold text-primary">${totalSales.toFixed(2)}</p>
               </CardContent>
             </Card>
-          ))}
-          {filteredInventory.length === 0 && (
-            <p className="col-span-full text-center text-muted-foreground py-8">
-              No hay productos disponibles
-            </p>
-          )}
-        </div>
-      </div>
-
-      {/* Cart */}
-      <Card className="h-fit sticky top-4">
-        <CardHeader className="pb-3">
-          <CardTitle className="flex items-center gap-2">
-            <ShoppingCart className="w-5 h-5" /> Carrito
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {cart.length === 0 ? (
-            <p className="text-center text-muted-foreground py-4">Carrito vacío</p>
-          ) : (
-            <div className="space-y-2">
-              {cart.map(item => (
-                <div key={item.inventory.id} className="flex items-center gap-2 p-2 bg-muted rounded-lg">
-                  <div className="flex-1 min-w-0">
-                    <p className="font-medium truncate text-sm">{item.inventory.name}</p>
-                    <p className="text-sm text-muted-foreground">
-                      ${item.inventory.price.toFixed(2)} x {item.quantity}
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-1">
-                    <Button size="icon" variant="outline" className="h-7 w-7" onClick={() => updateQuantity(item.inventory.id, -1)}>
-                      <Minus className="w-3 h-3" />
-                    </Button>
-                    <span className="w-6 text-center text-sm">{item.quantity}</span>
-                    <Button size="icon" variant="outline" className="h-7 w-7" onClick={() => updateQuantity(item.inventory.id, 1)}>
-                      <Plus className="w-3 h-3" />
-                    </Button>
-                    <Button size="icon" variant="destructive" className="h-7 w-7 ml-1" onClick={() => removeFromCart(item.inventory.id)}>
-                      <Trash2 className="w-3 h-3" />
-                    </Button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-
-          <div className="border-t pt-4 space-y-3">
-            <div className="space-y-2">
-              <Label>Alumno (opcional)</Label>
-              <Select value={selectedStudent} onValueChange={setSelectedStudent}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Seleccionar alumno" />
-                </SelectTrigger>
-                <SelectContent>
-                  {students.map(s => (
-                    <SelectItem key={s.id} value={s.id}>
-                      {s.first_name} {s.last_name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-2">
-              <Label>Método de Pago</Label>
-              <Select value={paymentMethod} onValueChange={(v: PaymentMethod) => setPaymentMethod(v)}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {Object.entries(PAYMENT_METHOD_LABELS).map(([key, label]) => (
-                    <SelectItem key={key} value={key}>{label}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="text-right text-2xl font-bold text-primary">
-              Total: ${total.toFixed(2)}
-            </div>
-
-            <Button className="w-full" size="lg" onClick={handleSale} disabled={loading || cart.length === 0}>
-              {loading ? 'Procesando...' : 'Registrar Venta'}
-            </Button>
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium text-muted-foreground">Productos Vendidos</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-3xl font-bold">{totalItemsSold}</p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium text-muted-foreground">Cantidad de Ventas</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-3xl font-bold">{salesHistory.length}</p>
+              </CardContent>
+            </Card>
           </div>
-        </CardContent>
-      </Card>
+
+          {/* Sales by Product */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Ventas por Producto</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="rounded-lg border">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Producto</TableHead>
+                      <TableHead className="text-center">Cantidad Vendida</TableHead>
+                      <TableHead className="text-right">Importe Total</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {Object.entries(productSales)
+                      .sort((a, b) => b[1].total - a[1].total)
+                      .map(([productName, data]) => (
+                        <TableRow key={productName}>
+                          <TableCell className="font-medium">{productName}</TableCell>
+                          <TableCell className="text-center">{data.quantity}</TableCell>
+                          <TableCell className="text-right font-bold">${data.total.toFixed(2)}</TableCell>
+                        </TableRow>
+                      ))}
+                    {Object.keys(productSales).length === 0 && (
+                      <TableRow>
+                        <TableCell colSpan={3} className="text-center text-muted-foreground py-8">
+                          No hay datos de ventas
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </TableBody>
+                </Table>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      </TabsContent>
 
       {/* Receipt Modal */}
       <Dialog open={!!receiptData} onOpenChange={() => setReceiptData(null)}>
@@ -318,11 +509,11 @@ export default function SalesModule() {
           <DialogHeader>
             <DialogTitle>Recibo de Venta</DialogTitle>
           </DialogHeader>
-          
+
           <div ref={receiptRef}>
             <h1>Silicer</h1>
             <p className="subtitle">Taller de Cerámica</p>
-            
+
             <table>
               <thead>
                 <tr>
@@ -341,7 +532,7 @@ export default function SalesModule() {
                 ))}
               </tbody>
             </table>
-            
+
             <p className="total">Total: ${receiptData?.sale.total_amount.toFixed(2)}</p>
             <p className="footer">¡Gracias por tu compra!</p>
           </div>
@@ -351,6 +542,6 @@ export default function SalesModule() {
           </Button>
         </DialogContent>
       </Dialog>
-    </div>
+    </Tabs>
   );
 }

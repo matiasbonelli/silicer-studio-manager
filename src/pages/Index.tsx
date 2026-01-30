@@ -25,6 +25,7 @@ export default function Index() {
   const [schedules, setSchedules] = useState<(Schedule & { current_count: number })[]>([]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const [selectedDay, setSelectedDay] = useState('');
   const [formData, setFormData] = useState({
     first_name: '',
     last_name: '',
@@ -118,6 +119,7 @@ export default function Index() {
         title: '¡Inscripción enviada!',
         description: 'Nos pondremos en contacto pronto.',
       });
+      setSelectedDay('');
       setFormData({
         first_name: '',
         last_name: '',
@@ -132,6 +134,14 @@ export default function Index() {
   };
 
   const availableSchedules = schedules.filter(s => s.current_count < s.max_capacity);
+
+  // Get unique days that have available schedules
+  const availableDays = [...new Set(availableSchedules.map(s => s.day_of_week))];
+
+  // Get schedules for selected day
+  const schedulesForSelectedDay = selectedDay
+    ? availableSchedules.filter(s => s.day_of_week === selectedDay)
+    : [];
 
   return (
     <div className="min-h-screen bg-background">
@@ -227,31 +237,60 @@ export default function Index() {
                   />
                 </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="schedule">Horario Preferido *</Label>
-                  <Select
-                    value={formData.schedule_id}
-                    onValueChange={(value) => setFormData(prev => ({ ...prev, schedule_id: value }))}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder={loading ? 'Cargando...' : 'Seleccionar horario'} />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {availableSchedules.map(schedule => (
-                        <SelectItem key={schedule.id} value={schedule.id}>
-                          {DAY_NAMES[schedule.day_of_week]} {schedule.start_time.slice(0, 5)} - {schedule.end_time.slice(0, 5)}
-                          <span className="text-muted-foreground ml-2">
-                            ({schedule.max_capacity - schedule.current_count} cupos)
-                          </span>
-                        </SelectItem>
-                      ))}
-                      {availableSchedules.length === 0 && !loading && (
-                        <SelectItem value="none" disabled>
-                          No hay horarios disponibles
-                        </SelectItem>
-                      )}
-                    </SelectContent>
-                  </Select>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-2">
+                    <Label htmlFor="day">Día *</Label>
+                    <Select
+                      value={selectedDay}
+                      onValueChange={(value) => {
+                        setSelectedDay(value);
+                        setFormData(prev => ({ ...prev, schedule_id: '' }));
+                      }}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder={loading ? 'Cargando...' : 'Seleccionar día'} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {availableDays.map(day => (
+                          <SelectItem key={day} value={day}>
+                            {DAY_NAMES[day]}
+                          </SelectItem>
+                        ))}
+                        {availableDays.length === 0 && !loading && (
+                          <SelectItem value="none" disabled>
+                            No hay días disponibles
+                          </SelectItem>
+                        )}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="schedule">Horario *</Label>
+                    <Select
+                      value={formData.schedule_id}
+                      onValueChange={(value) => setFormData(prev => ({ ...prev, schedule_id: value }))}
+                      disabled={!selectedDay}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder={!selectedDay ? 'Elegí un día' : 'Seleccionar horario'} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {schedulesForSelectedDay.map(schedule => (
+                          <SelectItem key={schedule.id} value={schedule.id}>
+                            {schedule.start_time.slice(0, 5)} - {schedule.end_time.slice(0, 5)}
+                            <span className="text-muted-foreground ml-2">
+                              ({schedule.max_capacity - schedule.current_count} cupos)
+                            </span>
+                          </SelectItem>
+                        ))}
+                        {schedulesForSelectedDay.length === 0 && selectedDay && (
+                          <SelectItem value="none" disabled>
+                            No hay horarios disponibles
+                          </SelectItem>
+                        )}
+                      </SelectContent>
+                    </Select>
+                  </div>
                 </div>
 
                 <div className="space-y-2">

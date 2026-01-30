@@ -8,7 +8,9 @@ import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
-import { Plus, Pencil, Trash2, Search, Loader2, AlertTriangle } from 'lucide-react';
+import { Plus, Pencil, Trash2, Search, Loader2, AlertTriangle, ShoppingCart, Package } from 'lucide-react';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Switch } from '@/components/ui/switch';
 
 export default function InventoryManager() {
   const [items, setItems] = useState<InventoryItem[]>([]);
@@ -23,7 +25,9 @@ export default function InventoryManager() {
     unit: 'unidad',
     min_stock: 0,
     price: 0,
+    for_sale: false,
   });
+  const [inventoryTab, setInventoryTab] = useState('all');
   const { toast } = useToast();
 
   const fetchItems = async () => {
@@ -53,6 +57,7 @@ export default function InventoryManager() {
         unit: item.unit,
         min_stock: item.min_stock,
         price: item.price,
+        for_sale: item.for_sale ?? false,
       });
     } else {
       setEditingItem(null);
@@ -63,6 +68,7 @@ export default function InventoryManager() {
         unit: 'unidad',
         min_stock: 0,
         price: 0,
+        for_sale: false,
       });
     }
     setIsModalOpen(true);
@@ -72,8 +78,13 @@ export default function InventoryManager() {
     e.preventDefault();
 
     const dataToSave = {
-      ...formData,
+      name: formData.name,
       description: formData.description || null,
+      quantity: formData.quantity,
+      unit: formData.unit,
+      min_stock: formData.min_stock,
+      price: formData.price,
+      for_sale: formData.for_sale,
     };
 
     let error;
@@ -118,9 +129,15 @@ export default function InventoryManager() {
     }
   };
 
-  const filteredItems = items.filter(item =>
-    item.name.toLowerCase().includes(search.toLowerCase())
-  );
+  const filteredItems = items.filter(item => {
+    const matchesSearch = item.name.toLowerCase().includes(search.toLowerCase());
+    if (inventoryTab === 'for_sale') {
+      return matchesSearch && item.for_sale;
+    } else if (inventoryTab === 'general') {
+      return matchesSearch && !item.for_sale;
+    }
+    return matchesSearch; // 'all' tab
+  });
 
   if (loading) {
     return (
@@ -132,19 +149,36 @@ export default function InventoryManager() {
 
   return (
     <div className="space-y-4">
-      <div className="flex gap-3">
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
-          <Input
-            placeholder="Buscar producto..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="pl-10"
-          />
+      <Tabs value={inventoryTab} onValueChange={setInventoryTab}>
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+          <TabsList>
+            <TabsTrigger value="all" className="flex items-center gap-1.5">
+              <Package className="w-4 h-4" />
+              Todos
+            </TabsTrigger>
+            <TabsTrigger value="for_sale" className="flex items-center gap-1.5">
+              <ShoppingCart className="w-4 h-4" />
+              Para Venta
+            </TabsTrigger>
+            <TabsTrigger value="general" className="flex items-center gap-1.5">
+              <Package className="w-4 h-4" />
+              Inv. General
+            </TabsTrigger>
+          </TabsList>
+          <Button onClick={() => openModal()}>
+            <Plus className="w-4 h-4 mr-2" /> Agregar Producto
+          </Button>
         </div>
-        <Button onClick={() => openModal()}>
-          <Plus className="w-4 h-4 mr-2" /> Agregar Producto
-        </Button>
+      </Tabs>
+
+      <div className="relative">
+        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
+        <Input
+          placeholder="Buscar producto..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          className="pl-10"
+        />
       </div>
 
       <div className="rounded-lg border bg-card">
@@ -152,6 +186,7 @@ export default function InventoryManager() {
           <TableHeader>
             <TableRow>
               <TableHead>Producto</TableHead>
+              <TableHead className="text-center">Tipo</TableHead>
               <TableHead className="text-center">Stock</TableHead>
               <TableHead className="text-right">Precio</TableHead>
               <TableHead className="text-center">Acciones</TableHead>
@@ -167,6 +202,11 @@ export default function InventoryManager() {
                       <p className="text-sm text-muted-foreground">{item.description}</p>
                     )}
                   </div>
+                </TableCell>
+                <TableCell className="text-center">
+                  <Badge variant={item.for_sale ? 'default' : 'secondary'}>
+                    {item.for_sale ? 'Venta' : 'General'}
+                  </Badge>
                 </TableCell>
                 <TableCell className="text-center">
                   <div className="flex items-center justify-center gap-2">
@@ -195,7 +235,7 @@ export default function InventoryManager() {
             ))}
             {filteredItems.length === 0 && (
               <TableRow>
-                <TableCell colSpan={4} className="text-center text-muted-foreground py-8">
+                <TableCell colSpan={5} className="text-center text-muted-foreground py-8">
                   No hay productos en el inventario
                 </TableCell>
               </TableRow>
@@ -269,6 +309,19 @@ export default function InventoryManager() {
                   onChange={(e) => setFormData(prev => ({ ...prev, price: parseFloat(e.target.value) || 0 }))}
                 />
               </div>
+            </div>
+            <div className="flex items-center justify-between rounded-lg border p-3">
+              <div className="space-y-0.5">
+                <Label htmlFor="for_sale">Disponible para Venta</Label>
+                <p className="text-sm text-muted-foreground">
+                  Marcar si este producto puede venderse a clientes
+                </p>
+              </div>
+              <Switch
+                id="for_sale"
+                checked={formData.for_sale}
+                onCheckedChange={(checked) => setFormData(prev => ({ ...prev, for_sale: checked }))}
+              />
             </div>
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => setIsModalOpen(false)}>

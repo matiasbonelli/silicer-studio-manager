@@ -5,7 +5,8 @@ import { Schedule, Student, DAY_NAMES, PAYMENT_STATUS_LABELS } from '@/types/dat
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, User } from 'lucide-react';
+import { Loader2, User, Search } from 'lucide-react';
+import { Input } from '@/components/ui/input';
 
 interface ScheduleGridProps {
   onStudentClick: (student: Student) => void;
@@ -16,6 +17,7 @@ export default function ScheduleGrid({ onStudentClick, refreshTrigger }: Schedul
   const [schedules, setSchedules] = useState<Schedule[]>([]);
   const [students, setStudents] = useState<Student[]>([]);
   const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState('');
   const { toast } = useToast();
 
   const fetchData = async () => {
@@ -84,6 +86,12 @@ export default function ScheduleGrid({ onStudentClick, refreshTrigger }: Schedul
     }
   };
 
+  // Filter students based on search
+  const filteredStudents = students.filter(student => {
+    const fullName = `${student.first_name} ${student.last_name}`.toLowerCase();
+    return fullName.includes(search.toLowerCase());
+  });
+
   const groupedSchedules = schedules.reduce((acc, schedule) => {
     if (!acc[schedule.day_of_week]) {
       acc[schedule.day_of_week] = [];
@@ -103,14 +111,28 @@ export default function ScheduleGrid({ onStudentClick, refreshTrigger }: Schedul
   }
 
   return (
-    <DragDropContext onDragEnd={handleDragEnd}>
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
-        {dayOrder.map(day => (
-          <div key={day} className="space-y-3">
-            <h3 className="font-bold text-lg text-primary text-center">{DAY_NAMES[day]}</h3>
-            {groupedSchedules[day]?.map(schedule => {
-              const scheduleStudents = students.filter(s => s.schedule_id === schedule.id);
-              const isFull = scheduleStudents.length >= schedule.max_capacity;
+    <div className="space-y-4">
+      <div className="relative">
+        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
+        <Input
+          placeholder="Buscar alumno..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          className="pl-10"
+        />
+      </div>
+
+      <DragDropContext onDragEnd={handleDragEnd}>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+          {dayOrder.map(day => (
+            <div key={day} className="space-y-3">
+              <h3 className="font-bold text-lg text-primary text-center">{DAY_NAMES[day]}</h3>
+              {groupedSchedules[day]?.map(schedule => {
+                // For capacity count, use all students
+                const allScheduleStudents = students.filter(s => s.schedule_id === schedule.id);
+                // For display, use filtered students
+                const scheduleStudents = filteredStudents.filter(s => s.schedule_id === schedule.id);
+                const isFull = allScheduleStudents.length >= schedule.max_capacity;
 
               return (
                 <Droppable key={schedule.id} droppableId={schedule.id}>
@@ -126,7 +148,7 @@ export default function ScheduleGrid({ onStudentClick, refreshTrigger }: Schedul
                         <CardTitle className="text-sm flex justify-between items-center">
                           <span>{schedule.start_time.slice(0, 5)} - {schedule.end_time.slice(0, 5)}</span>
                           <Badge variant={isFull ? 'destructive' : 'secondary'} className="text-xs">
-                            {scheduleStudents.length}/{schedule.max_capacity}
+                            {allScheduleStudents.length}/{schedule.max_capacity}
                           </Badge>
                         </CardTitle>
                       </CardHeader>
@@ -165,8 +187,9 @@ export default function ScheduleGrid({ onStudentClick, refreshTrigger }: Schedul
               );
             })}
           </div>
-        ))}
-      </div>
-    </DragDropContext>
+          ))}
+        </div>
+      </DragDropContext>
+    </div>
   );
 }
