@@ -10,7 +10,8 @@ import StudentModal from '@/components/admin/StudentModal';
 import InventoryManager from '@/components/admin/InventoryManager';
 import SalesModule from '@/components/admin/SalesModule';
 import BirthdayModal from '@/components/admin/BirthdayModal';
-import { LogOut, Plus, Calendar, Users, Package, ShoppingCart, Loader2 } from 'lucide-react';
+import EnrollmentsManager from '@/components/admin/EnrollmentsManager';
+import { LogOut, Plus, Calendar, Users, Package, ShoppingCart, Loader2, ClipboardList } from 'lucide-react';
 
 export default function Admin() {
   const { user, loading, signOut, isAdmin } = useAuth();
@@ -74,10 +75,14 @@ export default function Admin() {
       <main className="container mx-auto px-4 py-6">
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-            <TabsList className="grid w-full sm:w-auto grid-cols-4 gap-1">
+            <TabsList className="grid w-full sm:w-auto grid-cols-5 gap-1">
               <TabsTrigger value="schedule" className="flex items-center gap-1.5">
                 <Calendar className="w-4 h-4" />
                 <span className="hidden sm:inline">Horarios</span>
+              </TabsTrigger>
+              <TabsTrigger value="enrollments" className="flex items-center gap-1.5">
+                <ClipboardList className="w-4 h-4" />
+                <span className="hidden sm:inline">Inscripciones</span>
               </TabsTrigger>
               <TabsTrigger value="students" className="flex items-center gap-1.5">
                 <Users className="w-4 h-4" />
@@ -102,6 +107,10 @@ export default function Admin() {
 
           <TabsContent value="schedule" className="mt-6">
             <ScheduleGrid onStudentClick={handleStudentClick} refreshTrigger={refreshTrigger} />
+          </TabsContent>
+
+          <TabsContent value="enrollments" className="mt-6">
+            <EnrollmentsManager onStudentCreated={() => setRefreshTrigger(prev => prev + 1)} />
           </TabsContent>
 
           <TabsContent value="students" className="mt-6">

@@ -1,0 +1,658 @@
+import { useState, useEffect } from 'react';
+import { supabase } from '@/integrations/supabase/client';
+import { DAY_NAMES } from '@/types/database';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
+import { useToast } from '@/hooks/use-toast';
+import { Search, Loader2, MessageCircle, UserPlus, DollarSign, Check, Eye, Trash2 } from 'lucide-react';
+import { format } from 'date-fns';
+import { es } from 'date-fns/locale';
+
+interface Schedule {
+  id: string;
+  day_of_week: string;
+  start_time: string;
+  end_time: string;
+  max_capacity: number;
+}
+
+interface Enrollment {
+  id: string;
+  first_name: string;
+  last_name: string;
+  email: string;
+  phone: string | null;
+  schedule_id: string;
+  message: string | null;
+  status: string;
+  payment_status: string;
+  payment_amount: number | null;
+  payment_date: string | null;
+  payment_notes: string | null;
+  converted_to_student_id: string | null;
+  created_at: string;
+  schedule?: Schedule;
+}
+
+const ENROLLMENT_STATUS_LABELS: Record<string, string> = {
+  pending: 'Pendiente',
+  contacted: 'Contactado',
+  confirmed: 'Confirmado',
+  cancelled: 'Cancelado',
+};
+
+const PAYMENT_STATUS_LABELS: Record<string, string> = {
+  pending: 'Sin pago',
+  deposit: 'Señado',
+  paid: 'Pagado',
+};
+
+const PAYMENT_STATUS_COLORS: Record<string, 'default' | 'secondary' | 'destructive' | 'outline'> = {
+  pending: 'destructive',
+  deposit: 'secondary',
+  paid: 'default',
+};
+
+interface EnrollmentsManagerProps {
+  onStudentCreated?: () => void;
+}
+
+export default function EnrollmentsManager({ onStudentCreated }: EnrollmentsManagerProps) {
+  const [enrollments, setEnrollments] = useState<Enrollment[]>([]);
+  const [schedules, setSchedules] = useState<Schedule[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [paymentFilter, setPaymentFilter] = useState<string>('all');
+  const { toast } = useToast();
+
+  // Modal states
+  const [selectedEnrollment, setSelectedEnrollment] = useState<Enrollment | null>(null);
+  const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
+  const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
+  const [isConvertModalOpen, setIsConvertModalOpen] = useState(false);
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+
+  // Payment form
+  const [paymentForm, setPaymentForm] = useState({
+    status: 'deposit',
+    amount: '',
+    notes: '',
+  });
+
+  // Convert form
+  const [convertScheduleId, setConvertScheduleId] = useState<string>('');
+
+  const fetchEnrollments = async () => {
+    setLoading(true);
+    const { data, error } = await supabase
+      .from('enrollments')
+      .select('*, schedule:schedules(*)')
+      .order('created_at', { ascending: false });
+
+    if (data) {
+      setEnrollments(data as unknown as Enrollment[]);
+    }
+    if (error) {
+      toast({
+        title: 'Error',
+        description: 'No se pudieron cargar las pre-inscripciones',
+        variant: 'destructive',
+      });
+    }
+    setLoading(false);
+  };
+
+  const fetchSchedules = async () => {
+    const { data } = await supabase
+      .from('schedules')
+      .select('*')
+      .order('day_of_week')
+      .order('start_time');
+    if (data) setSchedules(data);
+  };
+
+  useEffect(() => {
+    fetchEnrollments();
+    fetchSchedules();
+  }, []);
+
+  const updateEnrollmentStatus = async (enrollment: Enrollment, newStatus: string) => {
+    const { error } = await supabase
+      .from('enrollments')
+      .update({ status: newStatus })
+      .eq('id', enrollment.id);
+
+    if (error) {
+      toast({
+        title: 'Error',
+        description: 'No se pudo actualizar el estado',
+        variant: 'destructive',
+      });
+    } else {
+      toast({ title: `Estado actualizado a ${ENROLLMENT_STATUS_LABELS[newStatus]}` });
+      fetchEnrollments();
+    }
+  };
+
+  const openPaymentModal = (enrollment: Enrollment) => {
+    setSelectedEnrollment(enrollment);
+    setPaymentForm({
+      status: enrollment.payment_status || 'deposit',
+      amount: enrollment.payment_amount?.toString() || '',
+      notes: enrollment.payment_notes || '',
+    });
+    setIsPaymentModalOpen(true);
+  };
+
+  const handlePaymentSubmit = async () => {
+    if (!selectedEnrollment) return;
+
+    const { error } = await supabase
+      .from('enrollments')
+      .update({
+        payment_status: paymentForm.status,
+        payment_amount: paymentForm.amount ? parseFloat(paymentForm.amount) : null,
+        payment_notes: paymentForm.notes || null,
+        payment_date: new Date().toISOString(),
+      })
+      .eq('id', selectedEnrollment.id);
+
+    if (error) {
+      toast({
+        title: 'Error',
+        description: 'No se pudo registrar el pago',
+        variant: 'destructive',
+      });
+    } else {
+      toast({ title: 'Pago registrado correctamente' });
+      setIsPaymentModalOpen(false);
+      fetchEnrollments();
+    }
+  };
+
+  const openConvertModal = (enrollment: Enrollment) => {
+    setSelectedEnrollment(enrollment);
+    setConvertScheduleId(enrollment.schedule_id);
+    setIsConvertModalOpen(true);
+  };
+
+  const handleConvertToStudent = async () => {
+    if (!selectedEnrollment) return;
+
+    // Create the student
+    const { data: newStudent, error: studentError } = await supabase
+      .from('students')
+      .insert({
+        first_name: selectedEnrollment.first_name,
+        last_name: selectedEnrollment.last_name,
+        email: selectedEnrollment.email,
+        phone: selectedEnrollment.phone,
+        schedule_id: convertScheduleId,
+        payment_status: selectedEnrollment.payment_status === 'paid' ? 'paid' : 'pending',
+        notes: selectedEnrollment.message,
+      })
+      .select()
+      .single();
+
+    if (studentError) {
+      toast({
+        title: 'Error',
+        description: 'No se pudo crear el alumno',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    // Update enrollment to mark as converted
+    const { error: updateError } = await supabase
+      .from('enrollments')
+      .update({
+        status: 'confirmed',
+        converted_to_student_id: newStudent.id,
+      })
+      .eq('id', selectedEnrollment.id);
+
+    if (updateError) {
+      toast({
+        title: 'Advertencia',
+        description: 'Alumno creado pero no se pudo actualizar la pre-inscripción',
+        variant: 'destructive',
+      });
+    } else {
+      toast({ title: 'Pre-inscripción convertida a alumno activo' });
+    }
+
+    setIsConvertModalOpen(false);
+    fetchEnrollments();
+    onStudentCreated?.();
+  };
+
+  const openDeleteModal = (enrollment: Enrollment) => {
+    setSelectedEnrollment(enrollment);
+    setIsDeleteModalOpen(true);
+  };
+
+  const handleDelete = async () => {
+    if (!selectedEnrollment) return;
+
+    const { error } = await supabase
+      .from('enrollments')
+      .delete()
+      .eq('id', selectedEnrollment.id);
+
+    if (error) {
+      toast({
+        title: 'Error',
+        description: 'No se pudo eliminar la pre-inscripción',
+        variant: 'destructive',
+      });
+    } else {
+      toast({ title: 'Pre-inscripción eliminada' });
+      setIsDeleteModalOpen(false);
+      fetchEnrollments();
+    }
+  };
+
+  const filteredEnrollments = enrollments.filter(enrollment => {
+    const fullName = `${enrollment.first_name} ${enrollment.last_name}`.toLowerCase();
+    const matchesSearch = fullName.includes(search.toLowerCase()) || 
+                          enrollment.email.toLowerCase().includes(search.toLowerCase());
+    const matchesStatus = statusFilter === 'all' || enrollment.status === statusFilter;
+    const matchesPayment = paymentFilter === 'all' || enrollment.payment_status === paymentFilter;
+    return matchesSearch && matchesStatus && matchesPayment;
+  });
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      {/* Filters */}
+      <div className="flex flex-col sm:flex-row gap-4">
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
+          <Input
+            placeholder="Buscar por nombre o email..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="pl-10"
+          />
+        </div>
+        <Select value={statusFilter} onValueChange={setStatusFilter}>
+          <SelectTrigger className="w-full sm:w-[180px]">
+            <SelectValue placeholder="Estado" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Todos los estados</SelectItem>
+            <SelectItem value="pending">Pendiente</SelectItem>
+            <SelectItem value="contacted">Contactado</SelectItem>
+            <SelectItem value="confirmed">Confirmado</SelectItem>
+            <SelectItem value="cancelled">Cancelado</SelectItem>
+          </SelectContent>
+        </Select>
+        <Select value={paymentFilter} onValueChange={setPaymentFilter}>
+          <SelectTrigger className="w-full sm:w-[180px]">
+            <SelectValue placeholder="Pago" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Todos los pagos</SelectItem>
+            <SelectItem value="pending">Sin pago</SelectItem>
+            <SelectItem value="deposit">Señado</SelectItem>
+            <SelectItem value="paid">Pagado</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
+      {/* Stats */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+        <div className="bg-card border rounded-lg p-4">
+          <p className="text-sm text-muted-foreground">Total</p>
+          <p className="text-2xl font-bold">{enrollments.length}</p>
+        </div>
+        <div className="bg-card border rounded-lg p-4">
+          <p className="text-sm text-muted-foreground">Pendientes</p>
+          <p className="text-2xl font-bold text-orange-500">
+            {enrollments.filter(e => e.status === 'pending').length}
+          </p>
+        </div>
+        <div className="bg-card border rounded-lg p-4">
+          <p className="text-sm text-muted-foreground">Señados</p>
+          <p className="text-2xl font-bold text-blue-500">
+            {enrollments.filter(e => e.payment_status === 'deposit').length}
+          </p>
+        </div>
+        <div className="bg-card border rounded-lg p-4">
+          <p className="text-sm text-muted-foreground">Pagados</p>
+          <p className="text-2xl font-bold text-green-500">
+            {enrollments.filter(e => e.payment_status === 'paid').length}
+          </p>
+        </div>
+      </div>
+
+      {/* Table */}
+      <div className="rounded-lg border bg-card overflow-x-auto">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Fecha</TableHead>
+              <TableHead>Nombre</TableHead>
+              <TableHead>Horario Solicitado</TableHead>
+              <TableHead className="text-center">Estado</TableHead>
+              <TableHead className="text-center">Pago</TableHead>
+              <TableHead className="text-center">Acciones</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {filteredEnrollments.map(enrollment => (
+              <TableRow key={enrollment.id} className={enrollment.converted_to_student_id ? 'opacity-60' : ''}>
+                <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
+                  {format(new Date(enrollment.created_at), 'dd/MM/yy', { locale: es })}
+                </TableCell>
+                <TableCell>
+                  <div>
+                    <p className="font-medium">{enrollment.first_name} {enrollment.last_name}</p>
+                    <p className="text-sm text-muted-foreground">{enrollment.email}</p>
+                  </div>
+                </TableCell>
+                <TableCell>
+                  {enrollment.schedule ? (
+                    <span className="text-sm">
+                      {DAY_NAMES[enrollment.schedule.day_of_week]} {enrollment.schedule.start_time.slice(0, 5)}
+                    </span>
+                  ) : (
+                    <span className="text-muted-foreground text-sm">-</span>
+                  )}
+                </TableCell>
+                <TableCell className="text-center">
+                  <Select 
+                    value={enrollment.status} 
+                    onValueChange={(value) => updateEnrollmentStatus(enrollment, value)}
+                    disabled={!!enrollment.converted_to_student_id}
+                  >
+                    <SelectTrigger className="w-[130px] h-8 text-xs">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="pending">Pendiente</SelectItem>
+                      <SelectItem value="contacted">Contactado</SelectItem>
+                      <SelectItem value="confirmed">Confirmado</SelectItem>
+                      <SelectItem value="cancelled">Cancelado</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </TableCell>
+                <TableCell className="text-center">
+                  <Badge variant={PAYMENT_STATUS_COLORS[enrollment.payment_status] || 'destructive'}>
+                    {PAYMENT_STATUS_LABELS[enrollment.payment_status] || 'Sin pago'}
+                  </Badge>
+                </TableCell>
+                <TableCell>
+                  <div className="flex items-center justify-center gap-1">
+                    {/* View details */}
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => {
+                        setSelectedEnrollment(enrollment);
+                        setIsDetailModalOpen(true);
+                      }}
+                    >
+                      <Eye className="w-4 h-4" />
+                    </Button>
+
+                    {/* WhatsApp */}
+                    {enrollment.phone && (
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="text-green-600 hover:text-green-700"
+                        onClick={() => {
+                          const phone = enrollment.phone?.replace(/\D/g, '');
+                          window.open(`https://wa.me/54${phone}`, '_blank');
+                        }}
+                      >
+                        <MessageCircle className="w-4 h-4" />
+                      </Button>
+                    )}
+
+                    {/* Register payment */}
+                    {!enrollment.converted_to_student_id && (
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => openPaymentModal(enrollment)}
+                      >
+                        <DollarSign className="w-4 h-4" />
+                      </Button>
+                    )}
+
+                    {/* Convert to student */}
+                    {!enrollment.converted_to_student_id && (
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="text-primary"
+                        onClick={() => openConvertModal(enrollment)}
+                      >
+                        <UserPlus className="w-4 h-4" />
+                      </Button>
+                    )}
+
+                    {enrollment.converted_to_student_id && (
+                      <Badge variant="outline" className="text-xs">
+                        <Check className="w-3 h-3 mr-1" /> Convertido
+                      </Badge>
+                    )}
+
+                    {/* Delete */}
+                    {!enrollment.converted_to_student_id && (
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="text-destructive hover:text-destructive"
+                        onClick={() => openDeleteModal(enrollment)}
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
+                    )}
+                  </div>
+                </TableCell>
+              </TableRow>
+            ))}
+            {filteredEnrollments.length === 0 && (
+              <TableRow>
+                <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
+                  No se encontraron pre-inscripciones
+                </TableCell>
+              </TableRow>
+            )}
+          </TableBody>
+        </Table>
+      </div>
+
+      {/* Detail Modal */}
+      <Dialog open={isDetailModalOpen} onOpenChange={setIsDetailModalOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Detalle de Pre-inscripción</DialogTitle>
+          </DialogHeader>
+          {selectedEnrollment && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label className="text-muted-foreground">Nombre</Label>
+                  <p className="font-medium">{selectedEnrollment.first_name} {selectedEnrollment.last_name}</p>
+                </div>
+                <div>
+                  <Label className="text-muted-foreground">Email</Label>
+                  <p>{selectedEnrollment.email}</p>
+                </div>
+                <div>
+                  <Label className="text-muted-foreground">Teléfono</Label>
+                  <p>{selectedEnrollment.phone || '-'}</p>
+                </div>
+                <div>
+                  <Label className="text-muted-foreground">Fecha inscripción</Label>
+                  <p>{format(new Date(selectedEnrollment.created_at), 'dd/MM/yyyy HH:mm', { locale: es })}</p>
+                </div>
+                <div>
+                  <Label className="text-muted-foreground">Horario solicitado</Label>
+                  <p>
+                    {selectedEnrollment.schedule 
+                      ? `${DAY_NAMES[selectedEnrollment.schedule.day_of_week]} ${selectedEnrollment.schedule.start_time.slice(0, 5)}`
+                      : '-'}
+                  </p>
+                </div>
+                <div>
+                  <Label className="text-muted-foreground">Estado de pago</Label>
+                  <p>
+                    <Badge variant={PAYMENT_STATUS_COLORS[selectedEnrollment.payment_status] || 'destructive'}>
+                      {PAYMENT_STATUS_LABELS[selectedEnrollment.payment_status] || 'Sin pago'}
+                    </Badge>
+                  </p>
+                </div>
+                {selectedEnrollment.payment_amount && (
+                  <div>
+                    <Label className="text-muted-foreground">Monto pagado</Label>
+                    <p>${selectedEnrollment.payment_amount.toLocaleString()}</p>
+                  </div>
+                )}
+                {selectedEnrollment.payment_date && (
+                  <div>
+                    <Label className="text-muted-foreground">Fecha de pago</Label>
+                    <p>{format(new Date(selectedEnrollment.payment_date), 'dd/MM/yyyy', { locale: es })}</p>
+                  </div>
+                )}
+              </div>
+              {selectedEnrollment.message && (
+                <div>
+                  <Label className="text-muted-foreground">Mensaje</Label>
+                  <p className="mt-1 p-3 bg-muted rounded-md text-sm">{selectedEnrollment.message}</p>
+                </div>
+              )}
+              {selectedEnrollment.payment_notes && (
+                <div>
+                  <Label className="text-muted-foreground">Notas de pago</Label>
+                  <p className="mt-1 p-3 bg-muted rounded-md text-sm">{selectedEnrollment.payment_notes}</p>
+                </div>
+              )}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Payment Modal */}
+      <Dialog open={isPaymentModalOpen} onOpenChange={setIsPaymentModalOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Registrar Pago</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label>Estado de Pago</Label>
+              <Select value={paymentForm.status} onValueChange={(v) => setPaymentForm(p => ({ ...p, status: v }))}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="pending">Sin pago</SelectItem>
+                  <SelectItem value="deposit">Señado</SelectItem>
+                  <SelectItem value="paid">Pagado</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label>Monto</Label>
+              <Input
+                type="number"
+                placeholder="Ej: 5000"
+                value={paymentForm.amount}
+                onChange={(e) => setPaymentForm(p => ({ ...p, amount: e.target.value }))}
+              />
+            </div>
+            <div>
+              <Label>Notas</Label>
+              <Textarea
+                placeholder="Notas sobre el pago..."
+                value={paymentForm.notes}
+                onChange={(e) => setPaymentForm(p => ({ ...p, notes: e.target.value }))}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsPaymentModalOpen(false)}>Cancelar</Button>
+            <Button onClick={handlePaymentSubmit}>Guardar</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Convert Modal */}
+      <Dialog open={isConvertModalOpen} onOpenChange={setIsConvertModalOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Convertir a Alumno Activo</DialogTitle>
+          </DialogHeader>
+          {selectedEnrollment && (
+            <div className="space-y-4">
+              <p>
+                ¿Convertir a <strong>{selectedEnrollment.first_name} {selectedEnrollment.last_name}</strong> en alumno activo?
+              </p>
+              <div>
+                <Label>Asignar a horario</Label>
+                <Select value={convertScheduleId} onValueChange={setConvertScheduleId}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Seleccionar horario" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {schedules.map(schedule => (
+                      <SelectItem key={schedule.id} value={schedule.id}>
+                        {DAY_NAMES[schedule.day_of_week]} {schedule.start_time.slice(0, 5)} - {schedule.end_time.slice(0, 5)}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsConvertModalOpen(false)}>Cancelar</Button>
+            <Button onClick={handleConvertToStudent} disabled={!convertScheduleId}>
+              <UserPlus className="w-4 h-4 mr-2" /> Convertir
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Confirmation Modal */}
+      <Dialog open={isDeleteModalOpen} onOpenChange={setIsDeleteModalOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Eliminar Pre-inscripción</DialogTitle>
+          </DialogHeader>
+          {selectedEnrollment && (
+            <p>
+              ¿Estás seguro de eliminar la pre-inscripción de <strong>{selectedEnrollment.first_name} {selectedEnrollment.last_name}</strong>?
+            </p>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsDeleteModalOpen(false)}>Cancelar</Button>
+            <Button variant="destructive" onClick={handleDelete}>
+              <Trash2 className="w-4 h-4 mr-2" /> Eliminar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
