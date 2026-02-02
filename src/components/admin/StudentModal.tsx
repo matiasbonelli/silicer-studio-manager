@@ -106,11 +106,10 @@ export default function StudentModal({ student, isOpen, onClose, onSave, isNew =
     try {
       const fileExt = file.name.split('.').pop();
       const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
-      const filePath = `receipts/${fileName}`;
 
       const { error: uploadError } = await supabase.storage
         .from('receipts')
-        .upload(filePath, file);
+        .upload(fileName, file);
 
       if (uploadError) {
         throw uploadError;
@@ -118,7 +117,7 @@ export default function StudentModal({ student, isOpen, onClose, onSave, isNew =
 
       const { data: urlData } = supabase.storage
         .from('receipts')
-        .getPublicUrl(filePath);
+        .getPublicUrl(fileName);
 
       setFormData(prev => ({ ...prev, payment_receipt_url: urlData.publicUrl }));
 
