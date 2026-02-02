@@ -5,18 +5,23 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
-import { Check, X, Search, Loader2, MessageCircle, FileText } from 'lucide-react';
+import { Check, X, Search, Loader2, MessageCircle, FileText, Trash2 } from 'lucide-react';
 
 interface StudentsListProps {
   onStudentClick: (student: Student) => void;
   refreshTrigger: number;
+  onStudentDeleted?: () => void;
 }
 
-export default function StudentsList({ onStudentClick, refreshTrigger }: StudentsListProps) {
+export default function StudentsList({ onStudentClick, refreshTrigger, onStudentDeleted }: StudentsListProps) {
   const [students, setStudents] = useState<Student[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
+  const [studentToDelete, setStudentToDelete] = useState<Student | null>(null);
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
   const { toast } = useToast();
 
   const fetchStudents = async () => {
@@ -63,6 +68,46 @@ export default function StudentsList({ onStudentClick, refreshTrigger }: Student
     }
   };
 
+  const handleDeleteStudent = async () => {
+    if (!studentToDelete) return;
+    
+    setIsDeleting(true);
+    
+    // First, nullify references in enrollments
+    await supabase
+      .from('enrollments')
+      .update({ converted_to_student_id: null })
+      .eq('converted_to_student_id', studentToDelete.id);
+    
+    // Nullify references in sales
+    await supabase
+      .from('sales')
+      .update({ student_id: null })
+      .eq('student_id', studentToDelete.id);
+    
+    // Now delete the student
+    const { error } = await supabase
+      .from('students')
+      .delete()
+      .eq('id', studentToDelete.id);
+    
+    setIsDeleting(false);
+    
+    if (error) {
+      toast({
+        title: 'Error',
+        description: 'No se pudo eliminar el alumno',
+        variant: 'destructive',
+      });
+    } else {
+      toast({ title: 'Alumno eliminado correctamente' });
+      setIsDeleteModalOpen(false);
+      setStudentToDelete(null);
+      fetchStudents();
+      onStudentDeleted?.();
+    }
+  };
+
   const filteredStudents = students.filter(student => {
     const fullName = `${student.first_name} ${student.last_name}`.toLowerCase();
     return fullName.includes(search.toLowerCase());
@@ -98,7 +143,8 @@ export default function StudentsList({ onStudentClick, refreshTrigger }: Student
               <TableHead className="text-center">WhatsApp</TableHead>
               <TableHead className="text-center">Cuota</TableHead>
               <TableHead className="text-center">Comprobante</TableHead>
-              <TableHead className="text-center">Acción</TableHead>
+              <TableHead className="text-center">Pago</TableHead>
+              <TableHead className="text-center">Eliminar</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -176,11 +222,25 @@ export default function StudentsList({ onStudentClick, refreshTrigger }: Student
                     )}
                   </Button>
                 </TableCell>
+                <TableCell className="text-center">
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="text-destructive hover:text-destructive"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setStudentToDelete(student);
+                      setIsDeleteModalOpen(true);
+                    }}
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </Button>
+                </TableCell>
               </TableRow>
             ))}
             {filteredStudents.length === 0 && (
               <TableRow>
-                <TableCell colSpan={7} className="text-center text-muted-foreground py-8">
+                <TableCell colSpan={8} className="text-center text-muted-foreground py-8">
                   No se encontraron alumnos
                 </TableCell>
               </TableRow>
@@ -188,6 +248,30 @@ export default function StudentsList({ onStudentClick, refreshTrigger }: Student
           </TableBody>
         </Table>
       </div>
+
+      {/* Delete Confirmation Modal */}
+      <Dialog open={isDeleteModalOpen} onOpenChange={setIsDeleteModalOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Eliminar Alumno</DialogTitle>
+          </DialogHeader>
+          {studentToDelete && (
+            <p>
+              ¿Estás seguro de eliminar a <strong>{studentToDelete.first_name} {studentToDelete.last_name}</strong>?
+              Esta acción no se puede deshacer.
+            </p>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsDeleteModalOpen(false)} disabled={isDeleting}>
+              Cancelar
+            </Button>
+            <Button variant="destructive" onClick={handleDeleteStudent} disabled={isDeleting}>
+              {isDeleting ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Trash2 className="w-4 h-4 mr-2" />}
+              Eliminar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

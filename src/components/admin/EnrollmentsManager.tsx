@@ -10,9 +10,17 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
-import { Search, Loader2, MessageCircle, UserPlus, DollarSign, Check, Eye, Trash2 } from 'lucide-react';
+import { Search, Loader2, MessageCircle, UserPlus, DollarSign, Check, Eye, Trash2, FileText, ExternalLink } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
+
+const getSignedReceiptUrl = async (filePath: string): Promise<string | null> => {
+  const { data, error } = await supabase.storage
+    .from('receipts')
+    .createSignedUrl(filePath, 3600);
+  if (error || !data) return null;
+  return data.signedUrl;
+};
 
 interface Schedule {
   id: string;
@@ -35,6 +43,7 @@ interface Enrollment {
   payment_amount: number | null;
   payment_date: string | null;
   payment_notes: string | null;
+  payment_receipt_url: string | null;
   converted_to_student_id: string | null;
   created_at: string;
   schedule?: Schedule;
@@ -545,6 +554,23 @@ export default function EnrollmentsManager({ onStudentCreated }: EnrollmentsMana
                 <div>
                   <Label className="text-muted-foreground">Notas de pago</Label>
                   <p className="mt-1 p-3 bg-muted rounded-md text-sm">{selectedEnrollment.payment_notes}</p>
+                </div>
+              )}
+              {selectedEnrollment.payment_receipt_url && (
+                <div>
+                  <Label className="text-muted-foreground">Comprobante de pago</Label>
+                  <Button
+                    variant="outline"
+                    className="mt-2 w-full"
+                    onClick={async () => {
+                      const url = await getSignedReceiptUrl(selectedEnrollment.payment_receipt_url!);
+                      if (url) window.open(url, '_blank');
+                    }}
+                  >
+                    <FileText className="w-4 h-4 mr-2" />
+                    Ver comprobante
+                    <ExternalLink className="w-4 h-4 ml-2" />
+                  </Button>
                 </div>
               )}
             </div>
