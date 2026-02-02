@@ -60,9 +60,12 @@ export type Database = {
       }
       inventory: {
         Row: {
+          cost: number | null
           created_at: string
           description: string | null
+          for_sale: boolean | null
           id: string
+          margin_percent: number | null
           min_stock: number
           name: string
           price: number
@@ -71,9 +74,12 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          cost?: number | null
           created_at?: string
           description?: string | null
+          for_sale?: boolean | null
           id?: string
+          margin_percent?: number | null
           min_stock?: number
           name: string
           price?: number
@@ -82,9 +88,12 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          cost?: number | null
           created_at?: string
           description?: string | null
+          for_sale?: boolean | null
           id?: string
+          margin_percent?: number | null
           min_stock?: number
           name?: string
           price?: number
@@ -210,7 +219,9 @@ export type Database = {
           id: string
           last_name: string
           notes: string | null
+          payment_receipt_url: string | null
           payment_status: Database["public"]["Enums"]["payment_status"]
+          phone: string | null
           schedule_id: string | null
           updated_at: string
         }
@@ -222,7 +233,9 @@ export type Database = {
           id?: string
           last_name: string
           notes?: string | null
+          payment_receipt_url?: string | null
           payment_status?: Database["public"]["Enums"]["payment_status"]
+          phone?: string | null
           schedule_id?: string | null
           updated_at?: string
         }
@@ -234,7 +247,9 @@ export type Database = {
           id?: string
           last_name?: string
           notes?: string | null
+          payment_receipt_url?: string | null
           payment_status?: Database["public"]["Enums"]["payment_status"]
+          phone?: string | null
           schedule_id?: string | null
           updated_at?: string
         }
