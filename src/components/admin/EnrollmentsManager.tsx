@@ -133,6 +133,65 @@ export default function EnrollmentsManager({ onStudentCreated }: EnrollmentsMana
   }, []);
 
   const updateEnrollmentStatus = async (enrollment: Enrollment, newStatus: string) => {
+    // Validar que para estado "confirmed" el pago debe ser "deposit" o "paid"
+    if (newStatus === 'confirmed' && enrollment.payment_status === 'pending') {
+      toast({
+        title: 'No se puede confirmar',
+        description: 'El pago debe estar "Señado" o "Pagado" para confirmar la inscripción',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    // Si cambia a "confirmed", crear automáticamente el alumno
+    if (newStatus === 'confirmed' && !enrollment.converted_to_student_id) {
+      // Crear el alumno
+      const { data: newStudent, error: studentError } = await supabase
+        .from('students')
+        .insert({
+          first_name: enrollment.first_name,
+          last_name: enrollment.last_name,
+          email: enrollment.email,
+          phone: enrollment.phone,
+          schedule_id: enrollment.schedule_id,
+          payment_status: enrollment.payment_status === 'paid' ? 'paid' : 'pending',
+          notes: enrollment.message,
+        })
+        .select()
+        .single();
+
+      if (studentError) {
+        toast({
+          title: 'Error',
+          description: 'No se pudo crear el alumno',
+          variant: 'destructive',
+        });
+        return;
+      }
+
+      // Actualizar enrollment con estado y converted_to_student_id
+      const { error: updateError } = await supabase
+        .from('enrollments')
+        .update({
+          status: 'confirmed',
+          converted_to_student_id: newStudent.id,
+        })
+        .eq('id', enrollment.id);
+
+      if (updateError) {
+        toast({
+          title: 'Error',
+          description: 'Alumno creado pero no se pudo actualizar la pre-inscripción',
+          variant: 'destructive',
+        });
+      } else {
+        toast({ title: 'Inscripción confirmada y alumno creado' });
+        fetchEnrollments();
+        onStudentCreated?.();
+      }
+      return;
+    }
+
     const { error } = await supabase
       .from('enrollments')
       .update({ status: newStatus })
@@ -163,14 +222,22 @@ export default function EnrollmentsManager({ onStudentCreated }: EnrollmentsMana
   const handlePaymentSubmit = async () => {
     if (!selectedEnrollment) return;
 
+    // Si se registra un pago y el estado es "pending", actualizar a "contacted"
+    const updateData: Record<string, unknown> = {
+      payment_status: paymentForm.status,
+      payment_amount: paymentForm.amount ? parseFloat(paymentForm.amount) : null,
+      payment_notes: paymentForm.notes || null,
+      payment_date: new Date().toISOString(),
+    };
+
+    // Si el pago no es "pending" y el estado de la inscripción es "pending", cambiar a "contacted"
+    if (paymentForm.status !== 'pending' && selectedEnrollment.status === 'pending') {
+      updateData.status = 'contacted';
+    }
+
     const { error } = await supabase
       .from('enrollments')
-      .update({
-        payment_status: paymentForm.status,
-        payment_amount: paymentForm.amount ? parseFloat(paymentForm.amount) : null,
-        payment_notes: paymentForm.notes || null,
-        payment_date: new Date().toISOString(),
-      })
+      .update(updateData)
       .eq('id', selectedEnrollment.id);
 
     if (error) {
@@ -426,9 +493,17 @@ export default function EnrollmentsManager({ onStudentCreated }: EnrollmentsMana
                         size="sm"
                         variant="ghost"
                         className="text-green-600 hover:text-green-700"
-                        onClick={() => {
+                        onClick={async () => {
                           const phone = enrollment.phone?.replace(/\D/g, '');
                           window.open(`https://wa.me/54${phone}`, '_blank');
+                          // Actualizar estado a "contacted" si está pendiente
+                          if (enrollment.status === 'pending' && !enrollment.converted_to_student_id) {
+                            await supabase
+                              .from('enrollments')
+                              .update({ status: 'contacted' })
+                              .eq('id', enrollment.id);
+                            fetchEnrollments();
+                          }
                         }}
                       >
                         <MessageCircle className="w-4 h-4" />
