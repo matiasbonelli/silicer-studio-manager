@@ -16,39 +16,61 @@ export type Database = {
     Tables: {
       enrollments: {
         Row: {
+          converted_to_student_id: string | null
           created_at: string
           email: string
           first_name: string
           id: string
           last_name: string
           message: string | null
+          payment_amount: number | null
+          payment_date: string | null
+          payment_notes: string | null
+          payment_status: string
           phone: string | null
           schedule_id: string
           status: string
         }
         Insert: {
+          converted_to_student_id?: string | null
           created_at?: string
           email: string
           first_name: string
           id?: string
           last_name: string
           message?: string | null
+          payment_amount?: number | null
+          payment_date?: string | null
+          payment_notes?: string | null
+          payment_status?: string
           phone?: string | null
           schedule_id: string
           status?: string
         }
         Update: {
+          converted_to_student_id?: string | null
           created_at?: string
           email?: string
           first_name?: string
           id?: string
           last_name?: string
           message?: string | null
+          payment_amount?: number | null
+          payment_date?: string | null
+          payment_notes?: string | null
+          payment_status?: string
           phone?: string | null
           schedule_id?: string
           status?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "enrollments_converted_to_student_id_fkey"
+            columns: ["converted_to_student_id"]
+            isOneToOne: false
+            referencedRelation: "students"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "enrollments_schedule_id_fkey"
             columns: ["schedule_id"]
