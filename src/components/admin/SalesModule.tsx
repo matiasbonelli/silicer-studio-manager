@@ -562,35 +562,45 @@ export default function SalesModule() {
       {/* Stats Tab */}
       <TabsContent value="stats">
         <div className="space-y-6">
-          {/* Date Filters */}
-          <div className="flex flex-wrap gap-2 items-center">
-            <CalendarDays className="w-4 h-4 text-muted-foreground" />
-            <span className="text-sm text-muted-foreground">Filtrar por:</span>
-            <Select value={filterMonth} onValueChange={setFilterMonth}>
-              <SelectTrigger className="w-[140px]">
-                <SelectValue placeholder="Mes" />
-              </SelectTrigger>
-              <SelectContent>
-                {monthNames.map(m => (
-                  <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Select value={filterYear} onValueChange={setFilterYear}>
-              <SelectTrigger className="w-[100px]">
-                <SelectValue placeholder="Año" />
-              </SelectTrigger>
-              <SelectContent>
-                {availableYears.map(y => (
-                  <SelectItem key={y} value={y.toString()}>{y}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            {(filterMonth || filterYear) && (
-              <Button variant="outline" size="sm" onClick={clearDateFilters}>
-                <Trash2 className="w-4 h-4 mr-1" /> Limpiar
-              </Button>
-            )}
+          {/* Filters */}
+          <div className="flex flex-col sm:flex-row gap-3">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
+              <Input
+                placeholder="Buscar por producto o cliente..."
+                value={historySearch}
+                onChange={(e) => setHistorySearch(e.target.value)}
+                className="pl-10"
+              />
+            </div>
+            <div className="flex gap-2">
+              <Select value={filterMonth} onValueChange={setFilterMonth}>
+                <SelectTrigger className="w-[140px]">
+                  <CalendarDays className="w-4 h-4 mr-2" />
+                  <SelectValue placeholder="Mes" />
+                </SelectTrigger>
+                <SelectContent>
+                  {monthNames.map(m => (
+                    <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Select value={filterYear} onValueChange={setFilterYear}>
+                <SelectTrigger className="w-[100px]">
+                  <SelectValue placeholder="Año" />
+                </SelectTrigger>
+                <SelectContent>
+                  {availableYears.map(y => (
+                    <SelectItem key={y} value={y.toString()}>{y}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {(filterMonth || filterYear) && (
+                <Button variant="outline" size="icon" onClick={clearDateFilters}>
+                  <Trash2 className="w-4 h-4" />
+                </Button>
+              )}
+            </div>
           </div>
 
           {/* Summary Cards */}
@@ -621,7 +631,7 @@ export default function SalesModule() {
             </Card>
           </div>
 
-          {/* Sales by Product */}
+          {/* Sales by Product - Tabla con mismos conceptos que historial */}
           <Card>
             <CardHeader>
               <CardTitle>Ventas por Producto</CardTitle>
@@ -631,24 +641,62 @@ export default function SalesModule() {
                 <Table>
                   <TableHeader>
                     <TableRow>
+                      <TableHead>Fecha</TableHead>
                       <TableHead>Producto</TableHead>
-                      <TableHead className="text-center">Cantidad Vendida</TableHead>
-                      <TableHead className="text-right">Importe Total</TableHead>
+                      <TableHead className="text-center">Cant.</TableHead>
+                      <TableHead>Cliente</TableHead>
+                      <TableHead>Método</TableHead>
+                      <TableHead className="text-center">Comprobante</TableHead>
+                      <TableHead className="text-right">Total</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {Object.entries(productSales)
-                      .sort((a, b) => b[1].total - a[1].total)
-                      .map(([productName, data]) => (
-                        <TableRow key={productName}>
-                          <TableCell className="font-medium">{productName}</TableCell>
-                          <TableCell className="text-center">{data.quantity}</TableCell>
-                          <TableCell className="text-right font-bold">{formatCurrency(data.total)}</TableCell>
-                        </TableRow>
-                      ))}
-                    {Object.keys(productSales).length === 0 && (
+                    {filteredSalesHistory.map(sale => (
+                      <TableRow key={sale.id}>
+                        <TableCell className="text-sm">{formatDate(sale.created_at)}</TableCell>
+                        <TableCell>
+                          <div className="space-y-1">
+                            {sale.sale_items?.map(item => (
+                              <div key={item.id} className="text-sm font-medium">
+                                {item.inventory?.name || 'Producto eliminado'}
+                              </div>
+                            ))}
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-center">
+                          <div className="space-y-1">
+                            {sale.sale_items?.map(item => (
+                              <div key={item.id} className="text-sm">
+                                {item.quantity}
+                              </div>
+                            ))}
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-sm">
+                          {sale.student ? `${sale.student.first_name} ${sale.student.last_name}` : '-'}
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant="secondary">{PAYMENT_METHOD_LABELS[sale.payment_method]}</Badge>
+                        </TableCell>
+                        <TableCell className="text-center">
+                          {sale.student?.payment_receipt_url ? (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => window.open(sale.student!.payment_receipt_url!, '_blank')}
+                            >
+                              <FileText className="w-4 h-4" />
+                            </Button>
+                          ) : (
+                            <span className="text-muted-foreground">-</span>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-right font-bold">{formatCurrency(sale.total_amount)}</TableCell>
+                      </TableRow>
+                    ))}
+                    {filteredSalesHistory.length === 0 && (
                       <TableRow>
-                        <TableCell colSpan={3} className="text-center text-muted-foreground py-8">
+                        <TableCell colSpan={7} className="text-center text-muted-foreground py-8">
                           No hay datos de ventas
                         </TableCell>
                       </TableRow>

@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
-import { Search, Loader2, MessageCircle, UserPlus, DollarSign, Check, Eye, Trash2, FileText, ExternalLink } from 'lucide-react';
+import { Search, Loader2, MessageCircle, UserPlus, DollarSign, Check, Eye, Trash2, FileText, ExternalLink, Pencil } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 
@@ -87,6 +87,17 @@ export default function EnrollmentsManager({ onStudentCreated }: EnrollmentsMana
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
   const [isConvertModalOpen, setIsConvertModalOpen] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+
+  // Edit form
+  const [editForm, setEditForm] = useState({
+    first_name: '',
+    last_name: '',
+    email: '',
+    phone: '',
+    schedule_id: '',
+    message: '',
+  });
 
   // Payment form
   const [paymentForm, setPaymentForm] = useState({
@@ -336,6 +347,47 @@ export default function EnrollmentsManager({ onStudentCreated }: EnrollmentsMana
     }
   };
 
+  const openEditModal = (enrollment: Enrollment) => {
+    setSelectedEnrollment(enrollment);
+    setEditForm({
+      first_name: enrollment.first_name,
+      last_name: enrollment.last_name,
+      email: enrollment.email,
+      phone: enrollment.phone || '',
+      schedule_id: enrollment.schedule_id,
+      message: enrollment.message || '',
+    });
+    setIsEditModalOpen(true);
+  };
+
+  const handleEditSubmit = async () => {
+    if (!selectedEnrollment) return;
+
+    const { error } = await supabase
+      .from('enrollments')
+      .update({
+        first_name: editForm.first_name,
+        last_name: editForm.last_name,
+        email: editForm.email,
+        phone: editForm.phone || null,
+        schedule_id: editForm.schedule_id,
+        message: editForm.message || null,
+      })
+      .eq('id', selectedEnrollment.id);
+
+    if (error) {
+      toast({
+        title: 'Error',
+        description: 'No se pudo actualizar la inscripción',
+        variant: 'destructive',
+      });
+    } else {
+      toast({ title: 'Inscripción actualizada' });
+      setIsEditModalOpen(false);
+      fetchEnrollments();
+    }
+  };
+
   const filteredEnrollments = enrollments.filter(enrollment => {
     const fullName = `${enrollment.first_name} ${enrollment.last_name}`.toLowerCase();
     const matchesSearch = fullName.includes(search.toLowerCase()) || 
@@ -487,7 +539,16 @@ export default function EnrollmentsManager({ onStudentCreated }: EnrollmentsMana
                       <Eye className="w-4 h-4" />
                     </Button>
 
-                    {/* WhatsApp */}
+                    {/* Edit */}
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => openEditModal(enrollment)}
+                    >
+                      <Pencil className="w-4 h-4" />
+                    </Button>
+
+                    {/* WhatsApp - siempre visible si tiene teléfono */}
                     {enrollment.phone && (
                       <Button
                         size="sm"
@@ -496,7 +557,7 @@ export default function EnrollmentsManager({ onStudentCreated }: EnrollmentsMana
                         onClick={async () => {
                           const phone = enrollment.phone?.replace(/\D/g, '');
                           window.open(`https://wa.me/54${phone}`, '_blank');
-                          // Actualizar estado a "contacted" si está pendiente
+                          // Actualizar estado a "contacted" si está pendiente y no convertido
                           if (enrollment.status === 'pending' && !enrollment.converted_to_student_id) {
                             await supabase
                               .from('enrollments')
@@ -751,6 +812,76 @@ export default function EnrollmentsManager({ onStudentCreated }: EnrollmentsMana
             <Button variant="destructive" onClick={handleDelete}>
               <Trash2 className="w-4 h-4 mr-2" /> Eliminar
             </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Modal */}
+      <Dialog open={isEditModalOpen} onOpenChange={setIsEditModalOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Editar Inscripción</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label>Nombre</Label>
+                <Input
+                  value={editForm.first_name}
+                  onChange={(e) => setEditForm(p => ({ ...p, first_name: e.target.value }))}
+                />
+              </div>
+              <div>
+                <Label>Apellido</Label>
+                <Input
+                  value={editForm.last_name}
+                  onChange={(e) => setEditForm(p => ({ ...p, last_name: e.target.value }))}
+                />
+              </div>
+            </div>
+            <div>
+              <Label>Email</Label>
+              <Input
+                type="email"
+                value={editForm.email}
+                onChange={(e) => setEditForm(p => ({ ...p, email: e.target.value }))}
+              />
+            </div>
+            <div>
+              <Label>Teléfono</Label>
+              <Input
+                type="tel"
+                value={editForm.phone}
+                onChange={(e) => setEditForm(p => ({ ...p, phone: e.target.value }))}
+              />
+            </div>
+            <div>
+              <Label>Horario</Label>
+              <Select value={editForm.schedule_id} onValueChange={(v) => setEditForm(p => ({ ...p, schedule_id: v }))}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Seleccionar horario" />
+                </SelectTrigger>
+                <SelectContent>
+                  {schedules.map(schedule => (
+                    <SelectItem key={schedule.id} value={schedule.id}>
+                      {DAY_NAMES[schedule.day_of_week]} {schedule.start_time.slice(0, 5)} - {schedule.end_time.slice(0, 5)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label>Mensaje / Notas</Label>
+              <Textarea
+                value={editForm.message}
+                onChange={(e) => setEditForm(p => ({ ...p, message: e.target.value }))}
+                rows={2}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsEditModalOpen(false)}>Cancelar</Button>
+            <Button onClick={handleEditSubmit}>Guardar</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
