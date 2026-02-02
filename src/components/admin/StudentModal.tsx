@@ -191,10 +191,28 @@ export default function StudentModal({ student, isOpen, onClose, onSave, isNew =
 
   const handleDelete = async () => {
     if (!student || isNew) return;
-    
+
     if (!confirm('¿Estás seguro de eliminar este alumno?')) return;
 
     setLoading(true);
+
+    // Primero desvincular el alumno de las inscripciones (foreign key constraint)
+    const { error: unlinkError } = await supabase
+      .from('enrollments')
+      .update({ converted_to_student_id: null })
+      .eq('converted_to_student_id', student.id);
+
+    if (unlinkError) {
+      toast({
+        title: 'Error',
+        description: 'No se pudo desvincular el alumno de las inscripciones',
+        variant: 'destructive',
+      });
+      setLoading(false);
+      return;
+    }
+
+    // Ahora sí eliminar el alumno
     const { error } = await supabase.from('students').delete().eq('id', student.id);
 
     if (error) {
