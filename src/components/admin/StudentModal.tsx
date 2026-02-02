@@ -109,7 +109,11 @@ export default function StudentModal({ student, isOpen, onClose, onSave, isNew =
 
       const { error: uploadError } = await supabase.storage
         .from('receipts')
-        .upload(fileName, file);
+        .upload(fileName, file, {
+          cacheControl: '3600',
+          contentType: file.type,
+          upsert: false
+        });
 
       if (uploadError) {
         throw uploadError;
