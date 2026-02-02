@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
-import { Plus, Minus, Trash2, ShoppingCart, Printer, Loader2, Search, History, TrendingUp, FileText } from 'lucide-react';
+import { Plus, Minus, Trash2, ShoppingCart, Printer, Loader2, Search, History, TrendingUp, FileText, CalendarDays } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 
@@ -44,8 +44,29 @@ export default function SalesModule() {
   const [salesHistory, setSalesHistory] = useState<SaleWithItems[]>([]);
   const [salesTab, setSalesTab] = useState('new');
   const [historySearch, setHistorySearch] = useState('');
+  const [filterMonth, setFilterMonth] = useState<string>('');
+  const [filterYear, setFilterYear] = useState<string>('');
   const { toast } = useToast();
   const receiptRef = useRef<HTMLDivElement>(null);
+
+  // Get available years for filter (current year and 2 years back)
+  const currentYear = new Date().getFullYear();
+  const availableYears = [currentYear, currentYear - 1, currentYear - 2];
+
+  const monthNames = [
+    { value: '1', label: 'Enero' },
+    { value: '2', label: 'Febrero' },
+    { value: '3', label: 'Marzo' },
+    { value: '4', label: 'Abril' },
+    { value: '5', label: 'Mayo' },
+    { value: '6', label: 'Junio' },
+    { value: '7', label: 'Julio' },
+    { value: '8', label: 'Agosto' },
+    { value: '9', label: 'Septiembre' },
+    { value: '10', label: 'Octubre' },
+    { value: '11', label: 'Noviembre' },
+    { value: '12', label: 'Diciembre' },
+  ];
 
   const fetchSalesHistory = async () => {
     const { data } = await supabase
@@ -224,25 +245,6 @@ export default function SalesModule() {
     item.name.toLowerCase().includes(search.toLowerCase()) && item.quantity > 0 && item.for_sale
   );
 
-  // Calculate sales statistics
-  const totalSales = salesHistory.reduce((sum, sale) => sum + sale.total_amount, 0);
-  const totalItemsSold = salesHistory.reduce((sum, sale) =>
-    sum + (sale.sale_items?.reduce((itemSum, item) => itemSum + item.quantity, 0) || 0), 0
-  );
-
-  // Group sales by product
-  const productSales = salesHistory.reduce((acc, sale) => {
-    sale.sale_items?.forEach(item => {
-      const productName = item.inventory?.name || 'Producto eliminado';
-      if (!acc[productName]) {
-        acc[productName] = { quantity: 0, total: 0 };
-      }
-      acc[productName].quantity += item.quantity;
-      acc[productName].total += item.quantity * item.unit_price;
-    });
-    return acc;
-  }, {} as Record<string, { quantity: number; total: number }>);
-
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('es-AR', {
       day: '2-digit',
@@ -253,12 +255,54 @@ export default function SalesModule() {
 
   // Filtrar historial de ventas
   const filteredSalesHistory = salesHistory.filter(sale => {
-    if (!historySearch) return true;
-    const searchLower = historySearch.toLowerCase();
-    const studentName = sale.student ? `${sale.student.first_name} ${sale.student.last_name}`.toLowerCase() : '';
-    const products = sale.sale_items?.map(item => item.inventory?.name?.toLowerCase() || '').join(' ') || '';
-    return studentName.includes(searchLower) || products.includes(searchLower);
+    // Filter by date
+    if (filterYear || filterMonth) {
+      const saleDate = new Date(sale.created_at);
+      if (filterYear && saleDate.getFullYear() !== parseInt(filterYear)) {
+        return false;
+      }
+      if (filterMonth && (saleDate.getMonth() + 1) !== parseInt(filterMonth)) {
+        return false;
+      }
+    }
+
+    // Filter by search
+    if (historySearch) {
+      const searchLower = historySearch.toLowerCase();
+      const studentName = sale.student ? `${sale.student.first_name} ${sale.student.last_name}`.toLowerCase() : '';
+      const products = sale.sale_items?.map(item => item.inventory?.name?.toLowerCase() || '').join(' ') || '';
+      if (!studentName.includes(searchLower) && !products.includes(searchLower)) {
+        return false;
+      }
+    }
+
+    return true;
   });
+
+  // Clear date filters
+  const clearDateFilters = () => {
+    setFilterMonth('');
+    setFilterYear('');
+  };
+
+  // Calculate sales statistics (based on filtered data)
+  const totalSales = filteredSalesHistory.reduce((sum, sale) => sum + sale.total_amount, 0);
+  const totalItemsSold = filteredSalesHistory.reduce((sum, sale) =>
+    sum + (sale.sale_items?.reduce((itemSum, item) => itemSum + item.quantity, 0) || 0), 0
+  );
+
+  // Group sales by product (based on filtered data)
+  const productSales = filteredSalesHistory.reduce((acc, sale) => {
+    sale.sale_items?.forEach(item => {
+      const productName = item.inventory?.name || 'Producto eliminado';
+      if (!acc[productName]) {
+        acc[productName] = { quantity: 0, total: 0 };
+      }
+      acc[productName].quantity += item.quantity;
+      acc[productName].total += item.quantity * item.unit_price;
+    });
+    return acc;
+  }, {} as Record<string, { quantity: number; total: number }>);
 
   if (loading && inventory.length === 0) {
     return (
@@ -405,14 +449,45 @@ export default function SalesModule() {
       {/* Sales History Tab */}
       <TabsContent value="history">
         <div className="space-y-4">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
-            <Input
-              placeholder="Buscar por producto o cliente..."
-              value={historySearch}
-              onChange={(e) => setHistorySearch(e.target.value)}
-              className="pl-10"
-            />
+          {/* Filters */}
+          <div className="flex flex-col sm:flex-row gap-3">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
+              <Input
+                placeholder="Buscar por producto o cliente..."
+                value={historySearch}
+                onChange={(e) => setHistorySearch(e.target.value)}
+                className="pl-10"
+              />
+            </div>
+            <div className="flex gap-2">
+              <Select value={filterMonth} onValueChange={setFilterMonth}>
+                <SelectTrigger className="w-[140px]">
+                  <CalendarDays className="w-4 h-4 mr-2" />
+                  <SelectValue placeholder="Mes" />
+                </SelectTrigger>
+                <SelectContent>
+                  {monthNames.map(m => (
+                    <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Select value={filterYear} onValueChange={setFilterYear}>
+                <SelectTrigger className="w-[100px]">
+                  <SelectValue placeholder="Año" />
+                </SelectTrigger>
+                <SelectContent>
+                  {availableYears.map(y => (
+                    <SelectItem key={y} value={y.toString()}>{y}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {(filterMonth || filterYear) && (
+                <Button variant="outline" size="icon" onClick={clearDateFilters}>
+                  <Trash2 className="w-4 h-4" />
+                </Button>
+              )}
+            </div>
           </div>
           <div className="rounded-lg border bg-card">
             <Table>
@@ -487,6 +562,37 @@ export default function SalesModule() {
       {/* Stats Tab */}
       <TabsContent value="stats">
         <div className="space-y-6">
+          {/* Date Filters */}
+          <div className="flex flex-wrap gap-2 items-center">
+            <CalendarDays className="w-4 h-4 text-muted-foreground" />
+            <span className="text-sm text-muted-foreground">Filtrar por:</span>
+            <Select value={filterMonth} onValueChange={setFilterMonth}>
+              <SelectTrigger className="w-[140px]">
+                <SelectValue placeholder="Mes" />
+              </SelectTrigger>
+              <SelectContent>
+                {monthNames.map(m => (
+                  <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select value={filterYear} onValueChange={setFilterYear}>
+              <SelectTrigger className="w-[100px]">
+                <SelectValue placeholder="Año" />
+              </SelectTrigger>
+              <SelectContent>
+                {availableYears.map(y => (
+                  <SelectItem key={y} value={y.toString()}>{y}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {(filterMonth || filterYear) && (
+              <Button variant="outline" size="sm" onClick={clearDateFilters}>
+                <Trash2 className="w-4 h-4 mr-1" /> Limpiar
+              </Button>
+            )}
+          </div>
+
           {/* Summary Cards */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <Card>
@@ -510,7 +616,7 @@ export default function SalesModule() {
                 <CardTitle className="text-sm font-medium text-muted-foreground">Cantidad de Ventas</CardTitle>
               </CardHeader>
               <CardContent>
-                <p className="text-3xl font-bold">{salesHistory.length}</p>
+                <p className="text-3xl font-bold">{filteredSalesHistory.length}</p>
               </CardContent>
             </Card>
           </div>

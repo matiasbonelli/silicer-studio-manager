@@ -135,8 +135,12 @@ export default function Index() {
 
   const availableSchedules = schedules.filter(s => s.current_count < s.max_capacity);
 
-  // Get unique days that have available schedules
-  const availableDays = [...new Set(availableSchedules.map(s => s.day_of_week))];
+  // Order of days
+  const dayOrder = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday'];
+
+  // Get unique days that have available schedules, sorted by day order
+  const availableDays = [...new Set(availableSchedules.map(s => s.day_of_week))]
+    .sort((a, b) => dayOrder.indexOf(a) - dayOrder.indexOf(b));
 
   // Get schedules for selected day
   const schedulesForSelectedDay = selectedDay

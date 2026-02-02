@@ -34,10 +34,15 @@ export default function InventoryManager() {
     quantity: 0,
     unit: 'unidad',
     min_stock: 0,
-    price: 0,
     cost: 0,
+    margin_percent: 0,
     for_sale: false,
   });
+
+  // Calculate price from cost and margin
+  const calculatedPrice = formData.cost > 0
+    ? Math.round(formData.cost * (1 + formData.margin_percent / 100))
+    : 0;
   const [inventoryTab, setInventoryTab] = useState('all');
   const { toast } = useToast();
 
@@ -60,6 +65,11 @@ export default function InventoryManager() {
 
   const openModal = (item?: InventoryItem) => {
     if (item) {
+      // Calculate margin percent from existing cost and price
+      const marginPercent = item.cost > 0
+        ? Math.round(((item.price - item.cost) / item.cost) * 100)
+        : 0;
+
       setEditingItem(item);
       setFormData({
         name: item.name,
@@ -67,8 +77,8 @@ export default function InventoryManager() {
         quantity: item.quantity,
         unit: item.unit,
         min_stock: item.min_stock,
-        price: item.price,
         cost: item.cost ?? 0,
+        margin_percent: marginPercent,
         for_sale: item.for_sale ?? false,
       });
     } else {
@@ -79,8 +89,8 @@ export default function InventoryManager() {
         quantity: 0,
         unit: 'unidad',
         min_stock: 0,
-        price: 0,
         cost: 0,
+        margin_percent: 0,
         for_sale: false,
       });
     }
@@ -96,7 +106,7 @@ export default function InventoryManager() {
       quantity: formData.quantity,
       unit: formData.unit,
       min_stock: formData.min_stock,
-      price: formData.price,
+      price: calculatedPrice,
       cost: formData.cost,
       for_sale: formData.for_sale,
     };
@@ -340,23 +350,21 @@ export default function InventoryManager() {
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-2">
-                <Label htmlFor="price">Precio de Venta</Label>
+                <Label htmlFor="margin_percent">Margen (%)</Label>
                 <Input
-                  id="price"
+                  id="margin_percent"
                   type="number"
                   min="0"
                   step="1"
-                  value={formData.price}
-                  onChange={(e) => setFormData(prev => ({ ...prev, price: parseFloat(e.target.value) || 0 }))}
+                  value={formData.margin_percent}
+                  onChange={(e) => setFormData(prev => ({ ...prev, margin_percent: parseFloat(e.target.value) || 0 }))}
                 />
               </div>
               <div className="space-y-2">
-                <Label>Margen</Label>
-                <div className="h-10 flex items-center px-3 rounded-md border bg-muted">
+                <Label>Precio de Venta</Label>
+                <div className="h-10 flex items-center px-3 rounded-md border bg-muted font-medium">
                   {formData.cost > 0 ? (
-                    <span className={formData.price - formData.cost > 0 ? 'text-green-600' : 'text-red-600'}>
-                      {formatCurrency(formData.price - formData.cost)} ({Math.round(((formData.price - formData.cost) / formData.cost) * 100)}%)
-                    </span>
+                    <span className="text-primary">{formatCurrency(calculatedPrice)}</span>
                   ) : (
                     <span className="text-muted-foreground">Ingresá el costo</span>
                   )}
