@@ -119,11 +119,9 @@ export default function StudentModal({ student, isOpen, onClose, onSave, isNew =
         throw uploadError;
       }
 
-      const { data: urlData } = supabase.storage
-        .from('receipts')
-        .getPublicUrl(fileName);
-
-      setFormData(prev => ({ ...prev, payment_receipt_url: urlData.publicUrl }));
+      // Store the file path instead of public URL since bucket is private
+      // We'll use signed URLs when displaying the receipt
+      setFormData(prev => ({ ...prev, payment_receipt_url: `receipts/${fileName}` }));
 
       toast({
         title: 'Archivo subido',
@@ -323,7 +321,20 @@ export default function StudentModal({ student, isOpen, onClose, onSave, isNew =
                   type="button"
                   variant="outline"
                   size="sm"
-                  onClick={() => window.open(formData.payment_receipt_url, '_blank')}
+                  onClick={async () => {
+                    // Extract filename from the stored path (receipts/filename)
+                    const filePath = formData.payment_receipt_url.startsWith('receipts/') 
+                      ? formData.payment_receipt_url.replace('receipts/', '')
+                      : formData.payment_receipt_url;
+                    
+                    const { data } = await supabase.storage
+                      .from('receipts')
+                      .createSignedUrl(filePath, 3600); // 1 hour expiry
+                    
+                    if (data?.signedUrl) {
+                      window.open(data.signedUrl, '_blank');
+                    }
+                  }}
                 >
                   <ExternalLink className="w-4 h-4 mr-1" /> Ver
                 </Button>
