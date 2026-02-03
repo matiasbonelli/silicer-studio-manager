@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { Schedule, DAY_NAMES } from '@/types/database';
@@ -10,7 +10,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import { z } from 'zod';
-import { MessageCircle, Instagram, Send, Loader2, Users, Palette, Heart, Sparkles } from 'lucide-react';
+import { MessageCircle, Instagram, Send, Loader2, Clock, Users, Sparkles, Settings } from 'lucide-react';
 
 const enrollmentSchema = z.object({
   first_name: z.string().trim().min(1, 'El nombre es requerido').max(100),
@@ -38,16 +38,17 @@ export default function Index() {
   });
   const { toast } = useToast();
 
+  const infoSectionRef = useRef<HTMLElement>(null);
+  const formSectionRef = useRef<HTMLElement>(null);
+
   useEffect(() => {
     const fetchSchedules = async () => {
-      // Get schedules
       const { data: schedulesData } = await supabase
         .from('schedules')
         .select('*')
         .order('day_of_week')
         .order('start_time');
 
-      // Get student counts per schedule
       const { data: studentsData } = await supabase
         .from('students')
         .select('schedule_id');
@@ -89,7 +90,6 @@ export default function Index() {
       return;
     }
 
-    // Check availability
     const selectedSchedule = schedules.find(s => s.id === formData.schedule_id);
     if (selectedSchedule && selectedSchedule.current_count >= selectedSchedule.max_capacity) {
       toast({
@@ -119,7 +119,7 @@ export default function Index() {
       });
     } else {
       toast({
-        title: '¡Inscripción enviada!',
+        title: '¡Preinscripción enviada!',
         description: 'Nos pondremos en contacto pronto.',
       });
       setSelectedDay('');
@@ -137,66 +137,174 @@ export default function Index() {
     setSubmitting(false);
   };
 
+  const scrollToSection = (ref: React.RefObject<HTMLElement>) => {
+    ref.current?.scrollIntoView({ behavior: 'smooth' });
+  };
+
   const availableSchedules = schedules.filter(s => s.current_count < s.max_capacity);
-
-  // Order of days
   const dayOrder = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday'];
-
-  // Get unique days that have available schedules, sorted by day order
   const availableDays = [...new Set(availableSchedules.map(s => s.day_of_week))]
     .sort((a, b) => dayOrder.indexOf(a) - dayOrder.indexOf(b));
-
-  // Get schedules for selected day
   const schedulesForSelectedDay = selectedDay
     ? availableSchedules.filter(s => s.day_of_week === selectedDay)
     : [];
 
   return (
-    <div className="min-h-screen bg-background">
-      {/* Header */}
-      <header className="bg-card shadow-sm py-4">
-        <div className="container mx-auto px-4 flex justify-center">
-          <div className="text-center">
-            <h1 className="text-4xl font-bold text-primary tracking-tight">Silicer</h1>
-            <p className="text-muted-foreground text-sm">Taller de Cerámica</p>
+    <div className="min-h-screen">
+      {/* Admin Link */}
+      <Link
+        to="/auth"
+        className="fixed top-4 right-4 z-50 p-2 text-[#d4b89c]/50 hover:text-[#d4b89c] transition-colors"
+        title="Acceso Administrador"
+      >
+        <Settings className="w-5 h-5" />
+      </Link>
+
+      {/* Hero Section - Dark Background */}
+      <section className="min-h-screen flex flex-col items-center justify-center px-4 bg-gradient-to-b from-[#1a1512] via-[#2a2118] to-[#1a1512] relative overflow-hidden">
+        {/* Decorative gradient overlay */}
+        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_left,_rgba(139,90,43,0.15)_0%,_transparent_50%)]" />
+
+        {/* Logo placeholder - replace with SVG when provided */}
+        <div className="mb-8 relative z-10">
+          {/* Placeholder for logo - will be replaced with actual SVG */}
+          <div className="w-24 h-24 rounded-full bg-[#d4b89c]/10 flex items-center justify-center">
+            <span className="text-4xl font-serif text-[#d4b89c]">S</span>
           </div>
         </div>
-      </header>
 
-      {/* Hero Section */}
-      <section className="py-16 md:py-24 bg-gradient-to-b from-accent to-background">
-        <div className="container mx-auto px-4 text-center">
-          <Sparkles className="w-12 h-12 mx-auto mb-6 text-primary" />
-          <h2 className="text-3xl md:text-5xl font-bold text-foreground mb-4">
-            Descubrí el arte de la cerámica
-          </h2>
-          <p className="text-lg md:text-xl text-muted-foreground max-w-2xl mx-auto mb-8">
-            Un espacio para crear, aprender y conectar con tus manos. 
-            Clases grupales en un ambiente cálido y creativo.
-          </p>
-          <div className="flex justify-center gap-4 flex-wrap">
-            <div className="flex items-center gap-2 text-muted-foreground">
-              <Users className="w-5 h-5 text-primary" />
-              <span>Grupos reducidos</span>
-            </div>
-            <div className="flex items-center gap-2 text-muted-foreground">
-              <Palette className="w-5 h-5 text-primary" />
-              <span>Materiales incluidos</span>
-            </div>
-            <div className="flex items-center gap-2 text-muted-foreground">
-              <Heart className="w-5 h-5 text-primary" />
-              <span>Todos los niveles</span>
-            </div>
+        {/* Title */}
+        <h1 className="text-4xl md:text-6xl lg:text-7xl font-serif text-[#f5ebe0] text-center mb-6 relative z-10 tracking-wide">
+          Descubrí el arte de la cerámica
+        </h1>
+
+        {/* Subtitle */}
+        <p className="text-lg md:text-xl text-[#a89888] text-center max-w-2xl mb-12 relative z-10 leading-relaxed">
+          Un espacio para crear, aprender, conectar con tus manos y pasar un momento super lindo.
+          Clases grupales en un ambiente cálido y creativo.
+        </p>
+
+        {/* Buttons */}
+        <div className="flex flex-col sm:flex-row gap-4 relative z-10">
+          <Button
+            size="lg"
+            className="bg-[#c4956a] hover:bg-[#b38559] text-white px-8 py-6 text-lg rounded-full"
+            onClick={() => scrollToSection(formSectionRef)}
+          >
+            Inscribirme
+          </Button>
+          <Button
+            size="lg"
+            variant="outline"
+            className="border-[#6b5c4c] text-[#d4b89c] hover:bg-[#6b5c4c]/20 px-8 py-6 text-lg rounded-full bg-transparent"
+            onClick={() => scrollToSection(infoSectionRef)}
+          >
+            Conocer más
+          </Button>
+        </div>
+
+        {/* Scroll indicator */}
+        <div className="absolute bottom-8 left-1/2 -translate-x-1/2 animate-bounce">
+          <div className="w-6 h-10 border-2 border-[#6b5c4c] rounded-full flex justify-center pt-2">
+            <div className="w-1 h-2 bg-[#6b5c4c] rounded-full" />
+          </div>
+        </div>
+      </section>
+
+      {/* Info Section */}
+      <section ref={infoSectionRef} className="py-20 px-4 bg-[#f8f5f1]">
+        <div className="container mx-auto max-w-4xl">
+          {/* Main Info Card */}
+          <Card className="border-none shadow-xl bg-white mb-12">
+            <CardContent className="p-8 md:p-12">
+              <h2 className="text-3xl md:text-4xl font-serif text-primary text-center mb-8">
+                ¡Sumate a nuestro taller este año!
+              </h2>
+
+              <div className="space-y-6 text-lg text-muted-foreground">
+                <p className="text-center">
+                  En Silicer tenemos todo listo para que aprendas cerámica en serio.
+                </p>
+
+                <div className="flex items-start gap-4 p-4 bg-accent/50 rounded-lg">
+                  <Sparkles className="w-6 h-6 text-primary shrink-0 mt-1" />
+                  <div>
+                    <strong className="text-foreground">¿Qué vas a aprender?</strong>
+                    <p>Técnicas de construcción y decoración en todos los estados (cuero, crudo, bizcocho y sobre esmalte).</p>
+                  </div>
+                </div>
+
+                <div className="flex items-start gap-4 p-4 bg-accent/50 rounded-lg">
+                  <span className="text-2xl shrink-0">🚀</span>
+                  <div>
+                    <strong className="text-foreground">¿Límites?</strong>
+                    <p>Ninguno. Hacé las piezas que quieras del tamaño que quieras (¡siempre que el horno nos dé espacio :) !).</p>
+                  </div>
+                </div>
+
+                <div className="flex items-start gap-4 p-4 bg-accent/50 rounded-lg">
+                  <span className="text-2xl shrink-0">🧉</span>
+                  <div>
+                    <strong className="text-foreground">El plus:</strong>
+                    <p>No es solo cerámica, es comunidad. Vení a encontrarte, a compartir y a tomarte unos mates con peperina con nosotros.</p>
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Three Columns */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <Card className="border-none shadow-lg bg-white text-center">
+              <CardContent className="p-6">
+                <Clock className="w-10 h-10 text-primary mx-auto mb-4" />
+                <h3 className="text-xl font-bold text-foreground mb-2">2 Horas</h3>
+                <p className="text-muted-foreground">
+                  Cada turno son de 2 horas, 1 vez por semana
+                </p>
+              </CardContent>
+            </Card>
+
+            <Card className="border-none shadow-lg bg-white text-center">
+              <CardContent className="p-6">
+                <Users className="w-10 h-10 text-primary mx-auto mb-4" />
+                <h3 className="text-xl font-bold text-foreground mb-2">Cupos limitados</h3>
+                <p className="text-muted-foreground">
+                  10 personas por turno, te recomendamos preinscribirte con antelación
+                </p>
+              </CardContent>
+            </Card>
+
+            <Card className="border-none shadow-lg bg-white text-center">
+              <CardContent className="p-6">
+                <Sparkles className="w-10 h-10 text-primary mx-auto mb-4" />
+                <h3 className="text-xl font-bold text-foreground mb-2">Experiencia</h3>
+                <p className="text-muted-foreground">
+                  No importa si no tenés experiencia, todos aprendemos juntos!
+                </p>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* CTA Button */}
+          <div className="text-center mt-12">
+            <Button
+              size="lg"
+              className="bg-primary hover:bg-primary/90 px-10 py-6 text-lg rounded-full"
+              onClick={() => scrollToSection(formSectionRef)}
+            >
+              Quiero inscribirme
+            </Button>
           </div>
         </div>
       </section>
 
       {/* Enrollment Form */}
-      <section className="py-16 bg-background" id="inscripcion">
+      <section ref={formSectionRef} className="py-20 bg-background" id="inscripcion">
         <div className="container mx-auto px-4 max-w-xl">
           <Card className="shadow-xl border-2">
             <CardHeader className="text-center">
-              <CardTitle className="text-2xl text-primary">¡Inscribite!</CardTitle>
+              <CardTitle className="text-2xl text-primary">¡Preinscribite!</CardTitle>
               <CardDescription>
                 Completá el formulario y te contactaremos para confirmar tu lugar
               </CardDescription>
@@ -330,7 +438,7 @@ export default function Index() {
                     </>
                   ) : (
                     <>
-                      <Send className="w-4 h-4 mr-2" /> Enviar Inscripción
+                      <Send className="w-4 h-4 mr-2" /> Enviar preinscripción
                     </>
                   )}
                 </Button>
@@ -371,11 +479,6 @@ export default function Index() {
                 <Instagram className="w-5 h-5 mr-2" /> Instagram
               </a>
             </Button>
-          </div>
-          <div className="mt-8 pt-8 border-t border-primary-foreground/20">
-            <Link to="/auth" className="text-sm opacity-70 hover:opacity-100 transition-opacity">
-              Acceso Administrador
-            </Link>
           </div>
         </div>
       </footer>
