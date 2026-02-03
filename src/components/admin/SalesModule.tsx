@@ -23,8 +23,42 @@ const formatCurrency = (amount: number): string => {
   }).format(amount);
 };
 
+// Keys para localStorage de la calculadora de costos
+const PRICING_CONFIG_KEY = 'silicer-pricing-config';
+const PRICING_PRODUCTS_KEY = 'silicer-pricing-products';
+
+// Categorías de productos en ventas
+type ProductCategory = 'all' | 'insumos' | 'servicios' | 'moldes';
+
+interface PricingProduct {
+  id: string;
+  nombre: string;
+  categoria: string;
+  pesoGramos: number;
+  costoManoObra: number;
+  margen: number;
+}
+
+interface PricingConfig {
+  precioBarbotina: number;
+  pesoBidon: number;
+  margenDefault: number;
+  costoManoObraDefault: number;
+}
+
+// Producto unificado para ventas
+interface SaleProduct {
+  id: string;
+  name: string;
+  price: number;
+  quantity: number; // stock disponible
+  unit: string;
+  category: ProductCategory;
+  source: 'inventory' | 'moldes';
+}
+
 interface CartItem {
-  inventory: InventoryItem;
+  inventory: InventoryItem | SaleProduct;
   quantity: number;
 }
 
@@ -34,12 +68,14 @@ interface SaleWithItems extends Sale {
 
 export default function SalesModule() {
   const [inventory, setInventory] = useState<InventoryItem[]>([]);
+  const [moldesProducts, setMoldesProducts] = useState<SaleProduct[]>([]);
   const [students, setStudents] = useState<Student[]>([]);
   const [cart, setCart] = useState<CartItem[]>([]);
   const [selectedStudent, setSelectedStudent] = useState<string>('');
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('cash');
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
+  const [categoryFilter, setCategoryFilter] = useState<ProductCategory>('all');
   const [salesHistory, setSalesHistory] = useState<SaleWithItems[]>([]);
   const [salesTab, setSalesTab] = useState('new');
   const [historySearch, setHistorySearch] = useState('');
@@ -58,6 +94,43 @@ export default function SalesModule() {
   const [historyReceiptSale, setHistoryReceiptSale] = useState<SaleWithItems | null>(null);
   const { toast } = useToast();
   const receiptRef = useRef<HTMLDivElement>(null);
+
+  // Cargar productos de la calculadora de costos desde localStorage
+  const loadMoldesProducts = () => {
+    try {
+      const savedProducts = localStorage.getItem(PRICING_PRODUCTS_KEY);
+      const savedConfig = localStorage.getItem(PRICING_CONFIG_KEY);
+
+      if (savedProducts) {
+        const products: PricingProduct[] = JSON.parse(savedProducts);
+        const config: PricingConfig = savedConfig
+          ? JSON.parse(savedConfig)
+          : { precioBarbotina: 11500, pesoBidon: 9000, margenDefault: 50, costoManoObraDefault: 1500 };
+
+        // Convertir productos de calculadora a formato de venta
+        const moldes: SaleProduct[] = products.map(p => {
+          // Calcular precio usando la misma fórmula de la calculadora
+          const costoBarbotina = (config.precioBarbotina / config.pesoBidon) * p.pesoGramos;
+          const costoTotal = costoBarbotina + p.costoManoObra;
+          const precioVenta = Math.round(costoTotal * (1 + p.margen / 100));
+
+          return {
+            id: `molde-${p.id}`,
+            name: p.nombre || 'Sin nombre',
+            price: precioVenta,
+            quantity: 999, // Stock ilimitado para moldes
+            unit: 'unidad',
+            category: 'moldes' as ProductCategory,
+            source: 'moldes' as const,
+          };
+        }).filter(p => p.name && p.price > 0);
+
+        setMoldesProducts(moldes);
+      }
+    } catch {
+      // Error parsing localStorage
+    }
+  };
 
   // Get available years for filter (current year and 2 years back)
   const currentYear = new Date().getFullYear();
@@ -100,13 +173,25 @@ export default function SalesModule() {
       if (invRes.data) setInventory(invRes.data as InventoryItem[]);
       if (studRes.data) setStudents(studRes.data as Student[]);
 
+      // Cargar moldes de la calculadora
+      loadMoldesProducts();
+
       await fetchSalesHistory();
       setLoading(false);
     };
     fetchData();
+
+    // Escuchar cambios en localStorage para actualizar moldes
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === PRICING_PRODUCTS_KEY || e.key === PRICING_CONFIG_KEY) {
+        loadMoldesProducts();
+      }
+    };
+    window.addEventListener('storage', handleStorageChange);
+    return () => window.removeEventListener('storage', handleStorageChange);
   }, []);
 
-  const addToCart = (item: InventoryItem) => {
+  const addToCart = (item: InventoryItem | SaleProduct) => {
     const existing = cart.find(c => c.inventory.id === item.id);
     if (existing) {
       if (existing.quantity >= item.quantity) {
@@ -117,7 +202,7 @@ export default function SalesModule() {
         });
         return;
       }
-      setCart(cart.map(c => 
+      setCart(cart.map(c =>
         c.inventory.id === item.id ? { ...c, quantity: c.quantity + 1 } : c
       ));
     } else {
@@ -131,7 +216,9 @@ export default function SalesModule() {
         if (c.inventory.id === itemId) {
           const newQty = c.quantity + delta;
           if (newQty <= 0) return null;
-          if (newQty > c.inventory.quantity) {
+          // Moldes no tienen límite de stock
+          const isMolde = 'source' in c.inventory && c.inventory.source === 'moldes';
+          if (!isMolde && newQty > c.inventory.quantity) {
             toast({
               title: 'Stock insuficiente',
               variant: 'destructive',
@@ -186,15 +273,21 @@ export default function SalesModule() {
       return;
     }
 
-    // Create sale items
-    const saleItems = cart.map(c => ({
+    // Create sale items - solo para items de inventario (no moldes)
+    const inventoryItems = cart.filter(c => !('source' in c.inventory) || c.inventory.source !== 'moldes');
+    const saleItems = inventoryItems.map(c => ({
       sale_id: saleData.id,
       inventory_id: c.inventory.id,
       quantity: c.quantity,
       unit_price: c.inventory.price,
     }));
 
-    const { error: itemsError } = await supabase.from('sale_items').insert(saleItems);
+    // Solo insertar si hay items de inventario
+    let itemsError = null;
+    if (saleItems.length > 0) {
+      const result = await supabase.from('sale_items').insert(saleItems);
+      itemsError = result.error;
+    }
 
     if (itemsError) {
       toast({
@@ -371,9 +464,24 @@ export default function SalesModule() {
     }
   };
 
-  const filteredInventory = inventory.filter(item =>
-    item.name.toLowerCase().includes(search.toLowerCase()) && item.quantity > 0 && item.for_sale
-  );
+  // Combinar productos de inventario (insumos) y moldes
+  const allProducts: (InventoryItem | SaleProduct)[] = [
+    // Inventario como insumos
+    ...inventory.filter(item => item.quantity > 0 && item.for_sale).map(item => ({
+      ...item,
+      category: 'insumos' as ProductCategory,
+      source: 'inventory' as const,
+    })),
+    // Moldes de la calculadora
+    ...moldesProducts,
+  ];
+
+  // Filtrar por búsqueda y categoría
+  const filteredProducts = allProducts.filter(item => {
+    const matchesSearch = item.name.toLowerCase().includes(search.toLowerCase());
+    const matchesCategory = categoryFilter === 'all' || ('category' in item && item.category === categoryFilter);
+    return matchesSearch && matchesCategory;
+  });
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('es-AR', {
@@ -469,33 +577,82 @@ export default function SalesModule() {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Products */}
           <div className="lg:col-span-2 space-y-4">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
-              <Input
-                placeholder="Buscar producto..."
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                className="pl-10"
-              />
+            <div className="flex flex-col sm:flex-row gap-3">
+              <div className="relative flex-1">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
+                <Input
+                  placeholder="Buscar producto..."
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  className="pl-10"
+                />
+              </div>
+              <div className="flex gap-1 bg-muted p-1 rounded-lg">
+                <Button
+                  size="sm"
+                  variant={categoryFilter === 'all' ? 'default' : 'ghost'}
+                  onClick={() => setCategoryFilter('all')}
+                  className="text-xs"
+                >
+                  Todos
+                </Button>
+                <Button
+                  size="sm"
+                  variant={categoryFilter === 'insumos' ? 'default' : 'ghost'}
+                  onClick={() => setCategoryFilter('insumos')}
+                  className="text-xs"
+                >
+                  Insumos
+                </Button>
+                <Button
+                  size="sm"
+                  variant={categoryFilter === 'servicios' ? 'default' : 'ghost'}
+                  onClick={() => setCategoryFilter('servicios')}
+                  className="text-xs"
+                >
+                  Servicios
+                </Button>
+                <Button
+                  size="sm"
+                  variant={categoryFilter === 'moldes' ? 'default' : 'ghost'}
+                  onClick={() => setCategoryFilter('moldes')}
+                  className="text-xs"
+                >
+                  Moldes
+                </Button>
+              </div>
             </div>
 
             <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-              {filteredInventory.map(item => (
+              {filteredProducts.map(item => (
                 <Card
                   key={item.id}
                   className="cursor-pointer hover:border-primary transition-colors"
                   onClick={() => addToCart(item)}
                 >
                   <CardContent className="p-4">
-                    <h4 className="font-medium truncate">{item.name}</h4>
-                    <p className="text-sm text-muted-foreground">Stock: {item.quantity}</p>
+                    <div className="flex items-start justify-between gap-2">
+                      <h4 className="font-medium truncate flex-1">{item.name}</h4>
+                      {'category' in item && item.category === 'moldes' && (
+                        <Badge variant="secondary" className="text-xs shrink-0">Molde</Badge>
+                      )}
+                    </div>
+                    {'source' in item && item.source === 'moldes' ? (
+                      <p className="text-sm text-muted-foreground">Disponible</p>
+                    ) : (
+                      <p className="text-sm text-muted-foreground">Stock: {item.quantity}</p>
+                    )}
                     <p className="text-lg font-bold text-primary">{formatCurrency(item.price)}</p>
                   </CardContent>
                 </Card>
               ))}
-              {filteredInventory.length === 0 && (
+              {filteredProducts.length === 0 && (
                 <p className="col-span-full text-center text-muted-foreground py-8">
-                  No hay productos disponibles para venta
+                  {categoryFilter === 'moldes'
+                    ? 'No hay moldes. Agrega productos en la Calculadora de Precios.'
+                    : categoryFilter === 'servicios'
+                      ? 'No hay servicios disponibles'
+                      : 'No hay productos disponibles para venta'}
                 </p>
               )}
             </div>
