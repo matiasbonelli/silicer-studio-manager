@@ -17,6 +17,7 @@ const enrollmentSchema = z.object({
   last_name: z.string().trim().min(1, 'El apellido es requerido').max(100),
   email: z.string().trim().email('Email inválido').max(255),
   phone: z.string().trim().max(50).optional(),
+  birthday: z.string().optional(),
   schedule_id: z.string().min(1, 'Selecciona un horario'),
   message: z.string().trim().max(500).optional(),
 });
@@ -31,6 +32,7 @@ export default function Index() {
     last_name: '',
     email: '',
     phone: '',
+    birthday: '',
     schedule_id: '',
     message: '',
   });
@@ -104,6 +106,7 @@ export default function Index() {
       last_name: formData.last_name.trim(),
       email: formData.email.trim(),
       phone: formData.phone?.trim() || null,
+      birthday: formData.birthday || null,
       schedule_id: formData.schedule_id,
       message: formData.message?.trim() || null,
     });
@@ -125,6 +128,7 @@ export default function Index() {
         last_name: '',
         email: '',
         phone: '',
+        birthday: '',
         schedule_id: '',
         message: '',
       });
@@ -231,14 +235,25 @@ export default function Index() {
                   />
                 </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="phone">Teléfono</Label>
-                  <Input
-                    id="phone"
-                    type="tel"
-                    value={formData.phone}
-                    onChange={(e) => setFormData(prev => ({ ...prev, phone: e.target.value }))}
-                  />
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-2">
+                    <Label htmlFor="phone">Teléfono</Label>
+                    <Input
+                      id="phone"
+                      type="tel"
+                      value={formData.phone}
+                      onChange={(e) => setFormData(prev => ({ ...prev, phone: e.target.value }))}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="birthday">Fecha de Nacimiento</Label>
+                    <Input
+                      id="birthday"
+                      type="date"
+                      value={formData.birthday}
+                      onChange={(e) => setFormData(prev => ({ ...prev, birthday: e.target.value }))}
+                    />
+                  </div>
                 </div>
 
                 <div className="grid grid-cols-2 gap-3">

@@ -16,6 +16,7 @@ export type Database = {
     Tables: {
       enrollments: {
         Row: {
+          birthday: string | null
           converted_to_student_id: string | null
           created_at: string
           email: string
@@ -32,6 +33,7 @@ export type Database = {
           status: string
         }
         Insert: {
+          birthday?: string | null
           converted_to_student_id?: string | null
           created_at?: string
           email: string
@@ -48,6 +50,7 @@ export type Database = {
           status?: string
         }
         Update: {
+          birthday?: string | null
           converted_to_student_id?: string | null
           created_at?: string
           email?: string
@@ -172,6 +175,7 @@ export type Database = {
           created_at: string
           id: string
           notes: string | null
+          paid_amount: number | null
           payment_method: Database["public"]["Enums"]["payment_method"]
           payment_status: Database["public"]["Enums"]["payment_status"]
           student_id: string | null
@@ -181,6 +185,7 @@ export type Database = {
           created_at?: string
           id?: string
           notes?: string | null
+          paid_amount?: number | null
           payment_method?: Database["public"]["Enums"]["payment_method"]
           payment_status?: Database["public"]["Enums"]["payment_status"]
           student_id?: string | null
@@ -190,6 +195,7 @@ export type Database = {
           created_at?: string
           id?: string
           notes?: string | null
+          paid_amount?: number | null
           payment_method?: Database["public"]["Enums"]["payment_method"]
           payment_status?: Database["public"]["Enums"]["payment_status"]
           student_id?: string | null
@@ -322,7 +328,7 @@ export type Database = {
     Enums: {
       app_role: "admin" | "user"
       payment_method: "cash" | "card" | "transfer" | "mercadopago"
-      payment_status: "paid" | "pending"
+      payment_status: "paid" | "pending" | "partial"
     }
     CompositeTypes: {
       [_ in never]: never

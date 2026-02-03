@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
-import { InventoryItem, Student, Sale, SaleItem, PaymentMethod, PAYMENT_METHOD_LABELS } from '@/types/database';
+import { InventoryItem, Student, Sale, SaleItem, PaymentMethod, PaymentStatus, PAYMENT_METHOD_LABELS, PAYMENT_STATUS_LABELS } from '@/types/database';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
-import { Plus, Minus, Trash2, ShoppingCart, Printer, Loader2, Search, History, TrendingUp, FileText, CalendarDays } from 'lucide-react';
+import { Plus, Minus, Trash2, ShoppingCart, Printer, Loader2, Search, History, TrendingUp, FileText, CalendarDays, DollarSign, Pencil } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 
@@ -46,6 +46,12 @@ export default function SalesModule() {
   const [historySearch, setHistorySearch] = useState('');
   const [filterMonth, setFilterMonth] = useState<string>('');
   const [filterYear, setFilterYear] = useState<string>('');
+  const [filterPaymentStatus, setFilterPaymentStatus] = useState<string>('');
+  const [paymentType, setPaymentType] = useState<'total' | 'partial'>('total');
+  const [partialAmount, setPartialAmount] = useState<string>('');
+  const [editPaymentSale, setEditPaymentSale] = useState<SaleWithItems | null>(null);
+  const [editPaymentType, setEditPaymentType] = useState<'total' | 'partial'>('total');
+  const [editPartialAmount, setEditPartialAmount] = useState<string>('');
   const { toast } = useToast();
   const receiptRef = useRef<HTMLDivElement>(null);
 
@@ -160,7 +166,8 @@ export default function SalesModule() {
         student_id: selectedStudent || null,
         total_amount: total,
         payment_method: paymentMethod,
-        payment_status: 'paid',
+        payment_status: 'pending',
+        paid_amount: 0,
       })
       .select()
       .single();
@@ -241,6 +248,113 @@ export default function SalesModule() {
     }
   };
 
+  // Register payment for a sale (from receipt modal)
+  const handleRegisterPayment = async () => {
+    if (!receiptData) return;
+
+    const paidAmount = paymentType === 'total'
+      ? receiptData.sale.total_amount
+      : parseFloat(partialAmount) || 0;
+
+    if (paymentType === 'partial' && (paidAmount <= 0 || paidAmount >= receiptData.sale.total_amount)) {
+      toast({
+        title: 'Monto inválido',
+        description: 'El pago parcial debe ser mayor a 0 y menor al total',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    const newStatus: PaymentStatus = paymentType === 'total' ? 'paid' : 'partial';
+
+    const { error } = await supabase
+      .from('sales')
+      .update({
+        payment_status: newStatus,
+        paid_amount: paidAmount,
+      })
+      .eq('id', receiptData.sale.id);
+
+    if (error) {
+      toast({
+        title: 'Error',
+        description: 'No se pudo registrar el pago',
+        variant: 'destructive',
+      });
+    } else {
+      toast({
+        title: 'Pago registrado',
+        description: paymentType === 'total'
+          ? `Pago total de ${formatCurrency(paidAmount)} registrado`
+          : `Pago parcial de ${formatCurrency(paidAmount)} registrado`,
+      });
+      await fetchSalesHistory();
+      setReceiptData(null);
+      setPaymentType('total');
+      setPartialAmount('');
+    }
+  };
+
+  // Edit payment from history
+  const handleEditPayment = async () => {
+    if (!editPaymentSale) return;
+
+    const paidAmount = editPaymentType === 'total'
+      ? editPaymentSale.total_amount
+      : parseFloat(editPartialAmount) || 0;
+
+    if (editPaymentType === 'partial' && (paidAmount <= 0 || paidAmount >= editPaymentSale.total_amount)) {
+      toast({
+        title: 'Monto inválido',
+        description: 'El pago parcial debe ser mayor a 0 y menor al total',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    const newStatus: PaymentStatus = editPaymentType === 'total' ? 'paid' : 'partial';
+
+    const { error } = await supabase
+      .from('sales')
+      .update({
+        payment_status: newStatus,
+        paid_amount: paidAmount,
+      })
+      .eq('id', editPaymentSale.id);
+
+    if (error) {
+      toast({
+        title: 'Error',
+        description: 'No se pudo actualizar el pago',
+        variant: 'destructive',
+      });
+    } else {
+      toast({
+        title: 'Pago actualizado',
+        description: editPaymentType === 'total'
+          ? `Pago total de ${formatCurrency(paidAmount)} registrado`
+          : `Pago parcial de ${formatCurrency(paidAmount)} registrado`,
+      });
+      await fetchSalesHistory();
+      setEditPaymentSale(null);
+      setEditPaymentType('total');
+      setEditPartialAmount('');
+    }
+  };
+
+  // Get payment status badge color
+  const getPaymentStatusBadge = (status: PaymentStatus) => {
+    switch (status) {
+      case 'paid':
+        return <Badge className="bg-green-500 hover:bg-green-600">Pagado</Badge>;
+      case 'partial':
+        return <Badge className="bg-yellow-500 hover:bg-yellow-600">Parcial</Badge>;
+      case 'pending':
+      default:
+        return <Badge variant="destructive">Pendiente</Badge>;
+    }
+  };
+
   const filteredInventory = inventory.filter(item =>
     item.name.toLowerCase().includes(search.toLowerCase()) && item.quantity > 0 && item.for_sale
   );
@@ -266,6 +380,11 @@ export default function SalesModule() {
       }
     }
 
+    // Filter by payment status
+    if (filterPaymentStatus && sale.payment_status !== filterPaymentStatus) {
+      return false;
+    }
+
     // Filter by search
     if (historySearch) {
       const searchLower = historySearch.toLowerCase();
@@ -283,6 +402,7 @@ export default function SalesModule() {
   const clearDateFilters = () => {
     setFilterMonth('');
     setFilterYear('');
+    setFilterPaymentStatus('');
   };
 
   // Calculate sales statistics (based on filtered data)
@@ -482,7 +602,18 @@ export default function SalesModule() {
                   ))}
                 </SelectContent>
               </Select>
-              {(filterMonth || filterYear) && (
+              <Select value={filterPaymentStatus} onValueChange={setFilterPaymentStatus}>
+                <SelectTrigger className="w-[130px]">
+                  <DollarSign className="w-4 h-4 mr-2" />
+                  <SelectValue placeholder="Pagos" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="pending">Pendiente</SelectItem>
+                  <SelectItem value="partial">Parcial</SelectItem>
+                  <SelectItem value="paid">Pagado</SelectItem>
+                </SelectContent>
+              </Select>
+              {(filterMonth || filterYear || filterPaymentStatus) && (
                 <Button variant="outline" size="icon" onClick={clearDateFilters}>
                   <Trash2 className="w-4 h-4" />
                 </Button>
@@ -498,8 +629,10 @@ export default function SalesModule() {
                   <TableHead className="text-center">Cant.</TableHead>
                   <TableHead>Cliente</TableHead>
                   <TableHead>Método</TableHead>
+                  <TableHead>Estado Pago</TableHead>
                   <TableHead className="text-center">Comprobante</TableHead>
                   <TableHead className="text-right">Total</TableHead>
+                  <TableHead></TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -530,6 +663,14 @@ export default function SalesModule() {
                     <TableCell>
                       <Badge variant="secondary">{PAYMENT_METHOD_LABELS[sale.payment_method]}</Badge>
                     </TableCell>
+                    <TableCell>
+                      {getPaymentStatusBadge(sale.payment_status)}
+                      {sale.payment_status === 'partial' && sale.paid_amount && (
+                        <div className="text-xs text-muted-foreground mt-1">
+                          {formatCurrency(sale.paid_amount)} de {formatCurrency(sale.total_amount)}
+                        </div>
+                      )}
+                    </TableCell>
                     <TableCell className="text-center">
                       {sale.student?.payment_receipt_url ? (
                         <Button
@@ -544,11 +685,26 @@ export default function SalesModule() {
                       )}
                     </TableCell>
                     <TableCell className="text-right font-bold">{formatCurrency(sale.total_amount)}</TableCell>
+                    <TableCell>
+                      {sale.payment_status !== 'paid' && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => {
+                            setEditPaymentSale(sale);
+                            setEditPaymentType(sale.payment_status === 'partial' ? 'partial' : 'total');
+                            setEditPartialAmount(sale.paid_amount?.toString() || '');
+                          }}
+                        >
+                          <Pencil className="w-4 h-4" />
+                        </Button>
+                      )}
+                    </TableCell>
                   </TableRow>
                 ))}
                 {filteredSalesHistory.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={7} className="text-center text-muted-foreground py-8">
+                    <TableCell colSpan={9} className="text-center text-muted-foreground py-8">
                       No hay ventas registradas
                     </TableCell>
                   </TableRow>
@@ -646,6 +802,7 @@ export default function SalesModule() {
                       <TableHead className="text-center">Cant.</TableHead>
                       <TableHead>Cliente</TableHead>
                       <TableHead>Método</TableHead>
+                      <TableHead>Estado Pago</TableHead>
                       <TableHead className="text-center">Comprobante</TableHead>
                       <TableHead className="text-right">Total</TableHead>
                     </TableRow>
@@ -678,6 +835,14 @@ export default function SalesModule() {
                         <TableCell>
                           <Badge variant="secondary">{PAYMENT_METHOD_LABELS[sale.payment_method]}</Badge>
                         </TableCell>
+                        <TableCell>
+                          {getPaymentStatusBadge(sale.payment_status)}
+                          {sale.payment_status === 'partial' && sale.paid_amount && (
+                            <div className="text-xs text-muted-foreground mt-1">
+                              {formatCurrency(sale.paid_amount)} de {formatCurrency(sale.total_amount)}
+                            </div>
+                          )}
+                        </TableCell>
                         <TableCell className="text-center">
                           {sale.student?.payment_receipt_url ? (
                             <Button
@@ -696,7 +861,7 @@ export default function SalesModule() {
                     ))}
                     {filteredSalesHistory.length === 0 && (
                       <TableRow>
-                        <TableCell colSpan={7} className="text-center text-muted-foreground py-8">
+                        <TableCell colSpan={8} className="text-center text-muted-foreground py-8">
                           No hay datos de ventas
                         </TableCell>
                       </TableRow>
@@ -710,42 +875,165 @@ export default function SalesModule() {
       </TabsContent>
 
       {/* Receipt Modal */}
-      <Dialog open={!!receiptData} onOpenChange={() => setReceiptData(null)}>
+      <Dialog open={!!receiptData} onOpenChange={() => {
+        setReceiptData(null);
+        setPaymentType('total');
+        setPartialAmount('');
+      }}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
             <DialogTitle>Recibo de Venta</DialogTitle>
           </DialogHeader>
 
-          <div ref={receiptRef}>
-            <h1>Silicer</h1>
-            <p className="subtitle">Taller de Cerámica</p>
+          <div ref={receiptRef} className="flex flex-col items-center justify-center text-center">
+            <h1 className="text-2xl font-bold text-primary">Silicer</h1>
+            <p className="subtitle text-muted-foreground text-sm mb-4">Taller de Cerámica</p>
 
-            <table>
+            <table className="w-full border-collapse mb-4">
               <thead>
-                <tr>
-                  <th>Producto</th>
-                  <th>Cant.</th>
-                  <th>Precio</th>
+                <tr className="border-b">
+                  <th className="text-left py-2">Producto</th>
+                  <th className="text-center py-2">Cant.</th>
+                  <th className="text-right py-2">Precio</th>
                 </tr>
               </thead>
               <tbody>
                 {receiptData?.items.map(item => (
-                  <tr key={item.inventory.id}>
-                    <td>{item.inventory.name}</td>
-                    <td>{item.quantity}</td>
-                    <td>{formatCurrency(item.inventory.price * item.quantity)}</td>
+                  <tr key={item.inventory.id} className="border-b border-muted">
+                    <td className="text-left py-2">{item.inventory.name}</td>
+                    <td className="text-center py-2">{item.quantity}</td>
+                    <td className="text-right py-2">{formatCurrency(item.inventory.price * item.quantity)}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
 
-            <p className="total">Total: {formatCurrency(receiptData?.sale.total_amount || 0)}</p>
-            <p className="footer">¡Gracias por tu compra!</p>
+            <p className="total text-xl font-bold text-primary">Total: {formatCurrency(receiptData?.sale.total_amount || 0)}</p>
+            <p className="footer text-muted-foreground text-sm mt-2">¡Gracias por tu compra!</p>
           </div>
 
-          <Button onClick={printReceipt} className="w-full">
-            <Printer className="w-4 h-4 mr-2" /> Imprimir Recibo
-          </Button>
+          <div className="space-y-3 border-t pt-4">
+            <Button onClick={printReceipt} className="w-full" variant="outline">
+              <Printer className="w-4 h-4 mr-2" /> Imprimir Recibo
+            </Button>
+
+            <div className="space-y-3 border-t pt-3">
+              <Label className="text-sm font-medium">Registrar Pago</Label>
+              <div className="flex gap-2">
+                <Button
+                  variant={paymentType === 'total' ? 'default' : 'outline'}
+                  size="sm"
+                  className="flex-1"
+                  onClick={() => setPaymentType('total')}
+                >
+                  Pago Total
+                </Button>
+                <Button
+                  variant={paymentType === 'partial' ? 'default' : 'outline'}
+                  size="sm"
+                  className="flex-1"
+                  onClick={() => setPaymentType('partial')}
+                >
+                  Pago Parcial
+                </Button>
+              </div>
+
+              {paymentType === 'total' ? (
+                <p className="text-sm text-muted-foreground text-center">
+                  Se registrará el pago completo de {formatCurrency(receiptData?.sale.total_amount || 0)}
+                </p>
+              ) : (
+                <div className="space-y-2">
+                  <Label htmlFor="partialAmount">Monto del pago parcial</Label>
+                  <Input
+                    id="partialAmount"
+                    type="number"
+                    placeholder="Ej: 5000"
+                    value={partialAmount}
+                    onChange={(e) => setPartialAmount(e.target.value)}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Total de la venta: {formatCurrency(receiptData?.sale.total_amount || 0)}
+                  </p>
+                </div>
+              )}
+
+              <Button onClick={handleRegisterPayment} className="w-full">
+                <DollarSign className="w-4 h-4 mr-2" /> Confirmar Pago
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Payment Modal */}
+      <Dialog open={!!editPaymentSale} onOpenChange={() => {
+        setEditPaymentSale(null);
+        setEditPaymentType('total');
+        setEditPartialAmount('');
+      }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Editar Estado de Pago</DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <div className="p-3 bg-muted rounded-lg">
+              <p className="text-sm text-muted-foreground">Venta del {editPaymentSale && formatDate(editPaymentSale.created_at)}</p>
+              <p className="text-lg font-bold">Total: {formatCurrency(editPaymentSale?.total_amount || 0)}</p>
+              {editPaymentSale?.paid_amount && editPaymentSale.paid_amount > 0 && (
+                <p className="text-sm text-muted-foreground">
+                  Pagado anteriormente: {formatCurrency(editPaymentSale.paid_amount)}
+                </p>
+              )}
+            </div>
+
+            <div className="space-y-3">
+              <Label className="text-sm font-medium">Tipo de Pago</Label>
+              <div className="flex gap-2">
+                <Button
+                  variant={editPaymentType === 'total' ? 'default' : 'outline'}
+                  size="sm"
+                  className="flex-1"
+                  onClick={() => setEditPaymentType('total')}
+                >
+                  Pago Total
+                </Button>
+                <Button
+                  variant={editPaymentType === 'partial' ? 'default' : 'outline'}
+                  size="sm"
+                  className="flex-1"
+                  onClick={() => setEditPaymentType('partial')}
+                >
+                  Pago Parcial
+                </Button>
+              </div>
+
+              {editPaymentType === 'total' ? (
+                <p className="text-sm text-muted-foreground text-center">
+                  Se registrará el pago completo de {formatCurrency(editPaymentSale?.total_amount || 0)}
+                </p>
+              ) : (
+                <div className="space-y-2">
+                  <Label htmlFor="editPartialAmount">Monto del pago parcial</Label>
+                  <Input
+                    id="editPartialAmount"
+                    type="number"
+                    placeholder="Ej: 5000"
+                    value={editPartialAmount}
+                    onChange={(e) => setEditPartialAmount(e.target.value)}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Total de la venta: {formatCurrency(editPaymentSale?.total_amount || 0)}
+                  </p>
+                </div>
+              )}
+            </div>
+
+            <Button onClick={handleEditPayment} className="w-full">
+              <DollarSign className="w-4 h-4 mr-2" /> Actualizar Pago
+            </Button>
+          </div>
         </DialogContent>
       </Dialog>
     </Tabs>
