@@ -3,78 +3,116 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
-import { Calculator, Settings, Save } from 'lucide-react';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Settings, Save, Plus, Trash2 } from 'lucide-react';
 
-const STORAGE_KEY = 'silicer-pricing-config';
+const CONFIG_STORAGE_KEY = 'silicer-pricing-config';
+const PRODUCTS_STORAGE_KEY = 'silicer-pricing-products';
 
 interface PricingConfig {
   precioBarbotina: number;
   pesoBidon: number;
   margenDefault: number;
+  costoManoObraDefault: number;
+}
+
+interface ProductCost {
+  id: string;
+  nombre: string;
+  categoria: string;
+  pesoGramos: number;
+  costoManoObra: number;
+  margen: number;
 }
 
 const defaultConfig: PricingConfig = {
   precioBarbotina: 11500,
   pesoBidon: 9000,
   margenDefault: 50,
+  costoManoObraDefault: 1500,
+};
+
+const formatCurrency = (value: number) => {
+  return new Intl.NumberFormat('es-AR', {
+    style: 'currency',
+    currency: 'ARS',
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  }).format(value);
 };
 
 export default function PricingCalculator() {
   const [config, setConfig] = useState<PricingConfig>(defaultConfig);
+  const [products, setProducts] = useState<ProductCost[]>([]);
 
-  // Inputs para calcular
-  const [pesoPieza, setPesoPieza] = useState<string>('');
-  const [costoManoObra, setCostoManoObra] = useState<string>('');
-  const [margen, setMargen] = useState<string>('50');
-
-  // Resultados
-  const [costoMateriaPrima, setCostoMateriaPrima] = useState<number>(0);
-  const [costoTotal, setCostoTotal] = useState<number>(0);
-  const [precioVenta, setPrecioVenta] = useState<number>(0);
-
-  // Cargar configuración guardada
+  // Cargar configuración y productos guardados
   useEffect(() => {
-    const saved = localStorage.getItem(STORAGE_KEY);
-    if (saved) {
+    const savedConfig = localStorage.getItem(CONFIG_STORAGE_KEY);
+    if (savedConfig) {
       try {
-        const parsed = JSON.parse(saved);
-        setConfig(parsed);
-        setMargen(parsed.margenDefault.toString());
+        const parsed = JSON.parse(savedConfig);
+        setConfig({ ...defaultConfig, ...parsed });
       } catch {
         // Usar default
+      }
+    }
+
+    const savedProducts = localStorage.getItem(PRODUCTS_STORAGE_KEY);
+    if (savedProducts) {
+      try {
+        setProducts(JSON.parse(savedProducts));
+      } catch {
+        // Sin productos
       }
     }
   }, []);
 
   // Guardar configuración
   const saveConfig = () => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(config));
+    localStorage.setItem(CONFIG_STORAGE_KEY, JSON.stringify(config));
   };
 
-  // Calcular precios cuando cambian los inputs
-  useEffect(() => {
-    const peso = parseFloat(pesoPieza) || 0;
-    const manoObra = parseFloat(costoManoObra) || 0;
-    const margenPct = parseFloat(margen) || 0;
+  // Guardar productos
+  const saveProducts = () => {
+    localStorage.setItem(PRODUCTS_STORAGE_KEY, JSON.stringify(products));
+  };
 
-    // Fórmula: (PRECIO_BARBOTINA / PESO_BIDON) × PESO_PIEZA
-    const materiaPrima = (config.precioBarbotina / config.pesoBidon) * peso;
-    setCostoMateriaPrima(materiaPrima);
+  // Agregar nuevo producto
+  const addProduct = () => {
+    const newProduct: ProductCost = {
+      id: Date.now().toString(),
+      nombre: '',
+      categoria: '',
+      pesoGramos: 0,
+      costoManoObra: config.costoManoObraDefault,
+      margen: config.margenDefault,
+    };
+    setProducts([...products, newProduct]);
+  };
 
-    const total = materiaPrima + manoObra;
-    setCostoTotal(total);
+  // Actualizar producto
+  const updateProduct = (id: string, field: keyof ProductCost, value: string | number) => {
+    setProducts(prev =>
+      prev.map(p => (p.id === id ? { ...p, [field]: value } : p))
+    );
+  };
 
-    const venta = total * (1 + margenPct / 100);
-    setPrecioVenta(venta);
-  }, [pesoPieza, costoManoObra, margen, config]);
+  // Eliminar producto
+  const removeProduct = (id: string) => {
+    setProducts(prev => prev.filter(p => p.id !== id));
+  };
 
-  const formatCurrency = (value: number) => {
-    return new Intl.NumberFormat('es-AR', {
-      style: 'currency',
-      currency: 'ARS',
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0,
-    }).format(value);
+  // Calcular costos de un producto
+  const calculateCosts = (product: ProductCost) => {
+    const costoBarbotina = (config.precioBarbotina / config.pesoBidon) * product.pesoGramos;
+    const costoTotalCrudo = costoBarbotina + product.costoManoObra;
+    const precioVentaCrudo = costoTotalCrudo * (1 + product.margen / 100);
+
+    return {
+      costoBarbotina,
+      costoTotalCrudo,
+      precioVentaCrudo,
+    };
   };
 
   return (
@@ -88,7 +126,7 @@ export default function PricingCalculator() {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             <div className="space-y-2">
               <Label>Precio Barbotina (bidón)</Label>
               <Input
@@ -97,7 +135,7 @@ export default function PricingCalculator() {
                 onChange={(e) => setConfig(p => ({ ...p, precioBarbotina: parseFloat(e.target.value) || 0 }))}
                 placeholder="11500"
               />
-              <p className="text-xs text-muted-foreground">Precio del bidón completo en pesos</p>
+              <p className="text-xs text-muted-foreground">Precio del bidón completo</p>
             </div>
             <div className="space-y-2">
               <Label>Peso del Bidón (gramos)</Label>
@@ -107,21 +145,27 @@ export default function PricingCalculator() {
                 onChange={(e) => setConfig(p => ({ ...p, pesoBidon: parseFloat(e.target.value) || 9000 }))}
                 placeholder="9000"
               />
-              <p className="text-xs text-muted-foreground">Peso total del bidón de barbotina</p>
+              <p className="text-xs text-muted-foreground">Peso total del bidón</p>
+            </div>
+            <div className="space-y-2">
+              <Label>Costo Mano de Obra Default ($)</Label>
+              <Input
+                type="number"
+                value={config.costoManoObraDefault}
+                onChange={(e) => setConfig(p => ({ ...p, costoManoObraDefault: parseFloat(e.target.value) || 0 }))}
+                placeholder="1500"
+              />
+              <p className="text-xs text-muted-foreground">Valor por defecto</p>
             </div>
             <div className="space-y-2">
               <Label>Margen Default (%)</Label>
               <Input
                 type="number"
                 value={config.margenDefault}
-                onChange={(e) => {
-                  const val = parseFloat(e.target.value) || 0;
-                  setConfig(p => ({ ...p, margenDefault: val }));
-                  setMargen(val.toString());
-                }}
+                onChange={(e) => setConfig(p => ({ ...p, margenDefault: parseFloat(e.target.value) || 0 }))}
                 placeholder="50"
               />
-              <p className="text-xs text-muted-foreground">Margen de ganancia por defecto</p>
+              <p className="text-xs text-muted-foreground">Margen por defecto</p>
             </div>
           </div>
           <Button onClick={saveConfig} className="mt-4" variant="outline">
@@ -130,81 +174,127 @@ export default function PricingCalculator() {
         </CardContent>
       </Card>
 
-      {/* Calculadora */}
+      {/* Tabla de Productos */}
       <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Calculator className="w-5 h-5" />
-            Calculadora de Precio - Etapa Crudo
-          </CardTitle>
+        <CardHeader className="flex flex-row items-center justify-between">
+          <CardTitle>Calculadora de Precios - Productos</CardTitle>
+          <div className="flex gap-2">
+            <Button onClick={saveProducts} variant="outline" size="sm">
+              <Save className="w-4 h-4 mr-2" /> Guardar Todo
+            </Button>
+            <Button onClick={addProduct} size="sm">
+              <Plus className="w-4 h-4 mr-2" /> Agregar Producto
+            </Button>
+          </div>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-            <div className="space-y-2">
-              <Label>Peso de la Pieza (gramos)</Label>
-              <Input
-                type="number"
-                value={pesoPieza}
-                onChange={(e) => setPesoPieza(e.target.value)}
-                placeholder="Ej: 500"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>Costo Mano de Obra ($)</Label>
-              <Input
-                type="number"
-                value={costoManoObra}
-                onChange={(e) => setCostoManoObra(e.target.value)}
-                placeholder="Ej: 1500"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>Margen de Ganancia (%)</Label>
-              <Input
-                type="number"
-                value={margen}
-                onChange={(e) => setMargen(e.target.value)}
-                placeholder="50"
-              />
-            </div>
-          </div>
-
-          {/* Resultados */}
-          <div className="border-t pt-6">
-            <h3 className="font-semibold mb-4">Resultados</h3>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="bg-muted p-4 rounded-lg">
-                <p className="text-sm text-muted-foreground">Costo Materia Prima</p>
-                <p className="text-2xl font-bold">{formatCurrency(costoMateriaPrima)}</p>
-                <p className="text-xs text-muted-foreground mt-1">
-                  ({formatCurrency(config.precioBarbotina)} / {config.pesoBidon}g) × {pesoPieza || 0}g
-                </p>
-              </div>
-              <div className="bg-muted p-4 rounded-lg">
-                <p className="text-sm text-muted-foreground">Costo Total Crudo</p>
-                <p className="text-2xl font-bold">{formatCurrency(costoTotal)}</p>
-                <p className="text-xs text-muted-foreground mt-1">
-                  Materia prima + Mano de obra
-                </p>
-              </div>
-              <div className="bg-primary/10 p-4 rounded-lg border-2 border-primary">
-                <p className="text-sm text-muted-foreground">Precio de Venta</p>
-                <p className="text-2xl font-bold text-primary">{formatCurrency(precioVenta)}</p>
-                <p className="text-xs text-muted-foreground mt-1">
-                  Con {margen || 0}% de margen
-                </p>
-              </div>
-            </div>
+          <div className="rounded-lg border overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="min-w-[150px]">Producto</TableHead>
+                  <TableHead className="min-w-[120px]">Categoría</TableHead>
+                  <TableHead className="min-w-[100px] text-center">Peso (g)</TableHead>
+                  <TableHead className="min-w-[120px] text-right">Costo Barbotina</TableHead>
+                  <TableHead className="min-w-[130px] text-center">Mano de Obra ($)</TableHead>
+                  <TableHead className="min-w-[120px] text-right">Costo Total</TableHead>
+                  <TableHead className="min-w-[100px] text-center">Margen (%)</TableHead>
+                  <TableHead className="min-w-[130px] text-right">Precio Venta</TableHead>
+                  <TableHead className="w-[50px]"></TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {products.map(product => {
+                  const costs = calculateCosts(product);
+                  return (
+                    <TableRow key={product.id}>
+                      <TableCell>
+                        <Input
+                          value={product.nombre}
+                          onChange={(e) => updateProduct(product.id, 'nombre', e.target.value)}
+                          placeholder="Nombre del producto"
+                          className="h-8"
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <Input
+                          value={product.categoria}
+                          onChange={(e) => updateProduct(product.id, 'categoria', e.target.value)}
+                          placeholder="Categoría"
+                          className="h-8"
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <Input
+                          type="number"
+                          value={product.pesoGramos || ''}
+                          onChange={(e) => updateProduct(product.id, 'pesoGramos', parseFloat(e.target.value) || 0)}
+                          placeholder="0"
+                          className="h-8 text-center"
+                        />
+                      </TableCell>
+                      <TableCell className="text-right font-medium">
+                        {formatCurrency(costs.costoBarbotina)}
+                      </TableCell>
+                      <TableCell>
+                        <Input
+                          type="number"
+                          value={product.costoManoObra || ''}
+                          onChange={(e) => updateProduct(product.id, 'costoManoObra', parseFloat(e.target.value) || 0)}
+                          placeholder="0"
+                          className="h-8 text-center"
+                        />
+                      </TableCell>
+                      <TableCell className="text-right font-medium">
+                        {formatCurrency(costs.costoTotalCrudo)}
+                      </TableCell>
+                      <TableCell>
+                        <Input
+                          type="number"
+                          value={product.margen || ''}
+                          onChange={(e) => updateProduct(product.id, 'margen', parseFloat(e.target.value) || 0)}
+                          placeholder="50"
+                          className="h-8 text-center"
+                        />
+                      </TableCell>
+                      <TableCell className="text-right font-bold text-primary">
+                        {formatCurrency(costs.precioVentaCrudo)}
+                      </TableCell>
+                      <TableCell>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-8 w-8 p-0 text-destructive hover:text-destructive"
+                          onClick={() => removeProduct(product.id)}
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+                {products.length === 0 && (
+                  <TableRow>
+                    <TableCell colSpan={9} className="text-center text-muted-foreground py-8">
+                      No hay productos. Haz clic en "Agregar Producto" para comenzar.
+                    </TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
           </div>
 
           {/* Fórmula explicada */}
           <div className="mt-6 p-4 bg-muted/50 rounded-lg">
-            <h4 className="font-medium mb-2">Fórmula utilizada:</h4>
+            <h4 className="font-medium mb-2">Fórmulas utilizadas:</h4>
             <ul className="text-sm text-muted-foreground space-y-1">
-              <li><strong>Costo Materia Prima</strong> = (Precio Barbotina ÷ Peso Bidón) × Peso Pieza</li>
-              <li><strong>Costo Total</strong> = Costo Materia Prima + Costo Mano de Obra</li>
-              <li><strong>Precio Venta</strong> = Costo Total × (1 + Margen%)</li>
+              <li><strong>Costo Barbotina</strong> = (Precio Barbotina ÷ Peso Bidón) × Peso Pieza</li>
+              <li><strong>Costo Total Crudo</strong> = Costo Barbotina + Costo Mano de Obra</li>
+              <li><strong>Precio Venta Crudo</strong> = Costo Total × (1 + Margen%)</li>
             </ul>
+            <p className="text-xs text-muted-foreground mt-3">
+              Precio barbotina por gramo: {formatCurrency(config.precioBarbotina / config.pesoBidon)} / gramo
+            </p>
           </div>
         </CardContent>
       </Card>
