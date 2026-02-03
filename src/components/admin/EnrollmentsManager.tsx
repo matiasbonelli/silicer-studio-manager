@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
-import { Search, Loader2, MessageCircle, UserPlus, DollarSign, Check, Eye, Trash2, FileText, ExternalLink, Pencil } from 'lucide-react';
+import { Search, Loader2, MessageCircle, UserPlus, DollarSign, Eye, Trash2, FileText, ExternalLink, Pencil, Plus } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 
@@ -88,9 +88,21 @@ export default function EnrollmentsManager({ onStudentCreated }: EnrollmentsMana
   const [isConvertModalOpen, setIsConvertModalOpen] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
 
-  // Edit form
+  // Edit form (incluye status)
   const [editForm, setEditForm] = useState({
+    first_name: '',
+    last_name: '',
+    email: '',
+    phone: '',
+    schedule_id: '',
+    message: '',
+    status: 'pending',
+  });
+
+  // Create form
+  const [createForm, setCreateForm] = useState({
     first_name: '',
     last_name: '',
     email: '',
@@ -356,12 +368,77 @@ export default function EnrollmentsManager({ onStudentCreated }: EnrollmentsMana
       phone: enrollment.phone || '',
       schedule_id: enrollment.schedule_id,
       message: enrollment.message || '',
+      status: enrollment.status,
     });
     setIsEditModalOpen(true);
   };
 
   const handleEditSubmit = async () => {
     if (!selectedEnrollment) return;
+
+    // Validar que para estado "confirmed" el pago debe ser "deposit" o "paid"
+    if (editForm.status === 'confirmed' && selectedEnrollment.payment_status === 'pending') {
+      toast({
+        title: 'No se puede confirmar',
+        description: 'El pago debe estar "Señado" o "Pagado" para confirmar la inscripción',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    // Si cambia a confirmed y no tiene alumno, crearlo
+    if (editForm.status === 'confirmed' && !selectedEnrollment.converted_to_student_id) {
+      const { data: newStudent, error: studentError } = await supabase
+        .from('students')
+        .insert({
+          first_name: editForm.first_name,
+          last_name: editForm.last_name,
+          email: editForm.email,
+          phone: editForm.phone || null,
+          schedule_id: editForm.schedule_id,
+          payment_status: selectedEnrollment.payment_status === 'paid' ? 'paid' : 'pending',
+          notes: editForm.message || null,
+        })
+        .select()
+        .single();
+
+      if (studentError) {
+        toast({
+          title: 'Error',
+          description: 'No se pudo crear el alumno',
+          variant: 'destructive',
+        });
+        return;
+      }
+
+      const { error } = await supabase
+        .from('enrollments')
+        .update({
+          first_name: editForm.first_name,
+          last_name: editForm.last_name,
+          email: editForm.email,
+          phone: editForm.phone || null,
+          schedule_id: editForm.schedule_id,
+          message: editForm.message || null,
+          status: 'confirmed',
+          converted_to_student_id: newStudent.id,
+        })
+        .eq('id', selectedEnrollment.id);
+
+      if (error) {
+        toast({
+          title: 'Error',
+          description: 'No se pudo actualizar la inscripción',
+          variant: 'destructive',
+        });
+      } else {
+        toast({ title: 'Inscripción confirmada y alumno creado' });
+        setIsEditModalOpen(false);
+        fetchEnrollments();
+        onStudentCreated?.();
+      }
+      return;
+    }
 
     const { error } = await supabase
       .from('enrollments')
@@ -372,6 +449,7 @@ export default function EnrollmentsManager({ onStudentCreated }: EnrollmentsMana
         phone: editForm.phone || null,
         schedule_id: editForm.schedule_id,
         message: editForm.message || null,
+        status: editForm.status,
       })
       .eq('id', selectedEnrollment.id);
 
@@ -384,6 +462,54 @@ export default function EnrollmentsManager({ onStudentCreated }: EnrollmentsMana
     } else {
       toast({ title: 'Inscripción actualizada' });
       setIsEditModalOpen(false);
+      fetchEnrollments();
+    }
+  };
+
+  const openCreateModal = () => {
+    setCreateForm({
+      first_name: '',
+      last_name: '',
+      email: '',
+      phone: '',
+      schedule_id: '',
+      message: '',
+    });
+    setIsCreateModalOpen(true);
+  };
+
+  const handleCreateSubmit = async () => {
+    if (!createForm.first_name || !createForm.last_name || !createForm.email || !createForm.schedule_id) {
+      toast({
+        title: 'Error',
+        description: 'Nombre, apellido, email y horario son requeridos',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    const { error } = await supabase
+      .from('enrollments')
+      .insert({
+        first_name: createForm.first_name,
+        last_name: createForm.last_name,
+        email: createForm.email,
+        phone: createForm.phone || null,
+        schedule_id: createForm.schedule_id,
+        message: createForm.message || null,
+        status: 'pending',
+        payment_status: 'pending',
+      });
+
+    if (error) {
+      toast({
+        title: 'Error',
+        description: 'No se pudo crear la inscripción',
+        variant: 'destructive',
+      });
+    } else {
+      toast({ title: 'Inscripción creada' });
+      setIsCreateModalOpen(false);
       fetchEnrollments();
     }
   };
@@ -441,6 +567,9 @@ export default function EnrollmentsManager({ onStudentCreated }: EnrollmentsMana
             <SelectItem value="paid">Pagado</SelectItem>
           </SelectContent>
         </Select>
+        <Button onClick={openCreateModal}>
+          <Plus className="w-4 h-4 mr-2" /> Agregar Inscripción
+        </Button>
       </div>
 
       {/* Stats */}
@@ -484,7 +613,7 @@ export default function EnrollmentsManager({ onStudentCreated }: EnrollmentsMana
           </TableHeader>
           <TableBody>
             {filteredEnrollments.map(enrollment => (
-              <TableRow key={enrollment.id} className={enrollment.converted_to_student_id ? 'opacity-60' : ''}>
+              <TableRow key={enrollment.id}>
                 <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
                   {format(new Date(enrollment.created_at), 'dd/MM/yy', { locale: es })}
                 </TableCell>
@@ -504,10 +633,9 @@ export default function EnrollmentsManager({ onStudentCreated }: EnrollmentsMana
                   )}
                 </TableCell>
                 <TableCell className="text-center">
-                  <Select 
-                    value={enrollment.status} 
+                  <Select
+                    value={enrollment.status}
                     onValueChange={(value) => updateEnrollmentStatus(enrollment, value)}
-                    disabled={!!enrollment.converted_to_student_id}
                   >
                     <SelectTrigger className="w-[130px] h-8 text-xs">
                       <SelectValue />
@@ -594,23 +722,15 @@ export default function EnrollmentsManager({ onStudentCreated }: EnrollmentsMana
                       </Button>
                     )}
 
-                    {enrollment.converted_to_student_id && (
-                      <Badge variant="outline" className="text-xs">
-                        <Check className="w-3 h-3 mr-1" /> Convertido
-                      </Badge>
-                    )}
-
                     {/* Delete */}
-                    {!enrollment.converted_to_student_id && (
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        className="text-destructive hover:text-destructive"
-                        onClick={() => openDeleteModal(enrollment)}
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </Button>
-                    )}
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="text-destructive hover:text-destructive"
+                      onClick={() => openDeleteModal(enrollment)}
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </Button>
                   </div>
                 </TableCell>
               </TableRow>
@@ -871,6 +991,20 @@ export default function EnrollmentsManager({ onStudentCreated }: EnrollmentsMana
               </Select>
             </div>
             <div>
+              <Label>Estado</Label>
+              <Select value={editForm.status} onValueChange={(v) => setEditForm(p => ({ ...p, status: v }))}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="pending">Pendiente</SelectItem>
+                  <SelectItem value="contacted">Contactado</SelectItem>
+                  <SelectItem value="confirmed">Confirmado</SelectItem>
+                  <SelectItem value="cancelled">Cancelado</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
               <Label>Mensaje / Notas</Label>
               <Textarea
                 value={editForm.message}
@@ -882,6 +1016,78 @@ export default function EnrollmentsManager({ onStudentCreated }: EnrollmentsMana
           <DialogFooter>
             <Button variant="outline" onClick={() => setIsEditModalOpen(false)}>Cancelar</Button>
             <Button onClick={handleEditSubmit}>Guardar</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Create Modal */}
+      <Dialog open={isCreateModalOpen} onOpenChange={setIsCreateModalOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Agregar Inscripción</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label>Nombre *</Label>
+                <Input
+                  value={createForm.first_name}
+                  onChange={(e) => setCreateForm(p => ({ ...p, first_name: e.target.value }))}
+                />
+              </div>
+              <div>
+                <Label>Apellido *</Label>
+                <Input
+                  value={createForm.last_name}
+                  onChange={(e) => setCreateForm(p => ({ ...p, last_name: e.target.value }))}
+                />
+              </div>
+            </div>
+            <div>
+              <Label>Email *</Label>
+              <Input
+                type="email"
+                value={createForm.email}
+                onChange={(e) => setCreateForm(p => ({ ...p, email: e.target.value }))}
+              />
+            </div>
+            <div>
+              <Label>Teléfono</Label>
+              <Input
+                type="tel"
+                value={createForm.phone}
+                onChange={(e) => setCreateForm(p => ({ ...p, phone: e.target.value }))}
+              />
+            </div>
+            <div>
+              <Label>Horario *</Label>
+              <Select value={createForm.schedule_id} onValueChange={(v) => setCreateForm(p => ({ ...p, schedule_id: v }))}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Seleccionar horario" />
+                </SelectTrigger>
+                <SelectContent>
+                  {schedules.map(schedule => (
+                    <SelectItem key={schedule.id} value={schedule.id}>
+                      {DAY_NAMES[schedule.day_of_week]} {schedule.start_time.slice(0, 5)} - {schedule.end_time.slice(0, 5)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label>Mensaje / Notas</Label>
+              <Textarea
+                value={createForm.message}
+                onChange={(e) => setCreateForm(p => ({ ...p, message: e.target.value }))}
+                rows={2}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsCreateModalOpen(false)}>Cancelar</Button>
+            <Button onClick={handleCreateSubmit}>
+              <Plus className="w-4 h-4 mr-2" /> Crear
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
