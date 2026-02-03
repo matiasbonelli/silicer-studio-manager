@@ -1,4 +1,4 @@
-export type PaymentStatus = 'paid' | 'pending';
+export type PaymentStatus = 'paid' | 'pending' | 'partial';
 export type PaymentMethod = 'cash' | 'card' | 'transfer' | 'mercadopago';
 export type AppRole = 'admin' | 'user';
 
@@ -45,6 +45,7 @@ export interface Sale {
   id: string;
   student_id: string | null;
   total_amount: number;
+  paid_amount: number | null;
   payment_method: PaymentMethod;
   payment_status: PaymentStatus;
   notes: string | null;
@@ -68,6 +69,7 @@ export interface Enrollment {
   last_name: string;
   email: string;
   phone: string | null;
+  birthday: string | null;
   schedule_id: string;
   message: string | null;
   status: string;
@@ -93,6 +95,7 @@ export const DAY_NAMES: Record<string, string> = {
 export const PAYMENT_STATUS_LABELS: Record<PaymentStatus, string> = {
   paid: 'Pagado',
   pending: 'Pendiente',
+  partial: 'Parcial',
 };
 
 export const PAYMENT_METHOD_LABELS: Record<PaymentMethod, string> = {
