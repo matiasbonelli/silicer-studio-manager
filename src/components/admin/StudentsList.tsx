@@ -1,13 +1,14 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
-import { Student, DAY_NAMES, PAYMENT_STATUS_LABELS } from '@/types/database';
+import { Student, DAY_NAMES, PAYMENT_STATUS_LABELS, PaymentStatus } from '@/types/database';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
-import { Check, X, Search, Loader2, MessageCircle, FileText, Trash2 } from 'lucide-react';
+import { Check, X, Search, Loader2, MessageCircle, FileText, Trash2, DollarSign } from 'lucide-react';
 
 interface StudentsListProps {
   onStudentClick: (student: Student) => void;
@@ -22,6 +23,10 @@ export default function StudentsList({ onStudentClick, refreshTrigger, onStudent
   const [studentToDelete, setStudentToDelete] = useState<Student | null>(null);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [studentToPayment, setStudentToPayment] = useState<Student | null>(null);
+  const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
+  const [paymentType, setPaymentType] = useState<'total' | 'partial' | 'pending'>('total');
+  const [partialAmount, setPartialAmount] = useState<string>('');
   const { toast } = useToast();
 
   const fetchStudents = async () => {
@@ -42,29 +47,82 @@ export default function StudentsList({ onStudentClick, refreshTrigger, onStudent
     fetchStudents();
   }, [refreshTrigger]);
 
-  const togglePayment = async (student: Student) => {
-    const newStatus = student.payment_status === 'paid' ? 'pending' : 'paid';
-    
-    setStudents(prev => prev.map(s => 
-      s.id === student.id ? { ...s, payment_status: newStatus } : s
-    ));
+  const openPaymentModal = (student: Student) => {
+    setStudentToPayment(student);
+    setPaymentType(student.payment_status === 'paid' ? 'pending' : 'total');
+    setPartialAmount(student.paid_amount?.toString() || '');
+    setIsPaymentModalOpen(true);
+  };
+
+  const handlePaymentSubmit = async () => {
+    if (!studentToPayment) return;
+
+    let newStatus: PaymentStatus;
+    let paidAmount: number | null = null;
+
+    if (paymentType === 'total') {
+      newStatus = 'paid';
+      paidAmount = null;
+    } else if (paymentType === 'partial') {
+      newStatus = 'partial';
+      paidAmount = parseFloat(partialAmount) || 0;
+      if (paidAmount <= 0) {
+        toast({
+          title: 'Error',
+          description: 'El monto parcial debe ser mayor a 0',
+          variant: 'destructive',
+        });
+        return;
+      }
+    } else {
+      newStatus = 'pending';
+      paidAmount = null;
+    }
 
     const { error } = await supabase
       .from('students')
-      .update({ payment_status: newStatus })
-      .eq('id', student.id);
+      .update({
+        payment_status: newStatus,
+        paid_amount: paidAmount,
+      })
+      .eq('id', studentToPayment.id);
 
     if (error) {
-      fetchStudents();
       toast({
         title: 'Error',
-        description: 'No se pudo actualizar el estado',
+        description: 'No se pudo actualizar el estado de pago',
         variant: 'destructive',
       });
     } else {
       toast({
-        title: newStatus === 'paid' ? 'Cuota marcada como pagada' : 'Cuota marcada como pendiente',
+        title: newStatus === 'paid'
+          ? 'Cuota marcada como pagada'
+          : newStatus === 'partial'
+            ? `Pago parcial de $${paidAmount?.toLocaleString()} registrado`
+            : 'Cuota marcada como pendiente',
       });
+      setIsPaymentModalOpen(false);
+      setStudentToPayment(null);
+      fetchStudents();
+    }
+  };
+
+  const getPaymentBadge = (student: Student) => {
+    switch (student.payment_status) {
+      case 'paid':
+        return <Badge className="bg-green-500 hover:bg-green-600">Pagado</Badge>;
+      case 'partial':
+        return (
+          <div className="text-center">
+            <Badge className="bg-yellow-500 hover:bg-yellow-600">Parcial</Badge>
+            {student.paid_amount && (
+              <p className="text-xs text-muted-foreground mt-1">${student.paid_amount.toLocaleString()}</p>
+            )}
+          </div>
+        );
+      case 'pending':
+      default:
+        return <Badge variant="destructive">Pendiente</Badge>;
     }
   };
 
@@ -186,9 +244,7 @@ export default function StudentsList({ onStudentClick, refreshTrigger, onStudent
                   )}
                 </TableCell>
                 <TableCell className="text-center">
-                  <Badge variant={student.payment_status === 'paid' ? 'default' : 'destructive'}>
-                    {PAYMENT_STATUS_LABELS[student.payment_status]}
-                  </Badge>
+                  {getPaymentBadge(student)}
                 </TableCell>
                 <TableCell className="text-center">
                   {student.payment_receipt_url ? (
@@ -209,17 +265,13 @@ export default function StudentsList({ onStudentClick, refreshTrigger, onStudent
                 <TableCell className="text-center">
                   <Button
                     size="sm"
-                    variant={student.payment_status === 'paid' ? 'outline' : 'default'}
+                    variant="outline"
                     onClick={(e) => {
                       e.stopPropagation();
-                      togglePayment(student);
+                      openPaymentModal(student);
                     }}
                   >
-                    {student.payment_status === 'paid' ? (
-                      <X className="w-4 h-4" />
-                    ) : (
-                      <Check className="w-4 h-4" />
-                    )}
+                    <DollarSign className="w-4 h-4" />
                   </Button>
                 </TableCell>
                 <TableCell className="text-center">
@@ -268,6 +320,73 @@ export default function StudentsList({ onStudentClick, refreshTrigger, onStudent
             <Button variant="destructive" onClick={handleDeleteStudent} disabled={isDeleting}>
               {isDeleting ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Trash2 className="w-4 h-4 mr-2" />}
               Eliminar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Payment Modal */}
+      <Dialog open={isPaymentModalOpen} onOpenChange={(open) => {
+        setIsPaymentModalOpen(open);
+        if (!open) setStudentToPayment(null);
+      }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Estado de Pago de Cuota</DialogTitle>
+          </DialogHeader>
+          {studentToPayment && (
+            <div className="space-y-4">
+              <p className="text-sm text-muted-foreground">
+                Alumno: <strong>{studentToPayment.first_name} {studentToPayment.last_name}</strong>
+              </p>
+
+              <div className="space-y-3">
+                <Label>Tipo de Pago</Label>
+                <div className="grid grid-cols-3 gap-2">
+                  <Button
+                    variant={paymentType === 'total' ? 'default' : 'outline'}
+                    size="sm"
+                    onClick={() => setPaymentType('total')}
+                  >
+                    Total
+                  </Button>
+                  <Button
+                    variant={paymentType === 'partial' ? 'default' : 'outline'}
+                    size="sm"
+                    onClick={() => setPaymentType('partial')}
+                  >
+                    Parcial
+                  </Button>
+                  <Button
+                    variant={paymentType === 'pending' ? 'default' : 'outline'}
+                    size="sm"
+                    onClick={() => setPaymentType('pending')}
+                  >
+                    Pendiente
+                  </Button>
+                </div>
+
+                {paymentType === 'partial' && (
+                  <div className="space-y-2">
+                    <Label htmlFor="partialAmount">Monto del pago parcial</Label>
+                    <Input
+                      id="partialAmount"
+                      type="number"
+                      placeholder="Ej: 5000"
+                      value={partialAmount}
+                      onChange={(e) => setPartialAmount(e.target.value)}
+                    />
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsPaymentModalOpen(false)}>
+              Cancelar
+            </Button>
+            <Button onClick={handlePaymentSubmit}>
+              <Check className="w-4 h-4 mr-2" /> Guardar
             </Button>
           </DialogFooter>
         </DialogContent>

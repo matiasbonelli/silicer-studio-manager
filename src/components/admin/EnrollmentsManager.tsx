@@ -36,6 +36,7 @@ interface Enrollment {
   last_name: string;
   email: string;
   phone: string | null;
+  birthday: string | null;
   schedule_id: string;
   message: string | null;
   status: string;
@@ -176,6 +177,7 @@ export default function EnrollmentsManager({ onStudentCreated }: EnrollmentsMana
           last_name: enrollment.last_name,
           email: enrollment.email,
           phone: enrollment.phone,
+          birthday: enrollment.birthday,
           schedule_id: enrollment.schedule_id,
           payment_status: enrollment.payment_status === 'paid' ? 'paid' : 'pending',
           notes: enrollment.message,
@@ -293,6 +295,7 @@ export default function EnrollmentsManager({ onStudentCreated }: EnrollmentsMana
         last_name: selectedEnrollment.last_name,
         email: selectedEnrollment.email,
         phone: selectedEnrollment.phone,
+        birthday: selectedEnrollment.birthday,
         schedule_id: convertScheduleId,
         payment_status: selectedEnrollment.payment_status === 'paid' ? 'paid' : 'pending',
         notes: selectedEnrollment.message,
@@ -395,6 +398,7 @@ export default function EnrollmentsManager({ onStudentCreated }: EnrollmentsMana
           last_name: editForm.last_name,
           email: editForm.email,
           phone: editForm.phone || null,
+          birthday: selectedEnrollment.birthday,
           schedule_id: editForm.schedule_id,
           payment_status: selectedEnrollment.payment_status === 'paid' ? 'paid' : 'pending',
           notes: editForm.message || null,
@@ -613,7 +617,10 @@ export default function EnrollmentsManager({ onStudentCreated }: EnrollmentsMana
           </TableHeader>
           <TableBody>
             {filteredEnrollments.map(enrollment => (
-              <TableRow key={enrollment.id}>
+              <TableRow
+                key={enrollment.id}
+                className={enrollment.converted_to_student_id ? 'opacity-50 bg-muted/30' : ''}
+              >
                 <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
                   {format(new Date(enrollment.created_at), 'dd/MM/yy', { locale: es })}
                 </TableCell>

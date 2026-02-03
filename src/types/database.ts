@@ -20,6 +20,7 @@ export interface Student {
   birthday: string | null;
   schedule_id: string | null;
   payment_status: PaymentStatus;
+  paid_amount: number | null;
   payment_receipt_url: string | null;
   notes: string | null;
   created_at: string;
