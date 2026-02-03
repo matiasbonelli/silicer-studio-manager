@@ -27,6 +27,7 @@ export default function StudentModal({ student, isOpen, onClose, onSave, isNew =
     birthday: '',
     schedule_id: '',
     payment_status: 'pending' as PaymentStatus,
+    paid_amount: '',
     payment_receipt_url: '',
     notes: '',
   });
@@ -46,6 +47,7 @@ export default function StudentModal({ student, isOpen, onClose, onSave, isNew =
         birthday: student.birthday || '',
         schedule_id: student.schedule_id || '',
         payment_status: student.payment_status,
+        paid_amount: student.paid_amount?.toString() || '',
         payment_receipt_url: student.payment_receipt_url || '',
         notes: student.notes || '',
       });
@@ -58,6 +60,7 @@ export default function StudentModal({ student, isOpen, onClose, onSave, isNew =
         birthday: '',
         schedule_id: '',
         payment_status: 'pending',
+        paid_amount: '',
         payment_receipt_url: '',
         notes: '',
       });
@@ -157,6 +160,9 @@ export default function StudentModal({ student, isOpen, onClose, onSave, isNew =
       birthday: formData.birthday || null,
       schedule_id: formData.schedule_id || null,
       payment_status: formData.payment_status,
+      paid_amount: formData.payment_status === 'partial' && formData.paid_amount
+        ? parseFloat(formData.paid_amount)
+        : null,
       payment_receipt_url: formData.payment_receipt_url || null,
       notes: formData.notes || null,
     };
@@ -323,10 +329,24 @@ export default function StudentModal({ student, isOpen, onClose, onSave, isNew =
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="paid">Pagado</SelectItem>
+                <SelectItem value="partial">Parcial</SelectItem>
                 <SelectItem value="pending">Pendiente</SelectItem>
               </SelectContent>
             </Select>
           </div>
+
+          {formData.payment_status === 'partial' && (
+            <div className="space-y-2">
+              <Label htmlFor="paid_amount">Monto Pagado</Label>
+              <Input
+                id="paid_amount"
+                type="number"
+                placeholder="Ej: 5000"
+                value={formData.paid_amount}
+                onChange={(e) => setFormData(prev => ({ ...prev, paid_amount: e.target.value }))}
+              />
+            </div>
+          )}
 
           <div className="space-y-2">
             <Label>Comprobante de Pago</Label>
