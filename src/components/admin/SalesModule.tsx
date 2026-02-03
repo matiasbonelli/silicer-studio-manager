@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
-import { Plus, Minus, Trash2, ShoppingCart, Printer, Loader2, Search, History, TrendingUp, FileText, CalendarDays, DollarSign, Pencil } from 'lucide-react';
+import { Plus, Minus, Trash2, ShoppingCart, Printer, Loader2, Search, History, TrendingUp, CalendarDays, DollarSign, Pencil } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 
@@ -40,7 +40,6 @@ export default function SalesModule() {
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('cash');
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
-  const [receiptData, setReceiptData] = useState<{sale: Sale, items: CartItem[]} | null>(null);
   const [salesHistory, setSalesHistory] = useState<SaleWithItems[]>([]);
   const [salesTab, setSalesTab] = useState('new');
   const [historySearch, setHistorySearch] = useState('');
@@ -52,6 +51,11 @@ export default function SalesModule() {
   const [editPaymentSale, setEditPaymentSale] = useState<SaleWithItems | null>(null);
   const [editPaymentType, setEditPaymentType] = useState<'total' | 'partial'>('total');
   const [editPartialAmount, setEditPartialAmount] = useState<string>('');
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [pendingSale, setPendingSale] = useState<{sale: Sale, items: CartItem[]} | null>(null);
+  const [showReceiptModal, setShowReceiptModal] = useState(false);
+  const [receiptSaleData, setReceiptSaleData] = useState<{sale: Sale, items: CartItem[], paidAmount: number} | null>(null);
+  const [historyReceiptSale, setHistoryReceiptSale] = useState<SaleWithItems | null>(null);
   const { toast } = useToast();
   const receiptRef = useRef<HTMLDivElement>(null);
 
@@ -201,10 +205,14 @@ export default function SalesModule() {
     } else {
       toast({
         title: 'Venta registrada',
-        description: `Total: ${formatCurrency(total)}`,
+        description: `Total: ${formatCurrency(total)}. Ahora registra el pago.`,
       });
 
-      setReceiptData({ sale: saleData as Sale, items: [...cart] });
+      // Mostrar modal de pago primero
+      setPendingSale({ sale: saleData as Sale, items: [...cart] });
+      setShowPaymentModal(true);
+      setPaymentType('total');
+      setPartialAmount('');
 
       // Refresh inventory and sales history
       const { data: newInv } = await supabase.from('inventory').select('*').order('name');
@@ -248,15 +256,15 @@ export default function SalesModule() {
     }
   };
 
-  // Register payment for a sale (from receipt modal)
+  // Register payment for a sale (from payment modal after sale)
   const handleRegisterPayment = async () => {
-    if (!receiptData) return;
+    if (!pendingSale) return;
 
     const paidAmount = paymentType === 'total'
-      ? receiptData.sale.total_amount
+      ? pendingSale.sale.total_amount
       : parseFloat(partialAmount) || 0;
 
-    if (paymentType === 'partial' && (paidAmount <= 0 || paidAmount >= receiptData.sale.total_amount)) {
+    if (paymentType === 'partial' && (paidAmount <= 0 || paidAmount >= pendingSale.sale.total_amount)) {
       toast({
         title: 'Monto inválido',
         description: 'El pago parcial debe ser mayor a 0 y menor al total',
@@ -273,7 +281,7 @@ export default function SalesModule() {
         payment_status: newStatus,
         paid_amount: paidAmount,
       })
-      .eq('id', receiptData.sale.id);
+      .eq('id', pendingSale.sale.id);
 
     if (error) {
       toast({
@@ -288,8 +296,16 @@ export default function SalesModule() {
           ? `Pago total de ${formatCurrency(paidAmount)} registrado`
           : `Pago parcial de ${formatCurrency(paidAmount)} registrado`,
       });
+
+      // Cerrar modal de pago y mostrar recibo
+      setShowPaymentModal(false);
+      setReceiptSaleData({
+        sale: pendingSale.sale,
+        items: pendingSale.items,
+        paidAmount: paidAmount,
+      });
+      setShowReceiptModal(true);
       await fetchSalesHistory();
-      setReceiptData(null);
       setPaymentType('total');
       setPartialAmount('');
     }
@@ -630,7 +646,6 @@ export default function SalesModule() {
                   <TableHead>Cliente</TableHead>
                   <TableHead>Método</TableHead>
                   <TableHead>Estado Pago</TableHead>
-                  <TableHead className="text-center">Comprobante</TableHead>
                   <TableHead className="text-right">Total</TableHead>
                   <TableHead></TableHead>
                 </TableRow>
@@ -664,25 +679,18 @@ export default function SalesModule() {
                       <Badge variant="secondary">{PAYMENT_METHOD_LABELS[sale.payment_method]}</Badge>
                     </TableCell>
                     <TableCell>
-                      {getPaymentStatusBadge(sale.payment_status)}
-                      {sale.payment_status === 'partial' && sale.paid_amount && (
-                        <div className="text-xs text-muted-foreground mt-1">
-                          {formatCurrency(sale.paid_amount)} de {formatCurrency(sale.total_amount)}
-                        </div>
-                      )}
-                    </TableCell>
-                    <TableCell className="text-center">
-                      {sale.student?.payment_receipt_url ? (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => window.open(sale.student!.payment_receipt_url!, '_blank')}
-                        >
-                          <FileText className="w-4 h-4" />
-                        </Button>
-                      ) : (
-                        <span className="text-muted-foreground">-</span>
-                      )}
+                      <button
+                        type="button"
+                        className="cursor-pointer hover:opacity-70 transition-opacity"
+                        onClick={() => setHistoryReceiptSale(sale)}
+                      >
+                        {getPaymentStatusBadge(sale.payment_status)}
+                        {sale.payment_status === 'partial' && sale.paid_amount && (
+                          <div className="text-xs text-muted-foreground mt-1">
+                            {formatCurrency(sale.paid_amount)} de {formatCurrency(sale.total_amount)}
+                          </div>
+                        )}
+                      </button>
                     </TableCell>
                     <TableCell className="text-right font-bold">{formatCurrency(sale.total_amount)}</TableCell>
                     <TableCell>
@@ -704,7 +712,7 @@ export default function SalesModule() {
                 ))}
                 {filteredSalesHistory.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={9} className="text-center text-muted-foreground py-8">
+                    <TableCell colSpan={8} className="text-center text-muted-foreground py-8">
                       No hay ventas registradas
                     </TableCell>
                   </TableRow>
@@ -803,7 +811,6 @@ export default function SalesModule() {
                       <TableHead>Cliente</TableHead>
                       <TableHead>Método</TableHead>
                       <TableHead>Estado Pago</TableHead>
-                      <TableHead className="text-center">Comprobante</TableHead>
                       <TableHead className="text-right">Total</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -836,32 +843,25 @@ export default function SalesModule() {
                           <Badge variant="secondary">{PAYMENT_METHOD_LABELS[sale.payment_method]}</Badge>
                         </TableCell>
                         <TableCell>
-                          {getPaymentStatusBadge(sale.payment_status)}
-                          {sale.payment_status === 'partial' && sale.paid_amount && (
-                            <div className="text-xs text-muted-foreground mt-1">
-                              {formatCurrency(sale.paid_amount)} de {formatCurrency(sale.total_amount)}
-                            </div>
-                          )}
-                        </TableCell>
-                        <TableCell className="text-center">
-                          {sale.student?.payment_receipt_url ? (
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => window.open(sale.student!.payment_receipt_url!, '_blank')}
-                            >
-                              <FileText className="w-4 h-4" />
-                            </Button>
-                          ) : (
-                            <span className="text-muted-foreground">-</span>
-                          )}
+                          <button
+                            type="button"
+                            className="cursor-pointer hover:opacity-70 transition-opacity"
+                            onClick={() => setHistoryReceiptSale(sale)}
+                          >
+                            {getPaymentStatusBadge(sale.payment_status)}
+                            {sale.payment_status === 'partial' && sale.paid_amount && (
+                              <div className="text-xs text-muted-foreground mt-1">
+                                {formatCurrency(sale.paid_amount)} de {formatCurrency(sale.total_amount)}
+                              </div>
+                            )}
+                          </button>
                         </TableCell>
                         <TableCell className="text-right font-bold">{formatCurrency(sale.total_amount)}</TableCell>
                       </TableRow>
                     ))}
                     {filteredSalesHistory.length === 0 && (
                       <TableRow>
-                        <TableCell colSpan={8} className="text-center text-muted-foreground py-8">
+                        <TableCell colSpan={7} className="text-center text-muted-foreground py-8">
                           No hay datos de ventas
                         </TableCell>
                       </TableRow>
@@ -874,51 +874,28 @@ export default function SalesModule() {
         </div>
       </TabsContent>
 
-      {/* Receipt Modal */}
-      <Dialog open={!!receiptData} onOpenChange={() => {
-        setReceiptData(null);
-        setPaymentType('total');
-        setPartialAmount('');
+      {/* Payment Modal (shows after sale) */}
+      <Dialog open={showPaymentModal} onOpenChange={(open) => {
+        setShowPaymentModal(open);
+        if (!open) {
+          setPendingSale(null);
+          setPaymentType('total');
+          setPartialAmount('');
+        }
       }}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
-            <DialogTitle>Recibo de Venta</DialogTitle>
+            <DialogTitle>Registrar Pago</DialogTitle>
           </DialogHeader>
 
-          <div ref={receiptRef} className="flex flex-col items-center justify-center text-center">
-            <h1 className="text-2xl font-bold text-primary">Silicer</h1>
-            <p className="subtitle text-muted-foreground text-sm mb-4">Taller de Cerámica</p>
+          <div className="space-y-4">
+            <div className="p-3 bg-muted rounded-lg text-center">
+              <p className="text-sm text-muted-foreground">Total de la venta</p>
+              <p className="text-2xl font-bold text-primary">{formatCurrency(pendingSale?.sale.total_amount || 0)}</p>
+            </div>
 
-            <table className="w-full border-collapse mb-4">
-              <thead>
-                <tr className="border-b">
-                  <th className="text-left py-2">Producto</th>
-                  <th className="text-center py-2">Cant.</th>
-                  <th className="text-right py-2">Precio</th>
-                </tr>
-              </thead>
-              <tbody>
-                {receiptData?.items.map(item => (
-                  <tr key={item.inventory.id} className="border-b border-muted">
-                    <td className="text-left py-2">{item.inventory.name}</td>
-                    <td className="text-center py-2">{item.quantity}</td>
-                    <td className="text-right py-2">{formatCurrency(item.inventory.price * item.quantity)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-
-            <p className="total text-xl font-bold text-primary">Total: {formatCurrency(receiptData?.sale.total_amount || 0)}</p>
-            <p className="footer text-muted-foreground text-sm mt-2">¡Gracias por tu compra!</p>
-          </div>
-
-          <div className="space-y-3 border-t pt-4">
-            <Button onClick={printReceipt} className="w-full" variant="outline">
-              <Printer className="w-4 h-4 mr-2" /> Imprimir Recibo
-            </Button>
-
-            <div className="space-y-3 border-t pt-3">
-              <Label className="text-sm font-medium">Registrar Pago</Label>
+            <div className="space-y-3">
+              <Label className="text-sm font-medium">Tipo de Pago</Label>
               <div className="flex gap-2">
                 <Button
                   variant={paymentType === 'total' ? 'default' : 'outline'}
@@ -940,29 +917,225 @@ export default function SalesModule() {
 
               {paymentType === 'total' ? (
                 <p className="text-sm text-muted-foreground text-center">
-                  Se registrará el pago completo de {formatCurrency(receiptData?.sale.total_amount || 0)}
+                  Se registrará el pago completo de {formatCurrency(pendingSale?.sale.total_amount || 0)}
                 </p>
               ) : (
                 <div className="space-y-2">
-                  <Label htmlFor="partialAmount">Monto del pago parcial</Label>
+                  <Label htmlFor="paymentPartialAmount">Monto del pago parcial</Label>
                   <Input
-                    id="partialAmount"
+                    id="paymentPartialAmount"
                     type="number"
                     placeholder="Ej: 5000"
                     value={partialAmount}
                     onChange={(e) => setPartialAmount(e.target.value)}
                   />
                   <p className="text-xs text-muted-foreground">
-                    Total de la venta: {formatCurrency(receiptData?.sale.total_amount || 0)}
+                    Total de la venta: {formatCurrency(pendingSale?.sale.total_amount || 0)}
                   </p>
                 </div>
               )}
+            </div>
 
-              <Button onClick={handleRegisterPayment} className="w-full">
-                <DollarSign className="w-4 h-4 mr-2" /> Confirmar Pago
+            <Button onClick={handleRegisterPayment} className="w-full">
+              <DollarSign className="w-4 h-4 mr-2" /> Confirmar Pago
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Receipt Modal (shows after payment confirmation) */}
+      <Dialog open={showReceiptModal} onOpenChange={(open) => {
+        setShowReceiptModal(open);
+        if (!open) {
+          setReceiptSaleData(null);
+          setPendingSale(null);
+        }
+      }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Recibo de Venta</DialogTitle>
+          </DialogHeader>
+
+          <div ref={receiptRef} className="flex flex-col items-center justify-center text-center">
+            <h1 className="text-2xl font-bold text-primary">Silicer</h1>
+            <p className="subtitle text-muted-foreground text-sm mb-4">Taller de Cerámica</p>
+
+            <table className="w-full border-collapse mb-4">
+              <thead>
+                <tr className="border-b">
+                  <th className="text-left py-2">Producto</th>
+                  <th className="text-center py-2">Cant.</th>
+                  <th className="text-right py-2">Precio</th>
+                </tr>
+              </thead>
+              <tbody>
+                {receiptSaleData?.items.map(item => (
+                  <tr key={item.inventory.id} className="border-b border-muted">
+                    <td className="text-left py-2">{item.inventory.name}</td>
+                    <td className="text-center py-2">{item.quantity}</td>
+                    <td className="text-right py-2">{formatCurrency(item.inventory.price * item.quantity)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+
+            <p className="total text-xl font-bold text-primary">Total: {formatCurrency(receiptSaleData?.sale.total_amount || 0)}</p>
+
+            {receiptSaleData && receiptSaleData.paidAmount < receiptSaleData.sale.total_amount ? (
+              <div className="mt-2 p-2 bg-yellow-100 rounded-lg">
+                <p className="text-sm font-medium text-yellow-800">Pago Parcial</p>
+                <p className="text-sm text-yellow-700">
+                  Pagado: {formatCurrency(receiptSaleData.paidAmount)} de {formatCurrency(receiptSaleData.sale.total_amount)}
+                </p>
+                <p className="text-sm text-yellow-700">
+                  Restante: {formatCurrency(receiptSaleData.sale.total_amount - receiptSaleData.paidAmount)}
+                </p>
+              </div>
+            ) : (
+              <div className="mt-2 p-2 bg-green-100 rounded-lg">
+                <p className="text-sm font-medium text-green-800">Pagado en su totalidad</p>
+              </div>
+            )}
+
+            <p className="footer text-muted-foreground text-sm mt-4">¡Gracias por tu compra!</p>
+          </div>
+
+          <Button onClick={printReceipt} className="w-full" variant="outline">
+            <Printer className="w-4 h-4 mr-2" /> Imprimir Recibo
+          </Button>
+        </DialogContent>
+      </Dialog>
+
+      {/* History Receipt Modal (click on payment status in history) */}
+      <Dialog open={!!historyReceiptSale} onOpenChange={(open) => {
+        if (!open) setHistoryReceiptSale(null);
+      }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Recibo de Venta</DialogTitle>
+          </DialogHeader>
+
+          {historyReceiptSale && (
+            <div className="flex flex-col items-center justify-center text-center">
+              <h1 className="text-2xl font-bold text-primary">Silicer</h1>
+              <p className="subtitle text-muted-foreground text-sm mb-4">Taller de Cerámica</p>
+              <p className="text-sm text-muted-foreground mb-2">{formatDate(historyReceiptSale.created_at)}</p>
+
+              <table className="w-full border-collapse mb-4">
+                <thead>
+                  <tr className="border-b">
+                    <th className="text-left py-2">Producto</th>
+                    <th className="text-center py-2">Cant.</th>
+                    <th className="text-right py-2">Precio</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {historyReceiptSale.sale_items?.map(item => (
+                    <tr key={item.id} className="border-b border-muted">
+                      <td className="text-left py-2">{item.inventory?.name || 'Producto eliminado'}</td>
+                      <td className="text-center py-2">{item.quantity}</td>
+                      <td className="text-right py-2">{formatCurrency(item.unit_price * item.quantity)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+
+              <p className="total text-xl font-bold text-primary">Total: {formatCurrency(historyReceiptSale.total_amount)}</p>
+
+              {historyReceiptSale.payment_status === 'partial' && historyReceiptSale.paid_amount ? (
+                <div className="mt-2 p-2 bg-yellow-100 rounded-lg w-full">
+                  <p className="text-sm font-medium text-yellow-800">Pago Parcial</p>
+                  <p className="text-sm text-yellow-700">
+                    Pagado: {formatCurrency(historyReceiptSale.paid_amount)} de {formatCurrency(historyReceiptSale.total_amount)}
+                  </p>
+                  <p className="text-sm text-yellow-700">
+                    Restante: {formatCurrency(historyReceiptSale.total_amount - historyReceiptSale.paid_amount)}
+                  </p>
+                </div>
+              ) : historyReceiptSale.payment_status === 'paid' ? (
+                <div className="mt-2 p-2 bg-green-100 rounded-lg w-full">
+                  <p className="text-sm font-medium text-green-800">Pagado en su totalidad</p>
+                </div>
+              ) : (
+                <div className="mt-2 p-2 bg-red-100 rounded-lg w-full">
+                  <p className="text-sm font-medium text-red-800">Pago Pendiente</p>
+                </div>
+              )}
+
+              <p className="footer text-muted-foreground text-sm mt-4">¡Gracias por tu compra!</p>
+
+              <Button
+                onClick={() => {
+                  const printWindow = window.open('', '_blank');
+                  if (printWindow && historyReceiptSale) {
+                    const itemsHtml = historyReceiptSale.sale_items?.map(item => `
+                      <tr>
+                        <td style="text-align: left; padding: 8px 4px; border-bottom: 1px solid #eee;">${item.inventory?.name || 'Producto eliminado'}</td>
+                        <td style="text-align: center; padding: 8px 4px; border-bottom: 1px solid #eee;">${item.quantity}</td>
+                        <td style="text-align: right; padding: 8px 4px; border-bottom: 1px solid #eee;">${formatCurrency(item.unit_price * item.quantity)}</td>
+                      </tr>
+                    `).join('') || '';
+
+                    printWindow.document.write(`
+                      <html>
+                        <head>
+                          <title>Recibo - Silicer</title>
+                          <style>
+                            body { font-family: Arial, sans-serif; padding: 20px; max-width: 300px; margin: 0 auto; }
+                            h1 { text-align: center; color: #5C329E; font-size: 24px; margin-bottom: 5px; }
+                            .subtitle { text-align: center; color: #666; font-size: 12px; margin-bottom: 20px; }
+                            table { width: 100%; border-collapse: collapse; margin: 15px 0; }
+                            th { text-align: left; padding: 8px 4px; border-bottom: 1px solid #333; }
+                            .total { font-weight: bold; font-size: 18px; text-align: center; margin-top: 15px; }
+                            .footer { text-align: center; margin-top: 20px; font-size: 12px; color: #666; }
+                            .payment-status { padding: 10px; border-radius: 8px; margin-top: 10px; text-align: center; }
+                            .partial { background-color: #fef3c7; color: #92400e; }
+                            .paid { background-color: #d1fae5; color: #065f46; }
+                            .pending { background-color: #fee2e2; color: #991b1b; }
+                          </style>
+                        </head>
+                        <body>
+                          <h1>Silicer</h1>
+                          <p class="subtitle">Taller de Cerámica</p>
+                          <p class="subtitle">${formatDate(historyReceiptSale.created_at)}</p>
+                          <table>
+                            <thead>
+                              <tr>
+                                <th>Producto</th>
+                                <th style="text-align: center;">Cant.</th>
+                                <th style="text-align: right;">Precio</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              ${itemsHtml}
+                            </tbody>
+                          </table>
+                          <p class="total">Total: ${formatCurrency(historyReceiptSale.total_amount)}</p>
+                          ${historyReceiptSale.payment_status === 'partial' && historyReceiptSale.paid_amount
+                            ? `<div class="payment-status partial">
+                                <strong>Pago Parcial</strong><br/>
+                                Pagado: ${formatCurrency(historyReceiptSale.paid_amount)} de ${formatCurrency(historyReceiptSale.total_amount)}<br/>
+                                Restante: ${formatCurrency(historyReceiptSale.total_amount - historyReceiptSale.paid_amount)}
+                              </div>`
+                            : historyReceiptSale.payment_status === 'paid'
+                              ? `<div class="payment-status paid"><strong>Pagado en su totalidad</strong></div>`
+                              : `<div class="payment-status pending"><strong>Pago Pendiente</strong></div>`
+                          }
+                          <p class="footer">¡Gracias por tu compra!</p>
+                        </body>
+                      </html>
+                    `);
+                    printWindow.document.close();
+                    printWindow.print();
+                  }
+                }}
+                className="w-full mt-4"
+                variant="outline"
+              >
+                <Printer className="w-4 h-4 mr-2" /> Imprimir Recibo
               </Button>
             </div>
-          </div>
+          )}
         </DialogContent>
       </Dialog>
 

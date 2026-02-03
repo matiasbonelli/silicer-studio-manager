@@ -4,7 +4,20 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Settings, Save, Plus, Trash2 } from 'lucide-react';
+
+const CATEGORIAS = [
+  'Taza',
+  'Plato',
+  'Cuenco',
+  'Vaso',
+  'Jarra',
+  'Fuente',
+  'Maceta',
+  'Bandeja',
+  'Otros',
+];
 
 const CONFIG_STORAGE_KEY = 'silicer-pricing-config';
 const PRODUCTS_STORAGE_KEY = 'silicer-pricing-products';
@@ -217,12 +230,19 @@ export default function PricingCalculator() {
                         />
                       </TableCell>
                       <TableCell>
-                        <Input
+                        <Select
                           value={product.categoria}
-                          onChange={(e) => updateProduct(product.id, 'categoria', e.target.value)}
-                          placeholder="Categoría"
-                          className="h-8"
-                        />
+                          onValueChange={(value) => updateProduct(product.id, 'categoria', value)}
+                        >
+                          <SelectTrigger className="h-8 w-[110px]">
+                            <SelectValue placeholder="Categoría" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {CATEGORIAS.map(cat => (
+                              <SelectItem key={cat} value={cat}>{cat}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
                       </TableCell>
                       <TableCell>
                         <Input

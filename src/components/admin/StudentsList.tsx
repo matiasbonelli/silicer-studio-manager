@@ -49,7 +49,14 @@ export default function StudentsList({ onStudentClick, refreshTrigger, onStudent
 
   const openPaymentModal = (student: Student) => {
     setStudentToPayment(student);
-    setPaymentType(student.payment_status === 'paid' ? 'pending' : 'total');
+    // Mapear el estado actual al tipo de pago correcto
+    if (student.payment_status === 'paid') {
+      setPaymentType('total');
+    } else if (student.payment_status === 'partial') {
+      setPaymentType('partial');
+    } else {
+      setPaymentType('pending');
+    }
     setPartialAmount(student.paid_amount?.toString() || '');
     setIsPaymentModalOpen(true);
   };
