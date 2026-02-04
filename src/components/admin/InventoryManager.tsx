@@ -1,14 +1,15 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
-import { InventoryItem } from '@/types/database';
+import { InventoryItem, ProductCategory, PRODUCT_CATEGORY_LABELS } from '@/types/database';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
-import { Plus, Pencil, Trash2, Search, Loader2, AlertTriangle, ShoppingCart, Package } from 'lucide-react';
+import { Plus, Pencil, Trash2, Search, Loader2, AlertTriangle, ShoppingCart, Package, Tag } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Switch } from '@/components/ui/switch';
 
@@ -37,6 +38,7 @@ export default function InventoryManager() {
     cost: 0,
     margin_percent: 0,
     for_sale: false,
+    category: '' as ProductCategory | '',
   });
 
   // Calculate price from cost and margin
@@ -80,6 +82,7 @@ export default function InventoryManager() {
         cost: item.cost ?? 0,
         margin_percent: marginPercent,
         for_sale: item.for_sale ?? false,
+        category: item.category || '',
       });
     } else {
       setEditingItem(null);
@@ -92,6 +95,7 @@ export default function InventoryManager() {
         cost: 0,
         margin_percent: 0,
         for_sale: false,
+        category: '',
       });
     }
     setIsModalOpen(true);
@@ -109,6 +113,7 @@ export default function InventoryManager() {
       price: calculatedPrice,
       cost: formData.cost,
       for_sale: formData.for_sale,
+      category: formData.category || null,
     };
 
     let error;
@@ -211,6 +216,7 @@ export default function InventoryManager() {
             <TableRow>
               <TableHead>Producto</TableHead>
               <TableHead className="text-center">Tipo</TableHead>
+              <TableHead className="text-center">Categoría</TableHead>
               <TableHead className="text-center">Stock</TableHead>
               <TableHead className="text-right">Costo</TableHead>
               <TableHead className="text-right">Precio</TableHead>
@@ -233,6 +239,15 @@ export default function InventoryManager() {
                   <Badge variant={item.for_sale ? 'default' : 'secondary'}>
                     {item.for_sale ? 'Venta' : 'General'}
                   </Badge>
+                </TableCell>
+                <TableCell className="text-center">
+                  {item.category ? (
+                    <Badge variant="outline">
+                      {PRODUCT_CATEGORY_LABELS[item.category]}
+                    </Badge>
+                  ) : (
+                    <span className="text-muted-foreground text-sm">-</span>
+                  )}
                 </TableCell>
                 <TableCell className="text-center">
                   <div className="flex items-center justify-center gap-2">
@@ -273,7 +288,7 @@ export default function InventoryManager() {
             ))}
             {filteredItems.length === 0 && (
               <TableRow>
-                <TableCell colSpan={7} className="text-center text-muted-foreground py-8">
+                <TableCell colSpan={8} className="text-center text-muted-foreground py-8">
                   No hay productos en el inventario
                 </TableCell>
               </TableRow>
@@ -384,6 +399,30 @@ export default function InventoryManager() {
                 onCheckedChange={(checked) => setFormData(prev => ({ ...prev, for_sale: checked }))}
               />
             </div>
+            {formData.for_sale && (
+              <div className="space-y-2">
+                <Label htmlFor="category">Categoría de Venta</Label>
+                <Select
+                  value={formData.category}
+                  onValueChange={(value) => setFormData(prev => ({ ...prev, category: value as ProductCategory }))}
+                >
+                  <SelectTrigger>
+                    <Tag className="w-4 h-4 mr-2" />
+                    <SelectValue placeholder="Seleccionar categoría" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {(Object.keys(PRODUCT_CATEGORY_LABELS) as ProductCategory[]).map((cat) => (
+                      <SelectItem key={cat} value={cat}>
+                        {PRODUCT_CATEGORY_LABELS[cat]}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">
+                  Esta categoría se usará para filtrar en el módulo de ventas
+                </p>
+              </div>
+            )}
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => setIsModalOpen(false)}>
                 Cancelar

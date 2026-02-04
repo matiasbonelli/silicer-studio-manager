@@ -150,102 +150,143 @@ export default function Index() {
     : [];
 
   return (
-    <div className="min-h-screen">
+    <div className="min-h-screen bg-[#EBEBEB]">
       {/* Admin Link */}
       <Link
         to="/auth"
-        className="fixed top-4 right-4 z-50 p-2 text-[#d4b89c]/50 hover:text-[#d4b89c] transition-colors"
+        className="fixed top-4 right-4 z-50 p-2 text-[#4a3f35]/30 hover:text-[#4a3f35]/70 transition-colors"
         title="Acceso Administrador"
       >
         <Settings className="w-5 h-5" />
       </Link>
 
-      {/* Hero Section - Dark Background */}
-      <section className="min-h-screen flex flex-col items-center justify-center px-4 bg-gradient-to-b from-[#1a1512] via-[#2a2118] to-[#1a1512] relative overflow-hidden">
-        {/* Decorative gradient overlay */}
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_left,_rgba(139,90,43,0.15)_0%,_transparent_50%)]" />
+      {/* Hero Section - Living Clay Style */}
+      <section className="min-h-screen relative flex flex-col items-center justify-start px-4 pt-8 pb-20 overflow-hidden">
+        {/* Background abstract image */}
+        <div
+          className="absolute inset-0 opacity-40"
+          style={{
+            backgroundImage: 'url(/hero-background.jpg)',
+            backgroundSize: 'cover',
+            backgroundPosition: 'center',
+          }}
+        />
 
-        {/* Logo placeholder - replace with SVG when provided */}
-        <div className="mb-8 relative z-10">
-          {/* Placeholder for logo - will be replaced with actual SVG */}
-          <div className="w-24 h-24 rounded-full bg-[#d4b89c]/10 flex items-center justify-center">
-            <span className="text-4xl font-serif text-[#d4b89c]">S</span>
+        {/* Header with logo placeholder */}
+        <div className="w-full max-w-6xl mx-auto flex items-center justify-between mb-8 relative z-10">
+          <span className="text-sm text-[#4a3f35]/60 font-light tracking-wide">Silicer Estudio</span>
+
+          {/* Logo area - where "POTTERY MASTER CLASSES" would go */}
+          <div className="flex flex-col items-center">
+            {/* Logo placeholder - replace with actual logo */}
+            <div className="w-16 h-16 rounded-full bg-[#4a3f35]/10 flex items-center justify-center mb-2">
+              <span className="text-2xl font-serif text-[#4a3f35]">S</span>
+            </div>
+            <span className="text-xs text-[#4a3f35]/60 tracking-[0.3em] uppercase">Taller de Cerámica</span>
           </div>
+
+          <span className="text-sm text-[#4a3f35]/60 font-light">Villa María, Córdoba</span>
         </div>
 
-        {/* Title */}
-        <h1 className="text-4xl md:text-6xl lg:text-7xl font-serif text-[#f5ebe0] text-center mb-6 relative z-10 tracking-wide">
-          Descubrí el arte de la cerámica
-        </h1>
+        {/* Main content - Oval image with overlapping text */}
+        <div className="relative flex flex-col items-center justify-center flex-1 w-full max-w-4xl mx-auto">
+          {/* Oval image container */}
+          <div className="relative">
+            <div
+              className="w-[320px] h-[420px] md:w-[400px] md:h-[520px] lg:w-[450px] lg:h-[580px] rounded-[50%] overflow-hidden shadow-2xl"
+              style={{
+                backgroundImage: 'url(/hero-ceramica.jpg)',
+                backgroundSize: 'cover',
+                backgroundPosition: 'center',
+              }}
+            >
+              {/* Fallback gradient if image doesn't exist */}
+              <div className="absolute inset-0 bg-gradient-to-b from-[#c4a882]/30 via-[#a08060]/20 to-[#8b7355]/40" />
+            </div>
 
-        {/* Subtitle */}
-        <p className="text-lg md:text-xl text-[#a89888] text-center max-w-2xl mb-12 relative z-10 leading-relaxed">
-          Un espacio para crear, aprender, conectar con tus manos y pasar un momento super lindo.
-          Clases grupales en un ambiente cálido y creativo.
-        </p>
+            {/* Overlapping title text */}
+            <div className="absolute -bottom-4 left-1/2 transform -translate-x-1/2 w-full">
+              <h1
+                className="text-4xl md:text-5xl lg:text-6xl font-serif text-[#4a3f35] text-center tracking-[0.15em] uppercase whitespace-nowrap"
+                style={{
+                  fontFamily: "'Playfair Display', 'Times New Roman', serif",
+                  fontWeight: 300,
+                  letterSpacing: '0.2em',
+                }}
+              >
+                SILICER
+              </h1>
+            </div>
+          </div>
 
-        {/* Buttons */}
-        <div className="flex flex-col sm:flex-row gap-4 relative z-10">
-          <Button
-            size="lg"
-            className="bg-[#c4956a] hover:bg-[#b38559] text-white px-8 py-6 text-lg rounded-full"
-            onClick={() => scrollToSection(formSectionRef)}
-          >
-            Inscribirme
-          </Button>
-          <Button
-            size="lg"
-            variant="outline"
-            className="border-[#6b5c4c] text-[#d4b89c] hover:bg-[#6b5c4c]/20 px-8 py-6 text-lg rounded-full bg-transparent"
-            onClick={() => scrollToSection(infoSectionRef)}
-          >
-            Conocer más
-          </Button>
+          {/* Subtitle below */}
+          <p className="mt-16 text-lg md:text-xl text-[#4a3f35]/70 text-center max-w-xl leading-relaxed font-light">
+            Un espacio para crear, aprender y conectar con tus manos
+          </p>
+
+          {/* CTA Buttons */}
+          <div className="flex flex-col sm:flex-row gap-4 mt-10">
+            <Button
+              size="lg"
+              className="bg-[#4a3f35] hover:bg-[#3a2f25] text-white px-10 py-6 text-base rounded-full tracking-wide"
+              onClick={() => scrollToSection(formSectionRef)}
+            >
+              Inscribirme
+            </Button>
+            <Button
+              size="lg"
+              variant="outline"
+              className="border-[#4a3f35]/30 text-[#4a3f35] hover:bg-[#4a3f35]/5 px-10 py-6 text-base rounded-full bg-transparent tracking-wide"
+              onClick={() => scrollToSection(infoSectionRef)}
+            >
+              Conocer más
+            </Button>
+          </div>
         </div>
 
         {/* Scroll indicator */}
         <div className="absolute bottom-8 left-1/2 -translate-x-1/2 animate-bounce">
-          <div className="w-6 h-10 border-2 border-[#6b5c4c] rounded-full flex justify-center pt-2">
-            <div className="w-1 h-2 bg-[#6b5c4c] rounded-full" />
+          <div className="w-5 h-8 border border-[#4a3f35]/30 rounded-full flex justify-center pt-1.5">
+            <div className="w-0.5 h-1.5 bg-[#4a3f35]/40 rounded-full" />
           </div>
         </div>
       </section>
 
       {/* Info Section */}
-      <section ref={infoSectionRef} className="py-20 px-4 bg-[#f8f5f1]">
+      <section ref={infoSectionRef} className="py-20 px-4 bg-white">
         <div className="container mx-auto max-w-4xl">
           {/* Main Info Card */}
-          <Card className="border-none shadow-xl bg-white mb-12">
+          <Card className="border-none shadow-xl bg-[#faf9f7] mb-12">
             <CardContent className="p-8 md:p-12">
-              <h2 className="text-3xl md:text-4xl font-serif text-primary text-center mb-8">
+              <h2 className="text-3xl md:text-4xl font-serif text-[#4a3f35] text-center mb-8">
                 ¡Sumate a nuestro taller este año!
               </h2>
 
-              <div className="space-y-6 text-lg text-muted-foreground">
+              <div className="space-y-6 text-lg text-[#6b5c4c]">
                 <p className="text-center">
                   En Silicer tenemos todo listo para que aprendas cerámica en serio.
                 </p>
 
-                <div className="flex items-start gap-4 p-4 bg-accent/50 rounded-lg">
-                  <Sparkles className="w-6 h-6 text-primary shrink-0 mt-1" />
+                <div className="flex items-start gap-4 p-4 bg-[#f5f1ec] rounded-lg">
+                  <Sparkles className="w-6 h-6 text-[#4a3f35] shrink-0 mt-1" />
                   <div>
-                    <strong className="text-foreground">¿Qué vas a aprender?</strong>
+                    <strong className="text-[#4a3f35]">¿Qué vas a aprender?</strong>
                     <p>Técnicas de construcción y decoración en todos los estados (cuero, crudo, bizcocho y sobre esmalte).</p>
                   </div>
                 </div>
 
-                <div className="flex items-start gap-4 p-4 bg-accent/50 rounded-lg">
+                <div className="flex items-start gap-4 p-4 bg-[#f5f1ec] rounded-lg">
                   <span className="text-2xl shrink-0">🚀</span>
                   <div>
-                    <strong className="text-foreground">¿Límites?</strong>
+                    <strong className="text-[#4a3f35]">¿Límites?</strong>
                     <p>Ninguno. Hacé las piezas que quieras del tamaño que quieras (¡siempre que el horno nos dé espacio :) !).</p>
                   </div>
                 </div>
 
-                <div className="flex items-start gap-4 p-4 bg-accent/50 rounded-lg">
+                <div className="flex items-start gap-4 p-4 bg-[#f5f1ec] rounded-lg">
                   <span className="text-2xl shrink-0">🧉</span>
                   <div>
-                    <strong className="text-foreground">El plus:</strong>
+                    <strong className="text-[#4a3f35]">El plus:</strong>
                     <p>No es solo cerámica, es comunidad. Vení a encontrarte, a compartir y a tomarte unos mates con peperina con nosotros.</p>
                   </div>
                 </div>
@@ -255,31 +296,31 @@ export default function Index() {
 
           {/* Three Columns */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <Card className="border-none shadow-lg bg-white text-center">
+            <Card className="border-none shadow-lg bg-[#faf9f7] text-center">
               <CardContent className="p-6">
-                <Clock className="w-10 h-10 text-primary mx-auto mb-4" />
-                <h3 className="text-xl font-bold text-foreground mb-2">2 Horas</h3>
-                <p className="text-muted-foreground">
+                <Clock className="w-10 h-10 text-[#4a3f35] mx-auto mb-4" />
+                <h3 className="text-xl font-bold text-[#4a3f35] mb-2">2 Horas</h3>
+                <p className="text-[#6b5c4c]">
                   Cada turno son de 2 horas, 1 vez por semana
                 </p>
               </CardContent>
             </Card>
 
-            <Card className="border-none shadow-lg bg-white text-center">
+            <Card className="border-none shadow-lg bg-[#faf9f7] text-center">
               <CardContent className="p-6">
-                <Users className="w-10 h-10 text-primary mx-auto mb-4" />
-                <h3 className="text-xl font-bold text-foreground mb-2">Cupos limitados</h3>
-                <p className="text-muted-foreground">
+                <Users className="w-10 h-10 text-[#4a3f35] mx-auto mb-4" />
+                <h3 className="text-xl font-bold text-[#4a3f35] mb-2">Cupos limitados</h3>
+                <p className="text-[#6b5c4c]">
                   10 personas por turno, te recomendamos preinscribirte con antelación
                 </p>
               </CardContent>
             </Card>
 
-            <Card className="border-none shadow-lg bg-white text-center">
+            <Card className="border-none shadow-lg bg-[#faf9f7] text-center">
               <CardContent className="p-6">
-                <Sparkles className="w-10 h-10 text-primary mx-auto mb-4" />
-                <h3 className="text-xl font-bold text-foreground mb-2">Experiencia</h3>
-                <p className="text-muted-foreground">
+                <Sparkles className="w-10 h-10 text-[#4a3f35] mx-auto mb-4" />
+                <h3 className="text-xl font-bold text-[#4a3f35] mb-2">Experiencia</h3>
+                <p className="text-[#6b5c4c]">
                   No importa si no tenés experiencia, todos aprendemos juntos!
                 </p>
               </CardContent>
@@ -290,7 +331,7 @@ export default function Index() {
           <div className="text-center mt-12">
             <Button
               size="lg"
-              className="bg-primary hover:bg-primary/90 px-10 py-6 text-lg rounded-full"
+              className="bg-[#4a3f35] hover:bg-[#3a2f25] text-white px-10 py-6 text-lg rounded-full"
               onClick={() => scrollToSection(formSectionRef)}
             >
               Quiero inscribirme
@@ -300,12 +341,12 @@ export default function Index() {
       </section>
 
       {/* Enrollment Form */}
-      <section ref={formSectionRef} className="py-20 bg-background" id="inscripcion">
+      <section ref={formSectionRef} className="py-20 bg-[#EBEBEB]" id="inscripcion">
         <div className="container mx-auto px-4 max-w-xl">
-          <Card className="shadow-xl border-2">
+          <Card className="shadow-xl border-none bg-white">
             <CardHeader className="text-center">
-              <CardTitle className="text-2xl text-primary">¡Preinscribite!</CardTitle>
-              <CardDescription>
+              <CardTitle className="text-2xl text-[#4a3f35] font-serif">¡Preinscribite!</CardTitle>
+              <CardDescription className="text-[#6b5c4c]">
                 Completá el formulario y te contactaremos para confirmar tu lugar
               </CardDescription>
             </CardHeader>
@@ -313,60 +354,65 @@ export default function Index() {
               <form onSubmit={handleSubmit} className="space-y-4">
                 <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-2">
-                    <Label htmlFor="first_name">Nombre *</Label>
+                    <Label htmlFor="first_name" className="text-[#4a3f35]">Nombre *</Label>
                     <Input
                       id="first_name"
                       value={formData.first_name}
                       onChange={(e) => setFormData(prev => ({ ...prev, first_name: e.target.value }))}
+                      className="border-[#d4c4b0] focus:border-[#4a3f35]"
                       required
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="last_name">Apellido *</Label>
+                    <Label htmlFor="last_name" className="text-[#4a3f35]">Apellido *</Label>
                     <Input
                       id="last_name"
                       value={formData.last_name}
                       onChange={(e) => setFormData(prev => ({ ...prev, last_name: e.target.value }))}
+                      className="border-[#d4c4b0] focus:border-[#4a3f35]"
                       required
                     />
                   </div>
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="email">Email *</Label>
+                  <Label htmlFor="email" className="text-[#4a3f35]">Email *</Label>
                   <Input
                     id="email"
                     type="email"
                     value={formData.email}
                     onChange={(e) => setFormData(prev => ({ ...prev, email: e.target.value }))}
+                    className="border-[#d4c4b0] focus:border-[#4a3f35]"
                     required
                   />
                 </div>
 
                 <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-2">
-                    <Label htmlFor="phone">Teléfono</Label>
+                    <Label htmlFor="phone" className="text-[#4a3f35]">Teléfono</Label>
                     <Input
                       id="phone"
                       type="tel"
                       value={formData.phone}
                       onChange={(e) => setFormData(prev => ({ ...prev, phone: e.target.value }))}
+                      className="border-[#d4c4b0] focus:border-[#4a3f35]"
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="birthday">Fecha de Nacimiento</Label>
+                    <Label htmlFor="birthday" className="text-[#4a3f35]">Fecha de Nacimiento</Label>
                     <Input
                       id="birthday"
                       type="date"
                       value={formData.birthday}
                       onChange={(e) => setFormData(prev => ({ ...prev, birthday: e.target.value }))}
+                      className="border-[#d4c4b0] focus:border-[#4a3f35]"
                     />
                   </div>
                 </div>
 
                 <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-2">
-                    <Label htmlFor="day">Día *</Label>
+                    <Label htmlFor="day" className="text-[#4a3f35]">Día *</Label>
                     <Select
                       value={selectedDay}
                       onValueChange={(value) => {
@@ -374,7 +420,7 @@ export default function Index() {
                         setFormData(prev => ({ ...prev, schedule_id: '' }));
                       }}
                     >
-                      <SelectTrigger>
+                      <SelectTrigger className="border-[#d4c4b0] focus:border-[#4a3f35]">
                         <SelectValue placeholder={loading ? 'Cargando...' : 'Seleccionar día'} />
                       </SelectTrigger>
                       <SelectContent>
@@ -392,13 +438,13 @@ export default function Index() {
                     </Select>
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="schedule">Horario *</Label>
+                    <Label htmlFor="schedule" className="text-[#4a3f35]">Horario *</Label>
                     <Select
                       value={formData.schedule_id}
                       onValueChange={(value) => setFormData(prev => ({ ...prev, schedule_id: value }))}
                       disabled={!selectedDay}
                     >
-                      <SelectTrigger>
+                      <SelectTrigger className="border-[#d4c4b0] focus:border-[#4a3f35]">
                         <SelectValue placeholder={!selectedDay ? 'Elegí un día' : 'Seleccionar horario'} />
                       </SelectTrigger>
                       <SelectContent>
@@ -421,17 +467,23 @@ export default function Index() {
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="message">Mensaje (opcional)</Label>
+                  <Label htmlFor="message" className="text-[#4a3f35]">Mensaje (opcional)</Label>
                   <Textarea
                     id="message"
                     value={formData.message}
                     onChange={(e) => setFormData(prev => ({ ...prev, message: e.target.value }))}
                     placeholder="¿Tenés alguna consulta o comentario?"
+                    className="border-[#d4c4b0] focus:border-[#4a3f35]"
                     rows={3}
                   />
                 </div>
 
-                <Button type="submit" size="lg" className="w-full" disabled={submitting || loading}>
+                <Button
+                  type="submit"
+                  size="lg"
+                  className="w-full bg-[#4a3f35] hover:bg-[#3a2f25] text-white rounded-full"
+                  disabled={submitting || loading}
+                >
                   {submitting ? (
                     <>
                       <Loader2 className="w-4 h-4 mr-2 animate-spin" /> Enviando...
@@ -449,13 +501,14 @@ export default function Index() {
       </section>
 
       {/* Footer */}
-      <footer className="bg-primary text-primary-foreground py-12">
+      <footer className="bg-[#4a3f35] text-white py-12">
         <div className="container mx-auto px-4 text-center">
-          <h3 className="text-2xl font-bold mb-4">¿Tenés dudas? ¡Contactanos!</h3>
+          <h3 className="text-2xl font-serif mb-4">¿Tenés dudas? ¡Contactanos!</h3>
           <div className="flex justify-center gap-4 flex-wrap">
             <Button
               variant="secondary"
               size="lg"
+              className="bg-white/10 hover:bg-white/20 text-white border-white/20"
               asChild
             >
               <a
@@ -469,6 +522,7 @@ export default function Index() {
             <Button
               variant="secondary"
               size="lg"
+              className="bg-white/10 hover:bg-white/20 text-white border-white/20"
               asChild
             >
               <a

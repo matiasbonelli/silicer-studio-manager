@@ -21,12 +21,16 @@ export interface Student {
   schedule_id: string | null;
   payment_status: PaymentStatus;
   paid_amount: number | null;
+  payment_date: string | null;
+  payment_month: string | null;
   payment_receipt_url: string | null;
   notes: string | null;
   created_at: string;
   updated_at: string;
   schedule?: Schedule;
 }
+
+export type ProductCategory = 'insumos' | 'servicios' | 'moldes';
 
 export interface InventoryItem {
   id: string;
@@ -38,6 +42,7 @@ export interface InventoryItem {
   price: number;
   cost: number;
   for_sale: boolean;
+  category: ProductCategory | null;
   created_at: string;
   updated_at: string;
 }
@@ -104,4 +109,25 @@ export const PAYMENT_METHOD_LABELS: Record<PaymentMethod, string> = {
   card: 'Tarjeta',
   transfer: 'Transferencia',
   mercadopago: 'MercadoPago',
+};
+
+export const PRODUCT_CATEGORY_LABELS: Record<ProductCategory, string> = {
+  insumos: 'Insumos',
+  servicios: 'Servicios',
+  moldes: 'Moldes',
+};
+
+export const MONTH_NAMES: Record<string, string> = {
+  '01': 'Enero',
+  '02': 'Febrero',
+  '03': 'Marzo',
+  '04': 'Abril',
+  '05': 'Mayo',
+  '06': 'Junio',
+  '07': 'Julio',
+  '08': 'Agosto',
+  '09': 'Septiembre',
+  '10': 'Octubre',
+  '11': 'Noviembre',
+  '12': 'Diciembre',
 };
