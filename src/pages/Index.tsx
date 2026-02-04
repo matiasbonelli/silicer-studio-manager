@@ -164,13 +164,16 @@ export default function Index() {
       <section className="min-h-screen relative flex flex-col items-center justify-start px-4 pt-8 pb-20 overflow-hidden">
         {/* Background abstract image */}
         <div
-          className="absolute inset-0 opacity-40"
+          className="absolute inset-0"
           style={{
             backgroundImage: 'url(/hero-background.jpg)',
             backgroundSize: 'cover',
             backgroundPosition: 'center',
+            opacity: 0.5,
           }}
         />
+        {/* Fallback gradient if image doesn't load */}
+        <div className="absolute inset-0 bg-gradient-to-br from-[#d4c4b0]/20 via-transparent to-[#a08060]/10 pointer-events-none" />
 
         {/* Header with logo */}
         <div className="w-full max-w-6xl mx-auto flex items-center justify-center mb-8 relative z-10">
