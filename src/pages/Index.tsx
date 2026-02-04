@@ -1,5 +1,4 @@
 import { useState, useEffect, useRef } from 'react';
-import { Link } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { Schedule, DAY_NAMES } from '@/types/database';
 import { Button } from '@/components/ui/button';
@@ -11,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
 import { z } from 'zod';
-import { MessageCircle, Instagram, Send, Loader2, Clock, Users, Sparkles, Settings, CheckCircle2, X } from 'lucide-react';
+import { MessageCircle, Instagram, Send, Loader2, Clock, Users, Sparkles, CheckCircle2, X } from 'lucide-react';
 
 const enrollmentSchema = z.object({
   first_name: z.string().trim().min(1, 'El nombre es requerido').max(100),
@@ -161,15 +160,6 @@ export default function Index() {
 
   return (
     <div className="min-h-screen bg-[#EBEBEB]">
-      {/* Admin Link */}
-      <Link
-        to="/auth"
-        className="fixed top-4 right-4 z-50 p-2 text-[#4a3f35]/30 hover:text-[#4a3f35]/70 transition-colors"
-        title="Acceso Administrador"
-      >
-        <Settings className="w-5 h-5" />
-      </Link>
-
       {/* Hero Section - Living Clay Style */}
       <section className="min-h-screen relative flex flex-col items-center justify-start px-4 pt-8 pb-20 overflow-hidden">
         {/* Background abstract image */}
@@ -288,7 +278,7 @@ export default function Index() {
                   <span className="text-2xl shrink-0">🧉</span>
                   <div>
                     <strong className="text-[#4a3f35]">El plus:</strong>
-                    <p>No es solo cerámica, es comunidad. Vení a encontrarte, a compartir y a tomarte unos mates con peperina con nosotros.</p>
+                    <p>No es solo cerámica, es comunidad. Vení a encontrarte, a compartir y a que tomemos juntos unos matecitos con peperina.</p>
                   </div>
                 </div>
               </div>
@@ -302,7 +292,7 @@ export default function Index() {
                 <Clock className="w-10 h-10 text-[#4a3f35] mx-auto mb-4" />
                 <h3 className="text-xl font-bold text-[#4a3f35] mb-2">2 Horas</h3>
                 <p className="text-[#6b5c4c]">
-                  La cuota mensual contempla 1 clase por semana (4 totales) con duración de 2 horas cada una
+                  La cuota mensual contempla 1 clase por semana con duración de 2 horas cada una
                 </p>
               </CardContent>
             </Card>
@@ -502,14 +492,14 @@ export default function Index() {
       </section>
 
       {/* Footer */}
-      <footer className="bg-[#5C329E] text-white py-12">
+      <footer className="bg-[#EBEBEB] py-12 border-t border-[#d4c4b0]/30">
         <div className="container mx-auto px-4 text-center">
-          <h3 className="text-2xl font-serif mb-4">¿Tenés dudas? ¡Contactanos!</h3>
+          <h3 className="text-2xl font-serif text-[#4a3f35] mb-4">¿Tenés dudas? ¡Contactanos!</h3>
           <div className="flex justify-center gap-4 flex-wrap">
             <Button
-              variant="secondary"
+              variant="outline"
               size="lg"
-              className="bg-white/10 hover:bg-white/20 text-white border-white/20"
+              className="bg-[#5C329E] hover:bg-[#4a2880] text-white border-none"
               asChild
             >
               <a
@@ -521,9 +511,9 @@ export default function Index() {
               </a>
             </Button>
             <Button
-              variant="secondary"
+              variant="outline"
               size="lg"
-              className="bg-white/10 hover:bg-white/20 text-white border-white/20"
+              className="bg-[#5C329E] hover:bg-[#4a2880] text-white border-none"
               asChild
             >
               <a
