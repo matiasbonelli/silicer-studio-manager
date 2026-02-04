@@ -172,59 +172,39 @@ export default function Index() {
           }}
         />
 
-        {/* Header with logo placeholder */}
-        <div className="w-full max-w-6xl mx-auto flex items-center justify-between mb-8 relative z-10">
-          <span className="text-sm text-[#4a3f35]/60 font-light tracking-wide">Silicer Estudio</span>
-
-          {/* Logo area - where "POTTERY MASTER CLASSES" would go */}
-          <div className="flex flex-col items-center">
-            {/* Logo - coloca logo.svg en /public */}
-            <img
-              src="/logo.svg"
-              alt="Silicer Logo"
-              className="h-16 md:h-20 mb-2"
-              onError={(e) => {
-                // Fallback si no existe el logo
-                e.currentTarget.style.display = 'none';
-                e.currentTarget.nextElementSibling?.classList.remove('hidden');
-              }}
-            />
-            <div className="hidden w-16 h-16 rounded-full bg-[#4a3f35]/10 flex items-center justify-center mb-2">
-              <span className="text-2xl font-serif text-[#4a3f35]">S</span>
-            </div>
-            <span className="text-xs text-[#4a3f35]/60 tracking-[0.3em] uppercase">Taller de Cerámica</span>
-          </div>
-
-          <span className="text-sm text-[#4a3f35]/60 font-light">Villa María, Córdoba</span>
+        {/* Header with logo */}
+        <div className="w-full max-w-6xl mx-auto flex items-center justify-center mb-8 relative z-10">
+          {/* Logo */}
+          <img
+            src="/logo.svg"
+            alt="Silicer Logo"
+            className="h-16 md:h-20"
+          />
         </div>
 
         {/* Main content - Oval image with overlapping text */}
         <div className="relative flex flex-col items-center justify-center flex-1 w-full max-w-4xl mx-auto">
           {/* Oval image container */}
           <div className="relative">
-            <div
-              className="w-[320px] h-[420px] md:w-[400px] md:h-[520px] lg:w-[450px] lg:h-[580px] rounded-[50%] overflow-hidden shadow-2xl"
+            <img
+              src="/hero-ceramica.jpg"
+              alt="Cerámica artesanal"
+              className="w-[320px] h-[420px] md:w-[400px] md:h-[520px] lg:w-[450px] lg:h-[580px] object-cover shadow-2xl"
               style={{
-                backgroundImage: 'url(/hero-ceramica.jpg)',
-                backgroundSize: 'cover',
-                backgroundPosition: 'center',
+                borderRadius: '50%',
               }}
-            >
-              {/* Fallback gradient if image doesn't exist */}
-              <div className="absolute inset-0 bg-gradient-to-b from-[#c4a882]/30 via-[#a08060]/20 to-[#8b7355]/40" />
-            </div>
+            />
 
             {/* Overlapping title text */}
-            <div className="absolute -bottom-4 left-1/2 transform -translate-x-1/2 w-full">
+            <div className="absolute -bottom-6 left-1/2 transform -translate-x-1/2 w-[140%]">
               <h1
-                className="text-4xl md:text-5xl lg:text-6xl font-serif text-[#4a3f35] text-center tracking-[0.15em] uppercase whitespace-nowrap"
+                className="text-2xl md:text-3xl lg:text-4xl font-serif text-[#4a3f35] text-center tracking-[0.08em]"
                 style={{
                   fontFamily: "'Playfair Display', 'Times New Roman', serif",
                   fontWeight: 300,
-                  letterSpacing: '0.2em',
                 }}
               >
-                SILICER
+                Descubrí el arte de la cerámica
               </h1>
             </div>
           </div>
@@ -238,7 +218,7 @@ export default function Index() {
           <div className="flex flex-col sm:flex-row gap-4 mt-10">
             <Button
               size="lg"
-              className="bg-[#4a3f35] hover:bg-[#3a2f25] text-white px-10 py-6 text-base rounded-full tracking-wide"
+              className="bg-[#5C329E] hover:bg-[#4a2880] text-white px-10 py-6 text-base rounded-full tracking-wide"
               onClick={() => scrollToSection(formSectionRef)}
             >
               Inscribirme
@@ -246,7 +226,7 @@ export default function Index() {
             <Button
               size="lg"
               variant="outline"
-              className="border-[#4a3f35]/30 text-[#4a3f35] hover:bg-[#4a3f35]/5 px-10 py-6 text-base rounded-full bg-transparent tracking-wide"
+              className="border-[#5C329E]/30 text-[#5C329E] hover:bg-[#5C329E]/5 px-10 py-6 text-base rounded-full bg-transparent tracking-wide"
               onClick={() => scrollToSection(infoSectionRef)}
             >
               Conocer más
@@ -341,7 +321,7 @@ export default function Index() {
           <div className="text-center mt-12">
             <Button
               size="lg"
-              className="bg-[#4a3f35] hover:bg-[#3a2f25] text-white px-10 py-6 text-lg rounded-full"
+              className="bg-[#5C329E] hover:bg-[#4a2880] text-white px-10 py-6 text-lg rounded-full"
               onClick={() => scrollToSection(formSectionRef)}
             >
               Quiero inscribirme
@@ -491,7 +471,7 @@ export default function Index() {
                 <Button
                   type="submit"
                   size="lg"
-                  className="w-full bg-[#4a3f35] hover:bg-[#3a2f25] text-white rounded-full"
+                  className="w-full bg-[#5C329E] hover:bg-[#4a2880] text-white rounded-full"
                   disabled={submitting || loading}
                 >
                   {submitting ? (
@@ -511,7 +491,7 @@ export default function Index() {
       </section>
 
       {/* Footer */}
-      <footer className="bg-[#4a3f35] text-white py-12">
+      <footer className="bg-[#5C329E] text-white py-12">
         <div className="container mx-auto px-4 text-center">
           <h3 className="text-2xl font-serif mb-4">¿Tenés dudas? ¡Contactanos!</h3>
           <div className="flex justify-center gap-4 flex-wrap">
