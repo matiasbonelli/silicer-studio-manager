@@ -178,8 +178,18 @@ export default function Index() {
 
           {/* Logo area - where "POTTERY MASTER CLASSES" would go */}
           <div className="flex flex-col items-center">
-            {/* Logo placeholder - replace with actual logo */}
-            <div className="w-16 h-16 rounded-full bg-[#4a3f35]/10 flex items-center justify-center mb-2">
+            {/* Logo - coloca logo.svg en /public */}
+            <img
+              src="/logo.svg"
+              alt="Silicer Logo"
+              className="h-16 md:h-20 mb-2"
+              onError={(e) => {
+                // Fallback si no existe el logo
+                e.currentTarget.style.display = 'none';
+                e.currentTarget.nextElementSibling?.classList.remove('hidden');
+              }}
+            />
+            <div className="hidden w-16 h-16 rounded-full bg-[#4a3f35]/10 flex items-center justify-center mb-2">
               <span className="text-2xl font-serif text-[#4a3f35]">S</span>
             </div>
             <span className="text-xs text-[#4a3f35]/60 tracking-[0.3em] uppercase">Taller de Cerámica</span>
