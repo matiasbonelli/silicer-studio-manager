@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
-import { InventoryItem, Student, Sale, SaleItem, PaymentMethod, PaymentStatus, PAYMENT_METHOD_LABELS, PAYMENT_STATUS_LABELS } from '@/types/database';
+import { InventoryItem, Student, Sale, SaleItem, PaymentMethod, PaymentStatus, PAYMENT_METHOD_LABELS, PAYMENT_STATUS_LABELS, PRODUCT_CATEGORY_LABELS, ProductCategory as DBProductCategory } from '@/types/database';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -464,12 +464,12 @@ export default function SalesModule() {
     }
   };
 
-  // Combinar productos de inventario (insumos) y moldes
+  // Combinar productos de inventario y moldes
   const allProducts: (InventoryItem | SaleProduct)[] = [
-    // Inventario como insumos
+    // Inventario - usar la categoría del producto o 'insumos' por defecto
     ...inventory.filter(item => item.quantity > 0 && item.for_sale).map(item => ({
       ...item,
-      category: 'insumos' as ProductCategory,
+      category: (item.category || 'insumos') as ProductCategory,
       source: 'inventory' as const,
     })),
     // Moldes de la calculadora
@@ -799,6 +799,7 @@ export default function SalesModule() {
                 <TableRow>
                   <TableHead>Fecha</TableHead>
                   <TableHead>Producto</TableHead>
+                  <TableHead>Categoría</TableHead>
                   <TableHead className="text-center">Cant.</TableHead>
                   <TableHead>Cliente</TableHead>
                   <TableHead>Método</TableHead>
@@ -816,6 +817,21 @@ export default function SalesModule() {
                         {sale.sale_items?.map(item => (
                           <div key={item.id} className="text-sm font-medium">
                             {item.inventory?.name || 'Producto eliminado'}
+                          </div>
+                        ))}
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <div className="space-y-1">
+                        {sale.sale_items?.map(item => (
+                          <div key={item.id}>
+                            {item.inventory?.category ? (
+                              <Badge variant="outline" className="text-xs">
+                                {PRODUCT_CATEGORY_LABELS[item.inventory.category as DBProductCategory] || item.inventory.category}
+                              </Badge>
+                            ) : (
+                              <span className="text-xs text-muted-foreground">-</span>
+                            )}
                           </div>
                         ))}
                       </div>
@@ -869,7 +885,7 @@ export default function SalesModule() {
                 ))}
                 {filteredSalesHistory.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={8} className="text-center text-muted-foreground py-8">
+                    <TableCell colSpan={9} className="text-center text-muted-foreground py-8">
                       No hay ventas registradas
                     </TableCell>
                   </TableRow>
@@ -964,6 +980,7 @@ export default function SalesModule() {
                     <TableRow>
                       <TableHead>Fecha</TableHead>
                       <TableHead>Producto</TableHead>
+                      <TableHead>Categoría</TableHead>
                       <TableHead className="text-center">Cant.</TableHead>
                       <TableHead>Cliente</TableHead>
                       <TableHead>Método</TableHead>
@@ -980,6 +997,21 @@ export default function SalesModule() {
                             {sale.sale_items?.map(item => (
                               <div key={item.id} className="text-sm font-medium">
                                 {item.inventory?.name || 'Producto eliminado'}
+                              </div>
+                            ))}
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <div className="space-y-1">
+                            {sale.sale_items?.map(item => (
+                              <div key={item.id}>
+                                {item.inventory?.category ? (
+                                  <Badge variant="outline" className="text-xs">
+                                    {PRODUCT_CATEGORY_LABELS[item.inventory.category as DBProductCategory] || item.inventory.category}
+                                  </Badge>
+                                ) : (
+                                  <span className="text-xs text-muted-foreground">-</span>
+                                )}
                               </div>
                             ))}
                           </div>
@@ -1018,7 +1050,7 @@ export default function SalesModule() {
                     ))}
                     {filteredSalesHistory.length === 0 && (
                       <TableRow>
-                        <TableCell colSpan={7} className="text-center text-muted-foreground py-8">
+                        <TableCell colSpan={8} className="text-center text-muted-foreground py-8">
                           No hay datos de ventas
                         </TableCell>
                       </TableRow>
