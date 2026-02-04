@@ -8,9 +8,10 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
 import { z } from 'zod';
-import { MessageCircle, Instagram, Send, Loader2, Clock, Users, Sparkles, Settings } from 'lucide-react';
+import { MessageCircle, Instagram, Send, Loader2, Clock, Users, Sparkles, Settings, CheckCircle2, X } from 'lucide-react';
 
 const enrollmentSchema = z.object({
   first_name: z.string().trim().min(1, 'El nombre es requerido').max(100),
@@ -27,6 +28,7 @@ export default function Index() {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [selectedDay, setSelectedDay] = useState('');
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [formData, setFormData] = useState({
     first_name: '',
     last_name: '',
@@ -75,6 +77,16 @@ export default function Index() {
     fetchSchedules();
   }, []);
 
+  // Auto-close success modal after 15 seconds
+  useEffect(() => {
+    if (showSuccessModal) {
+      const timer = setTimeout(() => {
+        setShowSuccessModal(false);
+      }, 15000);
+      return () => clearTimeout(timer);
+    }
+  }, [showSuccessModal]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSubmitting(true);
@@ -118,10 +130,8 @@ export default function Index() {
         variant: 'destructive',
       });
     } else {
-      toast({
-        title: '¡Preinscripción enviada!',
-        description: 'Nos pondremos en contacto pronto.',
-      });
+      // Show success modal instead of toast
+      setShowSuccessModal(true);
       setSelectedDay('');
       setFormData({
         first_name: '',
@@ -175,9 +185,9 @@ export default function Index() {
         {/* Fallback gradient if image doesn't load */}
         <div className="absolute inset-0 bg-gradient-to-br from-[#d4c4b0]/20 via-transparent to-[#a08060]/10 pointer-events-none" />
 
-        {/* Header with logo */}
-        <div className="w-full max-w-6xl mx-auto flex items-center justify-center mb-8 relative z-10">
-          {/* Logo - 50% smaller */}
+        {/* Header with logo - more spacing */}
+        <div className="w-full max-w-6xl mx-auto flex items-center justify-center mt-4 mb-12 relative z-10">
+          {/* Logo - 50% smaller with more margin */}
           <img
             src="/logo.svg"
             alt="Silicer Logo"
@@ -222,7 +232,7 @@ export default function Index() {
               className="bg-[#5C329E] hover:bg-[#4a2880] text-white px-10 py-6 text-base rounded-full tracking-wide"
               onClick={() => scrollToSection(formSectionRef)}
             >
-              Inscribirme
+              Preinscripción
             </Button>
             <Button
               size="lg"
@@ -270,7 +280,7 @@ export default function Index() {
                   <span className="text-2xl shrink-0">🚀</span>
                   <div>
                     <strong className="text-[#4a3f35]">¿Límites?</strong>
-                    <p>Ninguno. Hacé las piezas que quieras del tamaño que quieras (¡siempre que el horno nos dé espacio :) !).</p>
+                    <p>Ninguno. Hacé las piezas que quieras del tamaño que quieras (¡siempre que el horno nos dé espacio 😊!).</p>
                   </div>
                 </div>
 
@@ -292,7 +302,7 @@ export default function Index() {
                 <Clock className="w-10 h-10 text-[#4a3f35] mx-auto mb-4" />
                 <h3 className="text-xl font-bold text-[#4a3f35] mb-2">2 Horas</h3>
                 <p className="text-[#6b5c4c]">
-                  Cada turno son de 2 horas, 1 vez por semana
+                  La cuota mensual contempla 1 clase por semana (4 totales) con duración de 2 horas cada una
                 </p>
               </CardContent>
             </Card>
@@ -325,7 +335,7 @@ export default function Index() {
               className="bg-[#5C329E] hover:bg-[#4a2880] text-white px-10 py-6 text-lg rounded-full"
               onClick={() => scrollToSection(formSectionRef)}
             >
-              Quiero inscribirme
+              Quiero preinscribirme
             </Button>
           </div>
         </div>
@@ -527,6 +537,36 @@ export default function Index() {
           </div>
         </div>
       </footer>
+
+      {/* Success Modal */}
+      <Dialog open={showSuccessModal} onOpenChange={setShowSuccessModal}>
+        <DialogContent className="sm:max-w-md">
+          <button
+            onClick={() => setShowSuccessModal(false)}
+            className="absolute right-4 top-4 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+          >
+            <X className="h-4 w-4" />
+            <span className="sr-only">Cerrar</span>
+          </button>
+          <div className="flex flex-col items-center justify-center text-center py-6">
+            <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mb-4">
+              <CheckCircle2 className="w-10 h-10 text-green-600" />
+            </div>
+            <h2 className="text-2xl font-serif text-[#4a3f35] mb-3">
+              ¡Preinscripción enviada!
+            </h2>
+            <p className="text-[#6b5c4c] leading-relaxed max-w-sm">
+              La preinscripción no garantiza el cupo, nos pondremos en contacto pronto para confirmar tu lugar.
+            </p>
+            <Button
+              onClick={() => setShowSuccessModal(false)}
+              className="mt-6 bg-[#5C329E] hover:bg-[#4a2880] text-white rounded-full px-8"
+            >
+              Entendido
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
