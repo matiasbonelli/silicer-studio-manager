@@ -159,7 +159,7 @@ export default function Index() {
     : [];
 
   return (
-    <div className="min-h-screen bg-[#EBEBEB]">
+    <div className="min-h-screen bg-[#EBEBEB] landing-page">
       {/* Hero Section - Living Clay Style */}
       <section className="min-h-screen relative flex flex-col items-center justify-start px-4 pt-8 pb-20 overflow-hidden">
         {/* Background abstract image */}
@@ -201,11 +201,7 @@ export default function Index() {
 
           {/* Title - separated from oval */}
           <h1
-            className="mt-8 text-2xl md:text-3xl lg:text-4xl font-serif text-[#4a3f35] text-center tracking-[0.08em]"
-            style={{
-              fontFamily: "'Playfair Display', 'Times New Roman', serif",
-              fontWeight: 300,
-            }}
+            className="mt-8 text-2xl md:text-3xl lg:text-4xl text-[#4a3f35] text-center tracking-[0.08em]"
           >
             Descubrí el arte de la cerámica
           </h1>
