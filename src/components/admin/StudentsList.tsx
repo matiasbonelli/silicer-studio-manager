@@ -1,14 +1,15 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
-import { Student, DAY_NAMES, PAYMENT_STATUS_LABELS, PaymentStatus } from '@/types/database';
+import { Student, DAY_NAMES, PAYMENT_STATUS_LABELS, PaymentStatus, MONTH_NAMES } from '@/types/database';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
-import { Check, X, Search, Loader2, MessageCircle, FileText, Trash2, DollarSign } from 'lucide-react';
+import { Check, X, Search, Loader2, MessageCircle, FileText, Trash2, DollarSign, Calendar } from 'lucide-react';
 
 interface StudentsListProps {
   onStudentClick: (student: Student) => void;
@@ -16,10 +17,31 @@ interface StudentsListProps {
   onStudentDeleted?: () => void;
 }
 
+// Helper para obtener el mes actual en formato YYYY-MM
+const getCurrentMonth = () => {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+};
+
+// Helper para formatear mes para display
+const formatMonth = (monthStr: string | null) => {
+  if (!monthStr) return '-';
+  const [year, month] = monthStr.split('-');
+  return `${MONTH_NAMES[month]} ${year}`;
+};
+
+// Helper para formatear fecha
+const formatDate = (dateStr: string | null) => {
+  if (!dateStr) return '-';
+  const date = new Date(dateStr);
+  return date.toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+};
+
 export default function StudentsList({ onStudentClick, refreshTrigger, onStudentDeleted }: StudentsListProps) {
   const [students, setStudents] = useState<Student[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
+  const [selectedMonth, setSelectedMonth] = useState<string>(getCurrentMonth());
   const [studentToDelete, setStudentToDelete] = useState<Student | null>(null);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -86,11 +108,18 @@ export default function StudentsList({ onStudentClick, refreshTrigger, onStudent
       paidAmount = null;
     }
 
+    // Solo actualizar fecha si se está pagando (total o parcial)
+    const paymentDate = (paymentType === 'total' || paymentType === 'partial')
+      ? new Date().toISOString()
+      : null;
+
     const { error } = await supabase
       .from('students')
       .update({
         payment_status: newStatus,
         paid_amount: paidAmount,
+        payment_date: paymentDate,
+        payment_month: selectedMonth,
       })
       .eq('id', studentToPayment.id);
 
@@ -175,7 +204,9 @@ export default function StudentsList({ onStudentClick, refreshTrigger, onStudent
 
   const filteredStudents = students.filter(student => {
     const fullName = `${student.first_name} ${student.last_name}`.toLowerCase();
-    return fullName.includes(search.toLowerCase());
+    const matchesSearch = fullName.includes(search.toLowerCase());
+    const matchesMonth = !selectedMonth || selectedMonth === 'all' || student.payment_month === selectedMonth || !student.payment_month;
+    return matchesSearch && matchesMonth;
   });
 
   if (loading) {
@@ -186,16 +217,51 @@ export default function StudentsList({ onStudentClick, refreshTrigger, onStudent
     );
   }
 
+  // Generar opciones de meses (últimos 12 meses + próximos 3)
+  const generateMonthOptions = () => {
+    const options: { value: string; label: string }[] = [];
+    const now = new Date();
+
+    for (let i = -12; i <= 3; i++) {
+      const date = new Date(now.getFullYear(), now.getMonth() + i, 1);
+      const value = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+      const label = `${MONTH_NAMES[String(date.getMonth() + 1).padStart(2, '0')]} ${date.getFullYear()}`;
+      options.push({ value, label });
+    }
+
+    return options.reverse();
+  };
+
+  const monthOptions = generateMonthOptions();
+
   return (
     <div className="space-y-4">
-      <div className="relative">
-        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
-        <Input
-          placeholder="Buscar alumno..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="pl-10"
-        />
+      <div className="flex flex-col sm:flex-row gap-3">
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
+          <Input
+            placeholder="Buscar alumno..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="pl-10"
+          />
+        </div>
+        <div className="w-full sm:w-56">
+          <Select value={selectedMonth} onValueChange={setSelectedMonth}>
+            <SelectTrigger>
+              <Calendar className="w-4 h-4 mr-2" />
+              <SelectValue placeholder="Filtrar por mes" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todos los meses</SelectItem>
+              {monthOptions.map(option => (
+                <SelectItem key={option.value} value={option.value}>
+                  {option.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
       </div>
 
       <div className="rounded-lg border bg-card">
@@ -204,9 +270,10 @@ export default function StudentsList({ onStudentClick, refreshTrigger, onStudent
             <TableRow>
               <TableHead>Nombre</TableHead>
               <TableHead>Horario</TableHead>
-              <TableHead>Email</TableHead>
+              <TableHead className="text-center">Mes Cuota</TableHead>
+              <TableHead className="text-center">Fecha Pago</TableHead>
               <TableHead className="text-center">WhatsApp</TableHead>
-              <TableHead className="text-center">Cuota</TableHead>
+              <TableHead className="text-center">Estado</TableHead>
               <TableHead className="text-center">Comprobante</TableHead>
               <TableHead className="text-center">Pago</TableHead>
               <TableHead className="text-center">Eliminar</TableHead>
@@ -231,7 +298,12 @@ export default function StudentsList({ onStudentClick, refreshTrigger, onStudent
                     <span className="text-muted-foreground text-sm">Sin asignar</span>
                   )}
                 </TableCell>
-                <TableCell className="text-sm">{student.email || '-'}</TableCell>
+                <TableCell className="text-center text-sm">
+                  {formatMonth(student.payment_month)}
+                </TableCell>
+                <TableCell className="text-center text-sm">
+                  {formatDate(student.payment_date)}
+                </TableCell>
                 <TableCell className="text-center">
                   {student.phone ? (
                     <Button
@@ -299,7 +371,7 @@ export default function StudentsList({ onStudentClick, refreshTrigger, onStudent
             ))}
             {filteredStudents.length === 0 && (
               <TableRow>
-                <TableCell colSpan={8} className="text-center text-muted-foreground py-8">
+                <TableCell colSpan={9} className="text-center text-muted-foreground py-8">
                   No se encontraron alumnos
                 </TableCell>
               </TableRow>
@@ -345,6 +417,9 @@ export default function StudentsList({ onStudentClick, refreshTrigger, onStudent
             <div className="space-y-4">
               <p className="text-sm text-muted-foreground">
                 Alumno: <strong>{studentToPayment.first_name} {studentToPayment.last_name}</strong>
+              </p>
+              <p className="text-sm text-muted-foreground">
+                Cuota de: <strong>{formatMonth(selectedMonth !== 'all' ? selectedMonth : getCurrentMonth())}</strong>
               </p>
 
               <div className="space-y-3">
