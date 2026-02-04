@@ -174,11 +174,11 @@ export default function Index() {
 
         {/* Header with logo */}
         <div className="w-full max-w-6xl mx-auto flex items-center justify-center mb-8 relative z-10">
-          {/* Logo */}
+          {/* Logo - 50% smaller */}
           <img
             src="/logo.svg"
             alt="Silicer Logo"
-            className="h-16 md:h-20"
+            className="h-8 md:h-10"
           />
         </div>
 
@@ -194,28 +194,26 @@ export default function Index() {
                 borderRadius: '50%',
               }}
             />
-
-            {/* Overlapping title text */}
-            <div className="absolute -bottom-6 left-1/2 transform -translate-x-1/2 w-[140%]">
-              <h1
-                className="text-2xl md:text-3xl lg:text-4xl font-serif text-[#4a3f35] text-center tracking-[0.08em]"
-                style={{
-                  fontFamily: "'Playfair Display', 'Times New Roman', serif",
-                  fontWeight: 300,
-                }}
-              >
-                Descubrí el arte de la cerámica
-              </h1>
-            </div>
           </div>
 
-          {/* Subtitle below */}
-          <p className="mt-16 text-lg md:text-xl text-[#4a3f35]/70 text-center max-w-xl leading-relaxed font-light">
+          {/* Title - separated from oval */}
+          <h1
+            className="mt-8 text-2xl md:text-3xl lg:text-4xl font-serif text-[#4a3f35] text-center tracking-[0.08em]"
+            style={{
+              fontFamily: "'Playfair Display', 'Times New Roman', serif",
+              fontWeight: 300,
+            }}
+          >
+            Descubrí el arte de la cerámica
+          </h1>
+
+          {/* Subtitle - closer to title */}
+          <p className="mt-3 text-lg md:text-xl text-[#4a3f35]/70 text-center max-w-xl leading-relaxed font-light">
             Un espacio para crear, aprender y conectar con tus manos
           </p>
 
-          {/* CTA Buttons */}
-          <div className="flex flex-col sm:flex-row gap-4 mt-10">
+          {/* CTA Buttons - closer to subtitle */}
+          <div className="flex flex-col sm:flex-row gap-4 mt-6">
             <Button
               size="lg"
               className="bg-[#5C329E] hover:bg-[#4a2880] text-white px-10 py-6 text-base rounded-full tracking-wide"
@@ -234,8 +232,8 @@ export default function Index() {
           </div>
         </div>
 
-        {/* Scroll indicator */}
-        <div className="absolute bottom-8 left-1/2 -translate-x-1/2 animate-bounce">
+        {/* Scroll indicator - more space from buttons */}
+        <div className="absolute bottom-4 left-1/2 -translate-x-1/2 animate-bounce">
           <div className="w-5 h-8 border border-[#4a3f35]/30 rounded-full flex justify-center pt-1.5">
             <div className="w-0.5 h-1.5 bg-[#4a3f35]/40 rounded-full" />
           </div>
