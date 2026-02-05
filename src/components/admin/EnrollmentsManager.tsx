@@ -76,6 +76,7 @@ interface EnrollmentsManagerProps {
 export default function EnrollmentsManager({ onStudentCreated }: EnrollmentsManagerProps) {
   const [enrollments, setEnrollments] = useState<Enrollment[]>([]);
   const [schedules, setSchedules] = useState<Schedule[]>([]);
+  const [scheduleCounts, setScheduleCounts] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
@@ -149,6 +150,20 @@ export default function EnrollmentsManager({ onStudentCreated }: EnrollmentsMana
       .order('day_of_week')
       .order('start_time');
     if (data) setSchedules(data);
+
+    // Fetch student counts per schedule for availability
+    const { data: studentsData } = await supabase
+      .from('students')
+      .select('schedule_id');
+    if (studentsData) {
+      const counts = studentsData.reduce((acc, s) => {
+        if (s.schedule_id) {
+          acc[s.schedule_id] = (acc[s.schedule_id] || 0) + 1;
+        }
+        return acc;
+      }, {} as Record<string, number>);
+      setScheduleCounts(counts);
+    }
   };
 
   useEffect(() => {
@@ -520,8 +535,9 @@ export default function EnrollmentsManager({ onStudentCreated }: EnrollmentsMana
 
   const filteredEnrollments = enrollments.filter(enrollment => {
     const fullName = `${enrollment.first_name} ${enrollment.last_name}`.toLowerCase();
-    const matchesSearch = fullName.includes(search.toLowerCase()) || 
-                          enrollment.email.toLowerCase().includes(search.toLowerCase());
+    const phone = (enrollment.phone || '').toLowerCase();
+    const matchesSearch = fullName.includes(search.toLowerCase()) ||
+                          phone.includes(search.toLowerCase());
     const matchesStatus = statusFilter === 'all' || enrollment.status === statusFilter;
     const matchesPayment = paymentFilter === 'all' || enrollment.payment_status === paymentFilter;
     return matchesSearch && matchesStatus && matchesPayment;
@@ -542,7 +558,7 @@ export default function EnrollmentsManager({ onStudentCreated }: EnrollmentsMana
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
           <Input
-            placeholder="Buscar por nombre o email..."
+            placeholder="Buscar por nombre o teléfono..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="pl-10"
@@ -610,6 +626,7 @@ export default function EnrollmentsManager({ onStudentCreated }: EnrollmentsMana
               <TableHead>Fecha</TableHead>
               <TableHead>Nombre</TableHead>
               <TableHead>Horario Solicitado</TableHead>
+              <TableHead className="text-center">Disponible</TableHead>
               <TableHead className="text-center">Estado</TableHead>
               <TableHead className="text-center">Pago</TableHead>
               <TableHead className="text-center">Acciones</TableHead>
@@ -635,6 +652,17 @@ export default function EnrollmentsManager({ onStudentCreated }: EnrollmentsMana
                     <span className="text-sm">
                       {DAY_NAMES[enrollment.schedule.day_of_week]} {enrollment.schedule.start_time.slice(0, 5)}
                     </span>
+                  ) : (
+                    <span className="text-muted-foreground text-sm">-</span>
+                  )}
+                </TableCell>
+                <TableCell className="text-center">
+                  {enrollment.schedule ? (
+                    (scheduleCounts[enrollment.schedule_id] || 0) < enrollment.schedule.max_capacity ? (
+                      <Badge className="bg-green-500 hover:bg-green-600">Sí</Badge>
+                    ) : (
+                      <Badge variant="destructive">No</Badge>
+                    )
                   ) : (
                     <span className="text-muted-foreground text-sm">-</span>
                   )}
@@ -744,7 +772,7 @@ export default function EnrollmentsManager({ onStudentCreated }: EnrollmentsMana
             ))}
             {filteredEnrollments.length === 0 && (
               <TableRow>
-                <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
+                <TableCell colSpan={7} className="text-center text-muted-foreground py-8">
                   No se encontraron pre-inscripciones
                 </TableCell>
               </TableRow>

@@ -54,6 +54,7 @@ export interface Sale {
   paid_amount: number | null;
   payment_method: PaymentMethod;
   payment_status: PaymentStatus;
+  receipt_url: string | null;
   notes: string | null;
   created_at: string;
   student?: Student;
