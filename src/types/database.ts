@@ -74,7 +74,7 @@ export interface Enrollment {
   id: string;
   first_name: string;
   last_name: string;
-  email: string;
+  email: string | null;
   phone: string | null;
   birthday: string | null;
   schedule_id: string;
