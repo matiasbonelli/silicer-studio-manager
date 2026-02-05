@@ -264,9 +264,11 @@ export default function Index() {
         </div>
 
         {/* Scroll indicator - more space from buttons */}
-        <div className="absolute bottom-4 left-1/2 -translate-x-1/2 animate-bounce">
-          <div className="w-5 h-8 border border-[#4a3f35]/30 rounded-full flex justify-center pt-1.5">
-            <div className="w-0.5 h-1.5 bg-[#4a3f35]/40 rounded-full" />
+        <div className="absolute bottom-4 left-0 right-0 flex justify-center">
+          <div className="animate-bounce">
+            <div className="w-5 h-8 border border-[#4a3f35]/30 rounded-full flex justify-center pt-1.5">
+              <div className="w-0.5 h-1.5 bg-[#4a3f35]/40 rounded-full" />
+            </div>
           </div>
         </div>
       </section>
@@ -405,7 +407,7 @@ export default function Index() {
                   />
                 </div>
 
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div className="space-y-2">
                     <Label htmlFor="phone" className="text-[#4a3f35]">Teléfono *</Label>
                     <Input
@@ -424,7 +426,7 @@ export default function Index() {
                       type="date"
                       value={formData.birthday}
                       onChange={(e) => setFormData(prev => ({ ...prev, birthday: e.target.value }))}
-                      className="border-[#d4c4b0] focus:border-[#4a3f35]"
+                      className="border-[#d4c4b0] focus:border-[#4a3f35] w-full"
                     />
                   </div>
                 </div>
