@@ -719,7 +719,14 @@ export default function EnrollmentsManager({ onStudentCreated }: EnrollmentsMana
                         className="text-green-600 hover:text-green-700"
                         onClick={async () => {
                           const phone = enrollment.phone?.replace(/\D/g, '');
-                          window.open(`https://wa.me/54${phone}`, '_blank');
+                          const day = enrollment.schedule ? DAY_NAMES[enrollment.schedule.day_of_week] : '[Completar día]';
+                          const time = enrollment.schedule
+                            ? `${enrollment.schedule.start_time.slice(0, 5)} a ${enrollment.schedule.end_time.slice(0, 5)} hs`
+                            : '[Completar hora]';
+                          const message = encodeURIComponent(
+                            `¡Hola de nuevo! 👋\n\nTe escribimos para confirmar tu turno: 🏺✨\n\nConfirmación de turno:\n📅 Día: ${day}\n⏰ Horario: ${time}\n\nMuchas gracias, te esperamos!`
+                          );
+                          window.open(`https://wa.me/54${phone}?text=${message}`, '_blank');
                           // Actualizar estado a "contacted" si está pendiente y no convertido
                           if (enrollment.status === 'pending' && !enrollment.converted_to_student_id) {
                             await supabase
