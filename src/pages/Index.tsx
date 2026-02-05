@@ -426,7 +426,7 @@ export default function Index() {
                       type="date"
                       value={formData.birthday}
                       onChange={(e) => setFormData(prev => ({ ...prev, birthday: e.target.value }))}
-                      className="border-[#d4c4b0] focus:border-[#4a3f35] w-full"
+                      className="border-[#d4c4b0] focus:border-[#4a3f35] max-w-[200px]"
                     />
                   </div>
                 </div>
