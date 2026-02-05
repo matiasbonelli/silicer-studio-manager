@@ -10,13 +10,20 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
 import { z } from 'zod';
-import { MessageCircle, Instagram, Send, Loader2, Clock, Users, Sparkles, CheckCircle2, X } from 'lucide-react';
+import { Instagram, Send, Loader2, Clock, Users, Sparkles, CheckCircle2, X } from 'lucide-react';
+
+const WhatsAppIcon = ({ className }: { className?: string }) => (
+  <svg className={className} viewBox="0 0 24 24" fill="currentColor">
+    <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/>
+  </svg>
+);
+
 
 const enrollmentSchema = z.object({
   first_name: z.string().trim().min(1, 'El nombre es requerido').max(100),
   last_name: z.string().trim().min(1, 'El apellido es requerido').max(100),
-  email: z.string().trim().email('Email inválido').max(255),
-  phone: z.string().trim().max(50).optional(),
+  email: z.string().trim().max(255).optional().refine(val => !val || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val), 'Email inválido'),
+  phone: z.string().trim().min(1, 'El teléfono es requerido').max(50),
   birthday: z.string().optional(),
   schedule_id: z.string().min(1, 'Selecciona un horario'),
   message: z.string().trim().max(500).optional(),
@@ -115,8 +122,8 @@ export default function Index() {
     const { error } = await supabase.from('enrollments').insert({
       first_name: formData.first_name.trim(),
       last_name: formData.last_name.trim(),
-      email: formData.email.trim(),
-      phone: formData.phone?.trim() || null,
+      email: formData.email?.trim() || null,
+      phone: formData.phone.trim(),
       birthday: formData.birthday || null,
       schedule_id: formData.schedule_id,
       message: formData.message?.trim() || null,
@@ -176,7 +183,7 @@ export default function Index() {
         <div className="absolute inset-0 bg-gradient-to-br from-[#d4c4b0]/20 via-transparent to-[#a08060]/10 pointer-events-none" />
 
         {/* Header with logo - more spacing */}
-        <div className="w-full max-w-6xl mx-auto flex items-center justify-center mt-4 mb-12 relative z-10">
+        <div className="w-full max-w-6xl mx-auto flex items-center justify-center mt-4 mb-20 relative z-10">
           {/* Logo - 50% smaller with more margin */}
           <img
             src="/logo.svg"
@@ -363,26 +370,26 @@ export default function Index() {
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="email" className="text-[#4a3f35]">Email *</Label>
+                  <Label htmlFor="email" className="text-[#4a3f35]">Email</Label>
                   <Input
                     id="email"
                     type="email"
                     value={formData.email}
                     onChange={(e) => setFormData(prev => ({ ...prev, email: e.target.value }))}
                     className="border-[#d4c4b0] focus:border-[#4a3f35]"
-                    required
                   />
                 </div>
 
                 <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-2">
-                    <Label htmlFor="phone" className="text-[#4a3f35]">Teléfono</Label>
+                    <Label htmlFor="phone" className="text-[#4a3f35]">Teléfono *</Label>
                     <Input
                       id="phone"
                       type="tel"
                       value={formData.phone}
                       onChange={(e) => setFormData(prev => ({ ...prev, phone: e.target.value }))}
                       className="border-[#d4c4b0] focus:border-[#4a3f35]"
+                      required
                     />
                   </div>
                   <div className="space-y-2">
@@ -495,7 +502,7 @@ export default function Index() {
             <Button
               variant="outline"
               size="lg"
-              className="bg-[#5C329E] hover:bg-[#4a2880] text-white border-none"
+              className="border-[#5C329E]/30 text-[#5C329E] hover:bg-[#5C329E]/5 bg-transparent rounded-full"
               asChild
             >
               <a
@@ -503,13 +510,13 @@ export default function Index() {
                 target="_blank"
                 rel="noopener noreferrer"
               >
-                <MessageCircle className="w-5 h-5 mr-2" /> WhatsApp
+                <WhatsAppIcon className="w-5 h-5 mr-2" /> WhatsApp
               </a>
             </Button>
             <Button
               variant="outline"
               size="lg"
-              className="bg-[#5C329E] hover:bg-[#4a2880] text-white border-none"
+              className="border-[#5C329E]/30 text-[#5C329E] hover:bg-[#5C329E]/5 bg-transparent rounded-full"
               asChild
             >
               <a
@@ -526,7 +533,7 @@ export default function Index() {
 
       {/* Success Modal */}
       <Dialog open={showSuccessModal} onOpenChange={setShowSuccessModal}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="sm:max-w-md landing-page">
           <button
             onClick={() => setShowSuccessModal(false)}
             className="absolute right-4 top-4 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
@@ -538,7 +545,7 @@ export default function Index() {
             <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mb-4">
               <CheckCircle2 className="w-10 h-10 text-green-600" />
             </div>
-            <h2 className="text-2xl font-serif text-[#4a3f35] mb-3">
+            <h2 className="text-2xl text-[#4a3f35] mb-3">
               ¡Preinscripción enviada!
             </h2>
             <p className="text-[#6b5c4c] leading-relaxed max-w-sm">

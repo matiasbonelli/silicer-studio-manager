@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -12,7 +12,7 @@ import SalesModule from '@/components/admin/SalesModule';
 import BirthdayModal from '@/components/admin/BirthdayModal';
 import EnrollmentsManager from '@/components/admin/EnrollmentsManager';
 import PricingCalculator from '@/components/admin/PricingCalculator';
-import { LogOut, Plus, Calendar, Users, Package, ShoppingCart, Loader2, ClipboardList, Calculator } from 'lucide-react';
+import { LogOut, Plus, Calendar, Users, Package, ShoppingCart, Loader2, ClipboardList, Calculator, Sun, Moon } from 'lucide-react';
 
 export default function Admin() {
   const { user, loading, signOut, isAdmin } = useAuth();
@@ -22,6 +22,23 @@ export default function Admin() {
   const [isNewStudent, setIsNewStudent] = useState(false);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
   const [activeTab, setActiveTab] = useState('schedule');
+  const [darkMode, setDarkMode] = useState(() => {
+    return localStorage.getItem('silicer-admin-dark-mode') === 'true';
+  });
+
+  useEffect(() => {
+    if (darkMode) {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+    localStorage.setItem('silicer-admin-dark-mode', String(darkMode));
+
+    // Cleanup: remove dark class when leaving admin
+    return () => {
+      document.documentElement.classList.remove('dark');
+    };
+  }, [darkMode]);
 
   if (loading) {
     return (
@@ -65,6 +82,17 @@ export default function Admin() {
           <h1 className="text-2xl font-bold">Silicer Admin</h1>
           <div className="flex items-center gap-4">
             <span className="text-sm opacity-80 hidden md:inline">{user.email}</span>
+            <button
+              onClick={() => setDarkMode(!darkMode)}
+              className="flex items-center gap-1.5 px-2 py-1 rounded-full bg-primary-foreground/10 hover:bg-primary-foreground/20 transition-colors"
+              title={darkMode ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro'}
+            >
+              {darkMode ? (
+                <Sun className="w-4 h-4 text-yellow-300" />
+              ) : (
+                <Moon className="w-4 h-4 text-primary-foreground" />
+              )}
+            </button>
             <Button variant="secondary" size="sm" onClick={handleLogout}>
               <LogOut className="w-4 h-4 mr-2" /> Salir
             </Button>

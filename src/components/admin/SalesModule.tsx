@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
-import { Plus, Minus, Trash2, ShoppingCart, Printer, Loader2, Search, History, TrendingUp, CalendarDays, DollarSign, Pencil } from 'lucide-react';
+import { Plus, Minus, Trash2, ShoppingCart, Printer, Loader2, Search, History, TrendingUp, CalendarDays, DollarSign, Pencil, Upload, FileText, ExternalLink } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 
@@ -94,6 +94,61 @@ export default function SalesModule() {
   const [historyReceiptSale, setHistoryReceiptSale] = useState<SaleWithItems | null>(null);
   const { toast } = useToast();
   const receiptRef = useRef<HTMLDivElement>(null);
+  const receiptFileInputRef = useRef<HTMLInputElement>(null);
+  const historyFileInputRef = useRef<HTMLInputElement>(null);
+  const [uploadingSaleId, setUploadingSaleId] = useState<string | null>(null);
+
+  const handleUploadReceipt = async (saleId: string, file: File) => {
+    setUploadingSaleId(saleId);
+    const fileExt = file.name.split('.').pop();
+    const filePath = `sales/${saleId}/comprobante.${fileExt}`;
+
+    const { error: uploadError } = await supabase.storage
+      .from('receipts')
+      .upload(filePath, file, { upsert: true });
+
+    if (uploadError) {
+      toast({
+        title: 'Error',
+        description: 'No se pudo subir el comprobante',
+        variant: 'destructive',
+      });
+      setUploadingSaleId(null);
+      return;
+    }
+
+    const { error: updateError } = await supabase
+      .from('sales')
+      .update({ receipt_url: filePath })
+      .eq('id', saleId);
+
+    if (updateError) {
+      toast({
+        title: 'Error',
+        description: 'Comprobante subido pero no se pudo guardar la referencia',
+        variant: 'destructive',
+      });
+    } else {
+      toast({ title: 'Comprobante cargado correctamente' });
+      await fetchSalesHistory();
+    }
+    setUploadingSaleId(null);
+  };
+
+  const viewReceipt = async (receiptUrl: string) => {
+    const { data, error } = await supabase.storage
+      .from('receipts')
+      .createSignedUrl(receiptUrl, 3600);
+    if (error || !data) {
+      toast({
+        title: 'Error',
+        description: 'No se pudo obtener el comprobante',
+        variant: 'destructive',
+      });
+      return;
+    }
+    window.open(data.signedUrl, '_blank');
+  };
 
   // Cargar productos de la calculadora de costos desde localStorage
   const loadMoldesProducts = () => {
@@ -804,6 +859,7 @@ export default function SalesModule() {
                   <TableHead>Cliente</TableHead>
                   <TableHead>Método</TableHead>
                   <TableHead>Estado Pago</TableHead>
+                  <TableHead className="text-center">Comprobante</TableHead>
                   <TableHead className="text-right">Total</TableHead>
                   <TableHead></TableHead>
                 </TableRow>
@@ -865,6 +921,46 @@ export default function SalesModule() {
                         )}
                       </button>
                     </TableCell>
+                    <TableCell className="text-center">
+                      {sale.receipt_url ? (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="text-green-600 hover:text-green-700"
+                          onClick={() => viewReceipt(sale.receipt_url!)}
+                        >
+                          <FileText className="w-4 h-4" />
+                        </Button>
+                      ) : (
+                        <label className="cursor-pointer">
+                          <input
+                            type="file"
+                            accept="image/*,.pdf"
+                            className="hidden"
+                            onChange={(e) => {
+                              const file = e.target.files?.[0];
+                              if (file) handleUploadReceipt(sale.id, file);
+                              e.target.value = '';
+                            }}
+                          />
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="text-muted-foreground"
+                            disabled={uploadingSaleId === sale.id}
+                            asChild
+                          >
+                            <span>
+                              {uploadingSaleId === sale.id ? (
+                                <Loader2 className="w-4 h-4 animate-spin" />
+                              ) : (
+                                <Upload className="w-4 h-4" />
+                              )}
+                            </span>
+                          </Button>
+                        </label>
+                      )}
+                    </TableCell>
                     <TableCell className="text-right font-bold">{formatCurrency(sale.total_amount)}</TableCell>
                     <TableCell>
                       {sale.payment_status !== 'paid' && (
@@ -885,7 +981,7 @@ export default function SalesModule() {
                 ))}
                 {filteredSalesHistory.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={9} className="text-center text-muted-foreground py-8">
+                    <TableCell colSpan={10} className="text-center text-muted-foreground py-8">
                       No hay ventas registradas
                     </TableCell>
                   </TableRow>
@@ -985,6 +1081,7 @@ export default function SalesModule() {
                       <TableHead>Cliente</TableHead>
                       <TableHead>Método</TableHead>
                       <TableHead>Estado Pago</TableHead>
+                      <TableHead className="text-center">Comprobante</TableHead>
                       <TableHead className="text-right">Total</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -1045,12 +1142,52 @@ export default function SalesModule() {
                             )}
                           </button>
                         </TableCell>
+                        <TableCell className="text-center">
+                          {sale.receipt_url ? (
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="text-green-600 hover:text-green-700"
+                              onClick={() => viewReceipt(sale.receipt_url!)}
+                            >
+                              <FileText className="w-4 h-4" />
+                            </Button>
+                          ) : (
+                            <label className="cursor-pointer">
+                              <input
+                                type="file"
+                                accept="image/*,.pdf"
+                                className="hidden"
+                                onChange={(e) => {
+                                  const file = e.target.files?.[0];
+                                  if (file) handleUploadReceipt(sale.id, file);
+                                  e.target.value = '';
+                                }}
+                              />
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="text-muted-foreground"
+                                disabled={uploadingSaleId === sale.id}
+                                asChild
+                              >
+                                <span>
+                                  {uploadingSaleId === sale.id ? (
+                                    <Loader2 className="w-4 h-4 animate-spin" />
+                                  ) : (
+                                    <Upload className="w-4 h-4" />
+                                  )}
+                                </span>
+                              </Button>
+                            </label>
+                          )}
+                        </TableCell>
                         <TableCell className="text-right font-bold">{formatCurrency(sale.total_amount)}</TableCell>
                       </TableRow>
                     ))}
                     {filteredSalesHistory.length === 0 && (
                       <TableRow>
-                        <TableCell colSpan={8} className="text-center text-muted-foreground py-8">
+                        <TableCell colSpan={9} className="text-center text-muted-foreground py-8">
                           No hay datos de ventas
                         </TableCell>
                       </TableRow>
@@ -1191,6 +1328,31 @@ export default function SalesModule() {
 
           <Button onClick={printReceipt} className="w-full" variant="outline">
             <Printer className="w-4 h-4 mr-2" /> Imprimir Recibo
+          </Button>
+          <input
+            ref={receiptFileInputRef}
+            type="file"
+            accept="image/*,.pdf"
+            className="hidden"
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (file && receiptSaleData) {
+                handleUploadReceipt(receiptSaleData.sale.id, file);
+              }
+              e.target.value = '';
+            }}
+          />
+          <Button
+            onClick={() => receiptFileInputRef.current?.click()}
+            className="w-full"
+            variant="outline"
+            disabled={uploadingSaleId === receiptSaleData?.sale.id}
+          >
+            {uploadingSaleId === receiptSaleData?.sale.id ? (
+              <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Subiendo...</>
+            ) : (
+              <><Upload className="w-4 h-4 mr-2" /> Cargar Comprobante</>
+            )}
           </Button>
         </DialogContent>
       </Dialog>
