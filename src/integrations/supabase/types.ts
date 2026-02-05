@@ -19,7 +19,7 @@ export type Database = {
           birthday: string | null
           converted_to_student_id: string | null
           created_at: string
-          email: string
+          email: string | null
           first_name: string
           id: string
           last_name: string
@@ -36,7 +36,7 @@ export type Database = {
           birthday?: string | null
           converted_to_student_id?: string | null
           created_at?: string
-          email: string
+          email?: string | null
           first_name: string
           id?: string
           last_name: string
