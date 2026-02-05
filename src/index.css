@@ -10,8 +10,8 @@ All colors MUST be HSL.
 @font-face {
   font-family: 'Restora';
   src: url('/fonts/RestoraBoldItalic.otf') format('opentype');
-  font-weight: 700;
-  font-style: italic;
+  font-weight: 400 700;
+  font-style: normal italic;
   font-display: swap;
 }
 
