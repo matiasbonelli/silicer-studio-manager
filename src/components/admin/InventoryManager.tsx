@@ -35,17 +35,20 @@ export default function InventoryManager() {
     quantity: 0,
     unit: 'kg',
     min_stock: 0,
-    cost: 0,
+    cost_total: 0,
+    total_quantity: 1,
     bulk_quantity: 1,
     margin_percent: 0,
     for_sale: false,
     category: '' as ProductCategory | '',
   });
 
-  // Calculate unit cost and price from cost, bulk quantity and margin
-  const unitCost = formData.bulk_quantity > 0
-    ? formData.cost / formData.bulk_quantity
+  // Calculate unit cost: (cost_total / total_quantity) * bulk_quantity
+  // E.g.: $1000 / 100kg * 1kg per bulto = $10 per bulto
+  const costPerUnit = formData.total_quantity > 0
+    ? formData.cost_total / formData.total_quantity
     : 0;
+  const unitCost = costPerUnit * formData.bulk_quantity;
   const calculatedPrice = unitCost > 0
     ? Math.round(unitCost * (1 + formData.margin_percent / 100))
     : 0;
@@ -83,7 +86,8 @@ export default function InventoryManager() {
         quantity: item.quantity,
         unit: item.unit,
         min_stock: item.min_stock,
-        cost: item.cost ?? 0,
+        cost_total: item.cost ?? 0,
+        total_quantity: 1,
         bulk_quantity: 1,
         margin_percent: marginPercent,
         for_sale: item.for_sale ?? false,
@@ -97,7 +101,8 @@ export default function InventoryManager() {
         quantity: 0,
         unit: 'kg',
         min_stock: 0,
-        cost: 0,
+        cost_total: 0,
+        total_quantity: 1,
         bulk_quantity: 1,
         margin_percent: 0,
         for_sale: false,
@@ -328,33 +333,28 @@ export default function InventoryManager() {
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-2">
-                <Label htmlFor="cost">Costo Total</Label>
+                <Label htmlFor="cost_total">Costo Total</Label>
                 <Input
-                  id="cost"
+                  id="cost_total"
                   type="number"
                   min="0"
                   step="1"
-                  value={formData.cost}
-                  onChange={(e) => setFormData(prev => ({ ...prev, cost: parseFloat(e.target.value) || 0 }))}
+                  value={formData.cost_total}
+                  onChange={(e) => setFormData(prev => ({ ...prev, cost_total: parseFloat(e.target.value) || 0 }))}
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="bulk_quantity">Cantidad por Bulto</Label>
+                <Label htmlFor="total_quantity">Cantidad Total</Label>
                 <Input
-                  id="bulk_quantity"
+                  id="total_quantity"
                   type="number"
                   min="1"
                   step="1"
-                  value={formData.bulk_quantity}
-                  onChange={(e) => setFormData(prev => ({ ...prev, bulk_quantity: parseInt(e.target.value) || 1 }))}
+                  value={formData.total_quantity}
+                  onChange={(e) => setFormData(prev => ({ ...prev, total_quantity: parseInt(e.target.value) || 1 }))}
                 />
               </div>
             </div>
-            {unitCost > 0 && (
-              <div className="p-2 bg-muted rounded-md text-sm text-center">
-                Costo Unitario: <span className="font-semibold text-primary">{formatCurrency(Math.round(unitCost))}</span>
-              </div>
-            )}
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-2">
                 <Label htmlFor="unit">Unidad de Venta</Label>
@@ -374,27 +374,24 @@ export default function InventoryManager() {
                 </Select>
               </div>
               <div className="space-y-2">
-                <Label htmlFor="quantity">Stock</Label>
+                <Label htmlFor="bulk_quantity">Cantidad por Bulto</Label>
                 <Input
-                  id="quantity"
+                  id="bulk_quantity"
                   type="number"
-                  min="0"
-                  value={formData.quantity}
-                  onChange={(e) => setFormData(prev => ({ ...prev, quantity: parseInt(e.target.value) || 0 }))}
+                  min="1"
+                  step="1"
+                  value={formData.bulk_quantity}
+                  onChange={(e) => setFormData(prev => ({ ...prev, bulk_quantity: parseInt(e.target.value) || 1 }))}
                 />
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-2">
-                <Label htmlFor="min_stock">Stock Mínimo</Label>
-                <Input
-                  id="min_stock"
-                  type="number"
-                  min="0"
-                  value={formData.min_stock}
-                  onChange={(e) => setFormData(prev => ({ ...prev, min_stock: parseInt(e.target.value) || 0 }))}
-                />
+            {unitCost > 0 && (
+              <div className="p-2 bg-muted rounded-md text-sm text-center">
+                Costo Unitario: <span className="font-semibold text-primary">{formatCurrency(Math.round(unitCost))}</span>
+                <span className="text-muted-foreground"> / {formData.bulk_quantity} {formData.unit}</span>
               </div>
+            )}
+            <div className="grid grid-cols-3 gap-3">
               <div className="space-y-2">
                 <Label htmlFor="margin_percent">Margen (%)</Label>
                 <Input
@@ -406,15 +403,37 @@ export default function InventoryManager() {
                   onChange={(e) => setFormData(prev => ({ ...prev, margin_percent: parseFloat(e.target.value) || 0 }))}
                 />
               </div>
+              <div className="space-y-2 col-span-2">
+                <Label>Precio de Venta</Label>
+                <div className="h-10 flex items-center px-3 rounded-md border bg-muted font-medium">
+                  {unitCost > 0 ? (
+                    <span className="text-primary">{formatCurrency(calculatedPrice)} <span className="text-muted-foreground text-xs font-normal">/ {formData.bulk_quantity} {formData.unit}</span></span>
+                  ) : (
+                    <span className="text-muted-foreground">Ingresá costo y cantidades</span>
+                  )}
+                </div>
+              </div>
             </div>
-            <div className="space-y-2">
-              <Label>Precio de Venta</Label>
-              <div className="h-10 flex items-center px-3 rounded-md border bg-muted font-medium">
-                {unitCost > 0 ? (
-                  <span className="text-primary">{formatCurrency(calculatedPrice)}</span>
-                ) : (
-                  <span className="text-muted-foreground">Ingresá el costo y cantidad</span>
-                )}
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <Label htmlFor="quantity">Stock</Label>
+                <Input
+                  id="quantity"
+                  type="number"
+                  min="0"
+                  value={formData.quantity}
+                  onChange={(e) => setFormData(prev => ({ ...prev, quantity: parseInt(e.target.value) || 0 }))}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="min_stock">Stock Mínimo</Label>
+                <Input
+                  id="min_stock"
+                  type="number"
+                  min="0"
+                  value={formData.min_stock}
+                  onChange={(e) => setFormData(prev => ({ ...prev, min_stock: parseInt(e.target.value) || 0 }))}
+                />
               </div>
             </div>
             <div className="flex items-center justify-between rounded-lg border p-3">
