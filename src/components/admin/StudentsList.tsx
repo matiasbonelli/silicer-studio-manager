@@ -146,7 +146,7 @@ export default function StudentsList({ onStudentClick, refreshTrigger, onStudent
   const getPaymentBadge = (student: Student) => {
     switch (student.payment_status) {
       case 'paid':
-        return <Badge className="bg-green-500 hover:bg-green-600">Pagado</Badge>;
+        return <Badge className="bg-green-500 hover:bg-green-600">Total</Badge>;
       case 'partial':
         return (
           <div className="text-center">

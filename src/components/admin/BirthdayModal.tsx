@@ -60,8 +60,8 @@ export default function BirthdayModal() {
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
       <DialogContent className="max-w-md">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2 text-2xl">
+        <DialogHeader className="text-center">
+          <DialogTitle className="flex items-center justify-center gap-2 text-2xl">
             <Cake className="w-6 h-6 text-primary" />
             Cumpleaños de Hoy
           </DialogTitle>
@@ -74,26 +74,31 @@ export default function BirthdayModal() {
             {birthdayStudents.map(student => (
               <div
                 key={student.id}
-                className="p-4 bg-gradient-to-r from-primary/10 to-primary/5 rounded-lg border border-primary/20"
+                className="p-4 bg-gradient-to-r from-primary/10 to-primary/5 rounded-lg border border-primary/20 text-center"
               >
-                <p className="text-lg font-semibold text-center">
+                <p className="text-lg font-semibold">
                   {student.first_name} {student.last_name}
                 </p>
-                {student.email && (
-                  <p className="text-sm text-muted-foreground text-center">{student.email}</p>
+                {student.phone && (
+                  <a
+                    href={`https://wa.me/54${student.phone.replace(/\D/g, '')}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-sm text-primary hover:underline"
+                  >
+                    {student.phone}
+                  </a>
                 )}
               </div>
             ))}
           </div>
 
           <p className="text-center text-muted-foreground">
-            {birthdayStudents.length === 1
-              ? '¡No te olvides de saludarlo!'
-              : '¡No te olvides de saludarlos!'}
+            ¡No te olvides de saludar!
           </p>
         </div>
 
-        <DialogFooter>
+        <DialogFooter className="flex justify-center sm:justify-center">
           <Button variant="outline" onClick={handleDismiss}>
             <X className="w-4 h-4 mr-2" /> No mostrar más hoy
           </Button>
