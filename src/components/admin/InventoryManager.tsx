@@ -23,6 +23,19 @@ const formatCurrency = (amount: number): string => {
   }).format(amount);
 };
 
+// Parse stored unit field: "1 kg" → { bulk: 1, unit: "kg" }
+// Falls back to { bulk: 1, unit: raw } for legacy data like "unidad"
+const parseStoredUnit = (stored: string): { bulk: number; unit: string } => {
+  const match = stored.match(/^(\d+)\s+(.+)$/);
+  if (match) {
+    return { bulk: parseInt(match[1]), unit: match[2] };
+  }
+  return { bulk: 1, unit: stored };
+};
+
+// Select all text on focus for number inputs
+const selectOnFocus = (e: React.FocusEvent<HTMLInputElement>) => e.target.select();
+
 export default function InventoryManager() {
   const [items, setItems] = useState<InventoryItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -74,6 +87,7 @@ export default function InventoryManager() {
 
   const openModal = (item?: InventoryItem) => {
     if (item) {
+      const parsed = parseStoredUnit(item.unit);
       // Calculate margin percent from existing cost and price
       const marginPercent = item.cost > 0
         ? Math.round(((item.price - item.cost) / item.cost) * 100)
@@ -84,11 +98,12 @@ export default function InventoryManager() {
         name: item.name,
         description: item.description || '',
         quantity: item.quantity,
-        unit: item.unit,
+        unit: parsed.unit,
         min_stock: item.min_stock,
+        // On edit: cost_total = stored unit cost, total_quantity = bulk so math works
         cost_total: item.cost ?? 0,
-        total_quantity: 1,
-        bulk_quantity: 1,
+        total_quantity: parsed.bulk,
+        bulk_quantity: parsed.bulk,
         margin_percent: marginPercent,
         for_sale: item.for_sale ?? false,
         category: item.category || '',
@@ -115,11 +130,14 @@ export default function InventoryManager() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
+    // Store unit as "bulk unit" format (e.g., "1 kg", "500 gr")
+    const storedUnit = `${formData.bulk_quantity} ${formData.unit}`;
+
     const dataToSave = {
       name: formData.name,
       description: formData.description || null,
       quantity: formData.quantity,
-      unit: formData.unit,
+      unit: storedUnit,
       min_stock: formData.min_stock,
       price: calculatedPrice,
       cost: Math.round(unitCost * 100) / 100,
@@ -147,7 +165,7 @@ export default function InventoryManager() {
       toast({
         title: editingItem ? 'Producto actualizado' : 'Producto creado',
       });
-      fetchItems();
+      await fetchItems();
       setIsModalOpen(false);
     }
   };
@@ -266,7 +284,7 @@ export default function InventoryManager() {
                       <AlertTriangle className="w-4 h-4 text-warning" />
                     )}
                     <Badge variant={item.quantity <= item.min_stock ? 'destructive' : 'secondary'}>
-                      {item.quantity} {item.unit}
+                      {item.quantity}
                     </Badge>
                   </div>
                 </TableCell>
@@ -340,6 +358,7 @@ export default function InventoryManager() {
                   min="0"
                   step="1"
                   value={formData.cost_total}
+                  onFocus={selectOnFocus}
                   onChange={(e) => setFormData(prev => ({ ...prev, cost_total: parseFloat(e.target.value) || 0 }))}
                 />
               </div>
@@ -351,7 +370,16 @@ export default function InventoryManager() {
                   min="1"
                   step="1"
                   value={formData.total_quantity}
-                  onChange={(e) => setFormData(prev => ({ ...prev, total_quantity: parseInt(e.target.value) || 1 }))}
+                  onFocus={selectOnFocus}
+                  onChange={(e) => {
+                    const val = parseInt(e.target.value) || 1;
+                    setFormData(prev => {
+                      const newStock = !editingItem && prev.bulk_quantity > 0
+                        ? Math.floor(val / prev.bulk_quantity)
+                        : prev.quantity;
+                      return { ...prev, total_quantity: val, quantity: newStock };
+                    });
+                  }}
                 />
               </div>
             </div>
@@ -381,7 +409,16 @@ export default function InventoryManager() {
                   min="1"
                   step="1"
                   value={formData.bulk_quantity}
-                  onChange={(e) => setFormData(prev => ({ ...prev, bulk_quantity: parseInt(e.target.value) || 1 }))}
+                  onFocus={selectOnFocus}
+                  onChange={(e) => {
+                    const val = parseInt(e.target.value) || 1;
+                    setFormData(prev => {
+                      const newStock = !editingItem && val > 0
+                        ? Math.floor(prev.total_quantity / val)
+                        : prev.quantity;
+                      return { ...prev, bulk_quantity: val, quantity: newStock };
+                    });
+                  }}
                 />
               </div>
             </div>
@@ -400,6 +437,7 @@ export default function InventoryManager() {
                   min="0"
                   step="1"
                   value={formData.margin_percent}
+                  onFocus={selectOnFocus}
                   onChange={(e) => setFormData(prev => ({ ...prev, margin_percent: parseFloat(e.target.value) || 0 }))}
                 />
               </div>
@@ -422,6 +460,7 @@ export default function InventoryManager() {
                   type="number"
                   min="0"
                   value={formData.quantity}
+                  onFocus={selectOnFocus}
                   onChange={(e) => setFormData(prev => ({ ...prev, quantity: parseInt(e.target.value) || 0 }))}
                 />
               </div>
@@ -432,6 +471,7 @@ export default function InventoryManager() {
                   type="number"
                   min="0"
                   value={formData.min_stock}
+                  onFocus={selectOnFocus}
                   onChange={(e) => setFormData(prev => ({ ...prev, min_stock: parseInt(e.target.value) || 0 }))}
                 />
               </div>
