@@ -190,15 +190,14 @@ export default function EnrollmentsManager({ onStudentCreated }: EnrollmentsMana
       payment_date: new Date().toISOString(),
     };
 
-    // Actualizar estado automáticamente según el pago
-    if (paymentForm.status === 'pending') {
-      updateData.status = 'pending';
-    } else if (paymentForm.status === 'deposit') {
-      updateData.status = 'contacted';
-    } else if (paymentForm.status === 'paid') {
-      // Si está pagado, confirmar y crear alumno automáticamente
+    // Sin pago (pending) no afecta el estado de inscripción
+    // Señado o Pagado → Confirmar y crear alumno
+    if (paymentForm.status === 'deposit' || paymentForm.status === 'paid') {
       if (!selectedEnrollment.converted_to_student_id) {
-        // Crear el alumno
+        // Crear el alumno con el estado de pago correspondiente
+        // deposit → partial, paid → paid
+        const studentPaymentStatus = paymentForm.status === 'paid' ? 'paid' : 'partial';
+
         const { data: newStudent, error: studentError } = await supabase
           .from('students')
           .insert({
@@ -208,7 +207,7 @@ export default function EnrollmentsManager({ onStudentCreated }: EnrollmentsMana
             phone: selectedEnrollment.phone,
             birthday: selectedEnrollment.birthday,
             schedule_id: selectedEnrollment.schedule_id,
-            payment_status: 'paid',
+            payment_status: studentPaymentStatus,
             notes: selectedEnrollment.message,
           })
           .select()
@@ -226,9 +225,20 @@ export default function EnrollmentsManager({ onStudentCreated }: EnrollmentsMana
         updateData.status = 'confirmed';
         updateData.converted_to_student_id = newStudent.id;
 
-        toast({ title: 'Pago registrado y alumno creado automáticamente' });
+        toast({
+          title: 'Inscripción confirmada',
+          description: `Alumno creado con pago ${paymentForm.status === 'paid' ? 'completo' : 'parcial'}`
+        });
       } else {
+        // Ya tiene alumno, solo actualizar estado
         updateData.status = 'confirmed';
+
+        // Actualizar también el payment_status del alumno existente
+        const studentPaymentStatus = paymentForm.status === 'paid' ? 'paid' : 'partial';
+        await supabase
+          .from('students')
+          .update({ payment_status: studentPaymentStatus })
+          .eq('id', selectedEnrollment.converted_to_student_id);
       }
     }
 
@@ -244,12 +254,14 @@ export default function EnrollmentsManager({ onStudentCreated }: EnrollmentsMana
         variant: 'destructive',
       });
     } else {
-      if (paymentForm.status !== 'paid' || selectedEnrollment.converted_to_student_id) {
-        toast({ title: 'Pago registrado correctamente' });
+      if (paymentForm.status === 'pending') {
+        toast({ title: 'Estado de pago actualizado' });
+      } else if (selectedEnrollment.converted_to_student_id) {
+        toast({ title: 'Pago actualizado en inscripción y alumno' });
       }
       setIsPaymentModalOpen(false);
       fetchEnrollments();
-      if (paymentForm.status === 'paid' && !selectedEnrollment.converted_to_student_id) {
+      if ((paymentForm.status === 'deposit' || paymentForm.status === 'paid') && !selectedEnrollment.converted_to_student_id) {
         onStudentCreated?.();
       }
     }
@@ -264,6 +276,13 @@ export default function EnrollmentsManager({ onStudentCreated }: EnrollmentsMana
   const handleConvertToStudent = async () => {
     if (!selectedEnrollment) return;
 
+    // Mapear payment_status de inscripción a alumno: deposit → partial, paid → paid, pending → pending
+    const studentPaymentStatus = selectedEnrollment.payment_status === 'paid'
+      ? 'paid'
+      : selectedEnrollment.payment_status === 'deposit'
+        ? 'partial'
+        : 'pending';
+
     // Create the student
     const { data: newStudent, error: studentError } = await supabase
       .from('students')
@@ -274,7 +293,7 @@ export default function EnrollmentsManager({ onStudentCreated }: EnrollmentsMana
         phone: selectedEnrollment.phone,
         birthday: selectedEnrollment.birthday,
         schedule_id: convertScheduleId,
-        payment_status: selectedEnrollment.payment_status === 'paid' ? 'paid' : 'pending',
+        payment_status: studentPaymentStatus,
         notes: selectedEnrollment.message,
       })
       .select()
