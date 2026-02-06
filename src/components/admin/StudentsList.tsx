@@ -56,8 +56,7 @@ export default function StudentsList({ onStudentClick, refreshTrigger, onStudent
     const { data, error } = await supabase
       .from('students')
       .select('*, schedule:schedules(*)')
-      .order('last_name')
-      .order('first_name');
+      .order('updated_at', { ascending: false });
 
     if (data) {
       setStudents(data as Student[]);
