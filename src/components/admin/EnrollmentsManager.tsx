@@ -92,7 +92,7 @@ export default function EnrollmentsManager({ onStudentCreated }: EnrollmentsMana
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
 
-  // Edit form (incluye status)
+  // Edit form (sin status - se maneja automáticamente por pago)
   const [editForm, setEditForm] = useState({
     first_name: '',
     last_name: '',
@@ -100,7 +100,6 @@ export default function EnrollmentsManager({ onStudentCreated }: EnrollmentsMana
     phone: '',
     schedule_id: '',
     message: '',
-    status: 'pending',
   });
 
   // Create form
@@ -171,84 +170,6 @@ export default function EnrollmentsManager({ onStudentCreated }: EnrollmentsMana
     fetchSchedules();
   }, []);
 
-  const updateEnrollmentStatus = async (enrollment: Enrollment, newStatus: string) => {
-    // Validar que para estado "confirmed" el pago debe ser "deposit" o "paid"
-    if (newStatus === 'confirmed' && enrollment.payment_status === 'pending') {
-      toast({
-        title: 'No se puede confirmar',
-        description: 'El pago debe estar "Señado" o "Pagado" para confirmar la inscripción',
-        variant: 'destructive',
-      });
-      return;
-    }
-
-    // Si cambia a "confirmed", crear automáticamente el alumno
-    if (newStatus === 'confirmed' && !enrollment.converted_to_student_id) {
-      // Crear el alumno
-      const { data: newStudent, error: studentError } = await supabase
-        .from('students')
-        .insert({
-          first_name: enrollment.first_name,
-          last_name: enrollment.last_name,
-          email: enrollment.email,
-          phone: enrollment.phone,
-          birthday: enrollment.birthday,
-          schedule_id: enrollment.schedule_id,
-          payment_status: enrollment.payment_status === 'paid' ? 'paid' : 'pending',
-          notes: enrollment.message,
-        })
-        .select()
-        .single();
-
-      if (studentError) {
-        toast({
-          title: 'Error',
-          description: 'No se pudo crear el alumno',
-          variant: 'destructive',
-        });
-        return;
-      }
-
-      // Actualizar enrollment con estado y converted_to_student_id
-      const { error: updateError } = await supabase
-        .from('enrollments')
-        .update({
-          status: 'confirmed',
-          converted_to_student_id: newStudent.id,
-        })
-        .eq('id', enrollment.id);
-
-      if (updateError) {
-        toast({
-          title: 'Error',
-          description: 'Alumno creado pero no se pudo actualizar la pre-inscripción',
-          variant: 'destructive',
-        });
-      } else {
-        toast({ title: 'Inscripción confirmada y alumno creado' });
-        fetchEnrollments();
-        onStudentCreated?.();
-      }
-      return;
-    }
-
-    const { error } = await supabase
-      .from('enrollments')
-      .update({ status: newStatus })
-      .eq('id', enrollment.id);
-
-    if (error) {
-      toast({
-        title: 'Error',
-        description: 'No se pudo actualizar el estado',
-        variant: 'destructive',
-      });
-    } else {
-      toast({ title: `Estado actualizado a ${ENROLLMENT_STATUS_LABELS[newStatus]}` });
-      fetchEnrollments();
-    }
-  };
-
   const openPaymentModal = (enrollment: Enrollment) => {
     setSelectedEnrollment(enrollment);
     setPaymentForm({
@@ -262,7 +183,6 @@ export default function EnrollmentsManager({ onStudentCreated }: EnrollmentsMana
   const handlePaymentSubmit = async () => {
     if (!selectedEnrollment) return;
 
-    // Si se registra un pago y el estado es "pending", actualizar a "contacted"
     const updateData: Record<string, unknown> = {
       payment_status: paymentForm.status,
       payment_amount: paymentForm.amount ? parseFloat(paymentForm.amount) : null,
@@ -270,9 +190,46 @@ export default function EnrollmentsManager({ onStudentCreated }: EnrollmentsMana
       payment_date: new Date().toISOString(),
     };
 
-    // Si el pago no es "pending" y el estado de la inscripción es "pending", cambiar a "contacted"
-    if (paymentForm.status !== 'pending' && selectedEnrollment.status === 'pending') {
+    // Actualizar estado automáticamente según el pago
+    if (paymentForm.status === 'pending') {
+      updateData.status = 'pending';
+    } else if (paymentForm.status === 'deposit') {
       updateData.status = 'contacted';
+    } else if (paymentForm.status === 'paid') {
+      // Si está pagado, confirmar y crear alumno automáticamente
+      if (!selectedEnrollment.converted_to_student_id) {
+        // Crear el alumno
+        const { data: newStudent, error: studentError } = await supabase
+          .from('students')
+          .insert({
+            first_name: selectedEnrollment.first_name,
+            last_name: selectedEnrollment.last_name,
+            email: selectedEnrollment.email,
+            phone: selectedEnrollment.phone,
+            birthday: selectedEnrollment.birthday,
+            schedule_id: selectedEnrollment.schedule_id,
+            payment_status: 'paid',
+            notes: selectedEnrollment.message,
+          })
+          .select()
+          .single();
+
+        if (studentError) {
+          toast({
+            title: 'Error',
+            description: 'No se pudo crear el alumno',
+            variant: 'destructive',
+          });
+          return;
+        }
+
+        updateData.status = 'confirmed';
+        updateData.converted_to_student_id = newStudent.id;
+
+        toast({ title: 'Pago registrado y alumno creado automáticamente' });
+      } else {
+        updateData.status = 'confirmed';
+      }
     }
 
     const { error } = await supabase
@@ -287,9 +244,14 @@ export default function EnrollmentsManager({ onStudentCreated }: EnrollmentsMana
         variant: 'destructive',
       });
     } else {
-      toast({ title: 'Pago registrado correctamente' });
+      if (paymentForm.status !== 'paid' || selectedEnrollment.converted_to_student_id) {
+        toast({ title: 'Pago registrado correctamente' });
+      }
       setIsPaymentModalOpen(false);
       fetchEnrollments();
+      if (paymentForm.status === 'paid' && !selectedEnrollment.converted_to_student_id) {
+        onStudentCreated?.();
+      }
     }
   };
 
@@ -386,7 +348,6 @@ export default function EnrollmentsManager({ onStudentCreated }: EnrollmentsMana
       phone: enrollment.phone || '',
       schedule_id: enrollment.schedule_id,
       message: enrollment.message || '',
-      status: enrollment.status,
     });
     setIsEditModalOpen(true);
   };
@@ -394,71 +355,7 @@ export default function EnrollmentsManager({ onStudentCreated }: EnrollmentsMana
   const handleEditSubmit = async () => {
     if (!selectedEnrollment) return;
 
-    // Validar que para estado "confirmed" el pago debe ser "deposit" o "paid"
-    if (editForm.status === 'confirmed' && selectedEnrollment.payment_status === 'pending') {
-      toast({
-        title: 'No se puede confirmar',
-        description: 'El pago debe estar "Señado" o "Pagado" para confirmar la inscripción',
-        variant: 'destructive',
-      });
-      return;
-    }
-
-    // Si cambia a confirmed y no tiene alumno, crearlo
-    if (editForm.status === 'confirmed' && !selectedEnrollment.converted_to_student_id) {
-      const { data: newStudent, error: studentError } = await supabase
-        .from('students')
-        .insert({
-          first_name: editForm.first_name,
-          last_name: editForm.last_name,
-          email: editForm.email,
-          phone: editForm.phone || null,
-          birthday: selectedEnrollment.birthday,
-          schedule_id: editForm.schedule_id,
-          payment_status: selectedEnrollment.payment_status === 'paid' ? 'paid' : 'pending',
-          notes: editForm.message || null,
-        })
-        .select()
-        .single();
-
-      if (studentError) {
-        toast({
-          title: 'Error',
-          description: 'No se pudo crear el alumno',
-          variant: 'destructive',
-        });
-        return;
-      }
-
-      const { error } = await supabase
-        .from('enrollments')
-        .update({
-          first_name: editForm.first_name,
-          last_name: editForm.last_name,
-          email: editForm.email,
-          phone: editForm.phone || null,
-          schedule_id: editForm.schedule_id,
-          message: editForm.message || null,
-          status: 'confirmed',
-          converted_to_student_id: newStudent.id,
-        })
-        .eq('id', selectedEnrollment.id);
-
-      if (error) {
-        toast({
-          title: 'Error',
-          description: 'No se pudo actualizar la inscripción',
-          variant: 'destructive',
-        });
-      } else {
-        toast({ title: 'Inscripción confirmada y alumno creado' });
-        setIsEditModalOpen(false);
-        fetchEnrollments();
-        onStudentCreated?.();
-      }
-      return;
-    }
-
+    // Solo actualizar datos básicos - el estado se maneja por pago
     const { error } = await supabase
       .from('enrollments')
       .update({
@@ -468,7 +365,6 @@ export default function EnrollmentsManager({ onStudentCreated }: EnrollmentsMana
         phone: editForm.phone || null,
         schedule_id: editForm.schedule_id,
         message: editForm.message || null,
-        status: editForm.status,
       })
       .eq('id', selectedEnrollment.id);
 
@@ -668,20 +564,13 @@ export default function EnrollmentsManager({ onStudentCreated }: EnrollmentsMana
                   )}
                 </TableCell>
                 <TableCell className="text-center">
-                  <Select
-                    value={enrollment.status}
-                    onValueChange={(value) => updateEnrollmentStatus(enrollment, value)}
-                  >
-                    <SelectTrigger className="w-[130px] h-8 text-xs">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="pending">Pendiente</SelectItem>
-                      <SelectItem value="contacted">Contactado</SelectItem>
-                      <SelectItem value="confirmed">Confirmado</SelectItem>
-                      <SelectItem value="cancelled">Cancelado</SelectItem>
-                    </SelectContent>
-                  </Select>
+                  <Badge variant={
+                    enrollment.status === 'confirmed' ? 'default' :
+                    enrollment.status === 'contacted' ? 'secondary' :
+                    enrollment.status === 'cancelled' ? 'destructive' : 'outline'
+                  }>
+                    {ENROLLMENT_STATUS_LABELS[enrollment.status] || enrollment.status}
+                  </Badge>
                 </TableCell>
                 <TableCell className="text-center">
                   <Badge variant={PAYMENT_STATUS_COLORS[enrollment.payment_status] || 'destructive'}>
@@ -741,16 +630,14 @@ export default function EnrollmentsManager({ onStudentCreated }: EnrollmentsMana
                       </Button>
                     )}
 
-                    {/* Register payment */}
-                    {!enrollment.converted_to_student_id && (
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => openPaymentModal(enrollment)}
-                      >
-                        <DollarSign className="w-4 h-4" />
-                      </Button>
-                    )}
+                    {/* Register payment - siempre visible para poder editar */}
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => openPaymentModal(enrollment)}
+                    >
+                      <DollarSign className="w-4 h-4" />
+                    </Button>
 
                     {/* Convert to student */}
                     {!enrollment.converted_to_student_id && (
@@ -1029,20 +916,6 @@ export default function EnrollmentsManager({ onStudentCreated }: EnrollmentsMana
                       {DAY_NAMES[schedule.day_of_week]} {schedule.start_time.slice(0, 5)} - {schedule.end_time.slice(0, 5)}
                     </SelectItem>
                   ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label>Estado</Label>
-              <Select value={editForm.status} onValueChange={(v) => setEditForm(p => ({ ...p, status: v }))}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="pending">Pendiente</SelectItem>
-                  <SelectItem value="contacted">Contactado</SelectItem>
-                  <SelectItem value="confirmed">Confirmado</SelectItem>
-                  <SelectItem value="cancelled">Cancelado</SelectItem>
                 </SelectContent>
               </Select>
             </div>
