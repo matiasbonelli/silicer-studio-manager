@@ -739,7 +739,7 @@ export default function SalesModule() {
                     ) : (
                       <div className="mt-1">
                         <p className="text-sm text-muted-foreground">
-                          Stock: {item.quantity} {item.unit}
+                          Stock: {item.quantity}
                         </p>
                         <p className="text-xs text-muted-foreground">
                           Unidad de venta: {item.unit}
