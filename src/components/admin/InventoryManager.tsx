@@ -33,17 +33,21 @@ export default function InventoryManager() {
     name: '',
     description: '',
     quantity: 0,
-    unit: 'unidad',
+    unit: 'kg',
     min_stock: 0,
     cost: 0,
+    bulk_quantity: 1,
     margin_percent: 0,
     for_sale: false,
     category: '' as ProductCategory | '',
   });
 
-  // Calculate price from cost and margin
-  const calculatedPrice = formData.cost > 0
-    ? Math.round(formData.cost * (1 + formData.margin_percent / 100))
+  // Calculate unit cost and price from cost, bulk quantity and margin
+  const unitCost = formData.bulk_quantity > 0
+    ? formData.cost / formData.bulk_quantity
+    : 0;
+  const calculatedPrice = unitCost > 0
+    ? Math.round(unitCost * (1 + formData.margin_percent / 100))
     : 0;
   const [inventoryTab, setInventoryTab] = useState('all');
   const { toast } = useToast();
@@ -80,6 +84,7 @@ export default function InventoryManager() {
         unit: item.unit,
         min_stock: item.min_stock,
         cost: item.cost ?? 0,
+        bulk_quantity: 1,
         margin_percent: marginPercent,
         for_sale: item.for_sale ?? false,
         category: item.category || '',
@@ -90,9 +95,10 @@ export default function InventoryManager() {
         name: '',
         description: '',
         quantity: 0,
-        unit: 'unidad',
+        unit: 'kg',
         min_stock: 0,
         cost: 0,
+        bulk_quantity: 1,
         margin_percent: 0,
         for_sale: false,
         category: '',
@@ -111,7 +117,7 @@ export default function InventoryManager() {
       unit: formData.unit,
       min_stock: formData.min_stock,
       price: calculatedPrice,
-      cost: formData.cost,
+      cost: Math.round(unitCost * 100) / 100,
       for_sale: formData.for_sale,
       category: formData.category || null,
     };
@@ -218,7 +224,7 @@ export default function InventoryManager() {
               <TableHead className="text-center">Tipo</TableHead>
               <TableHead className="text-center">Categoría</TableHead>
               <TableHead className="text-center">Stock</TableHead>
-              <TableHead className="text-right">Costo</TableHead>
+              <TableHead className="text-right">Costo Unit.</TableHead>
               <TableHead className="text-right">Precio</TableHead>
               <TableHead className="text-right">Margen</TableHead>
               <TableHead className="text-center">Acciones</TableHead>
@@ -322,21 +328,59 @@ export default function InventoryManager() {
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-2">
-                <Label htmlFor="quantity">Cantidad</Label>
+                <Label htmlFor="cost">Costo Total</Label>
+                <Input
+                  id="cost"
+                  type="number"
+                  min="0"
+                  step="1"
+                  value={formData.cost}
+                  onChange={(e) => setFormData(prev => ({ ...prev, cost: parseFloat(e.target.value) || 0 }))}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="bulk_quantity">Cantidad por Bulto</Label>
+                <Input
+                  id="bulk_quantity"
+                  type="number"
+                  min="1"
+                  step="1"
+                  value={formData.bulk_quantity}
+                  onChange={(e) => setFormData(prev => ({ ...prev, bulk_quantity: parseInt(e.target.value) || 1 }))}
+                />
+              </div>
+            </div>
+            {unitCost > 0 && (
+              <div className="p-2 bg-muted rounded-md text-sm text-center">
+                Costo Unitario: <span className="font-semibold text-primary">{formatCurrency(Math.round(unitCost))}</span>
+              </div>
+            )}
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <Label htmlFor="unit">Unidad de Venta</Label>
+                <Select
+                  value={formData.unit}
+                  onValueChange={(value) => setFormData(prev => ({ ...prev, unit: value }))}
+                >
+                  <SelectTrigger id="unit">
+                    <SelectValue placeholder="Seleccionar unidad" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="kg">kg</SelectItem>
+                    <SelectItem value="gr">gr</SelectItem>
+                    <SelectItem value="ml">ml</SelectItem>
+                    <SelectItem value="unidad">unidad</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="quantity">Stock</Label>
                 <Input
                   id="quantity"
                   type="number"
                   min="0"
                   value={formData.quantity}
                   onChange={(e) => setFormData(prev => ({ ...prev, quantity: parseInt(e.target.value) || 0 }))}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="unit">Unidad</Label>
-                <Input
-                  id="unit"
-                  value={formData.unit}
-                  onChange={(e) => setFormData(prev => ({ ...prev, unit: e.target.value }))}
                 />
               </div>
             </div>
@@ -352,19 +396,6 @@ export default function InventoryManager() {
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="cost">Costo</Label>
-                <Input
-                  id="cost"
-                  type="number"
-                  min="0"
-                  step="1"
-                  value={formData.cost}
-                  onChange={(e) => setFormData(prev => ({ ...prev, cost: parseFloat(e.target.value) || 0 }))}
-                />
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-2">
                 <Label htmlFor="margin_percent">Margen (%)</Label>
                 <Input
                   id="margin_percent"
@@ -375,15 +406,15 @@ export default function InventoryManager() {
                   onChange={(e) => setFormData(prev => ({ ...prev, margin_percent: parseFloat(e.target.value) || 0 }))}
                 />
               </div>
-              <div className="space-y-2">
-                <Label>Precio de Venta</Label>
-                <div className="h-10 flex items-center px-3 rounded-md border bg-muted font-medium">
-                  {formData.cost > 0 ? (
-                    <span className="text-primary">{formatCurrency(calculatedPrice)}</span>
-                  ) : (
-                    <span className="text-muted-foreground">Ingresá el costo</span>
-                  )}
-                </div>
+            </div>
+            <div className="space-y-2">
+              <Label>Precio de Venta</Label>
+              <div className="h-10 flex items-center px-3 rounded-md border bg-muted font-medium">
+                {unitCost > 0 ? (
+                  <span className="text-primary">{formatCurrency(calculatedPrice)}</span>
+                ) : (
+                  <span className="text-muted-foreground">Ingresá el costo y cantidad</span>
+                )}
               </div>
             </div>
             <div className="flex items-center justify-between rounded-lg border p-3">

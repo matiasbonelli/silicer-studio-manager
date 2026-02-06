@@ -3,7 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { Student } from '@/types/database';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Cake, X } from 'lucide-react';
+import { X } from 'lucide-react';
 
 export default function BirthdayModal() {
   const [isOpen, setIsOpen] = useState(false);
@@ -60,15 +60,15 @@ export default function BirthdayModal() {
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
       <DialogContent className="max-w-md">
+        <div className="text-6xl text-center pt-2">🎂</div>
+
         <DialogHeader className="text-center">
-          <DialogTitle className="flex items-center justify-center gap-2 text-2xl">
-            <Cake className="w-6 h-6 text-primary" />
+          <DialogTitle className="text-2xl text-center">
             Cumpleaños de Hoy
           </DialogTitle>
         </DialogHeader>
 
         <div className="space-y-4 py-4">
-          <div className="text-6xl text-center">🎂</div>
 
           <div className="space-y-3">
             {birthdayStudents.map(student => (

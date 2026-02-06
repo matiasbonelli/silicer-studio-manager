@@ -737,9 +737,14 @@ export default function SalesModule() {
                     {'source' in item && item.source === 'moldes' ? (
                       <p className="text-sm text-muted-foreground mt-1">Disponible</p>
                     ) : (
-                      <p className="text-sm text-muted-foreground mt-1">
-                        Stock: {item.quantity} {item.unit}
-                      </p>
+                      <div className="mt-1">
+                        <p className="text-sm text-muted-foreground">
+                          Stock: {item.quantity} {item.unit}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          Unidad de venta: {item.unit}
+                        </p>
+                      </div>
                     )}
                     <p className="text-lg font-bold text-primary mt-1">{formatCurrency(item.price)}</p>
                   </CardContent>
@@ -902,7 +907,7 @@ export default function SalesModule() {
                   <TableHead className="text-center">Cant.</TableHead>
                   <TableHead>Cliente</TableHead>
                   <TableHead>Método</TableHead>
-                  <TableHead>Estado Pago</TableHead>
+                  <TableHead className="text-center">Estado Pago</TableHead>
                   <TableHead className="text-center">Comprobante</TableHead>
                   <TableHead className="text-right">Total</TableHead>
                   <TableHead></TableHead>
@@ -951,10 +956,10 @@ export default function SalesModule() {
                     <TableCell>
                       <Badge variant="secondary">{PAYMENT_METHOD_LABELS[sale.payment_method]}</Badge>
                     </TableCell>
-                    <TableCell>
+                    <TableCell className="align-middle">
                       <button
                         type="button"
-                        className="cursor-pointer hover:opacity-70 transition-opacity"
+                        className="cursor-pointer hover:opacity-70 transition-opacity flex flex-col items-center justify-center w-full"
                         onClick={() => setHistoryReceiptSale(sale)}
                       >
                         {getPaymentStatusBadge(sale.payment_status)}
@@ -1134,7 +1139,7 @@ export default function SalesModule() {
                       <TableHead className="text-center">Cant.</TableHead>
                       <TableHead>Cliente</TableHead>
                       <TableHead>Método</TableHead>
-                      <TableHead>Estado Pago</TableHead>
+                      <TableHead className="text-center">Estado Pago</TableHead>
                       <TableHead className="text-center">Comprobante</TableHead>
                       <TableHead className="text-right">Total</TableHead>
                       <TableHead></TableHead>
