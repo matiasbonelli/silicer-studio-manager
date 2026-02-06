@@ -519,6 +519,45 @@ export default function SalesModule() {
     }
   };
 
+  // Delete sale
+  const handleDeleteSale = async (saleId: string) => {
+    if (!confirm('¿Estás seguro de eliminar esta venta? Esta acción no se puede deshacer.')) {
+      return;
+    }
+
+    // First delete sale_items (foreign key constraint)
+    const { error: itemsError } = await supabase
+      .from('sale_items')
+      .delete()
+      .eq('sale_id', saleId);
+
+    if (itemsError) {
+      toast({
+        title: 'Error',
+        description: 'No se pudieron eliminar los items de la venta',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    // Then delete the sale
+    const { error: saleError } = await supabase
+      .from('sales')
+      .delete()
+      .eq('id', saleId);
+
+    if (saleError) {
+      toast({
+        title: 'Error',
+        description: 'No se pudo eliminar la venta',
+        variant: 'destructive',
+      });
+    } else {
+      toast({ title: 'Venta eliminada correctamente' });
+      await fetchSalesHistory();
+    }
+  };
+
   // Combinar productos de inventario y moldes
   const allProducts: (InventoryItem | SaleProduct)[] = [
     // Inventario - usar la categoría del producto o 'insumos' por defecto
@@ -692,12 +731,17 @@ export default function SalesModule() {
                         <Badge variant="secondary" className="text-xs shrink-0">Molde</Badge>
                       )}
                     </div>
-                    {'source' in item && item.source === 'moldes' ? (
-                      <p className="text-sm text-muted-foreground">Disponible</p>
-                    ) : (
-                      <p className="text-sm text-muted-foreground">Stock: {item.quantity}</p>
+                    {'description' in item && item.description && (
+                      <p className="text-xs text-muted-foreground line-clamp-2 mt-1">{item.description}</p>
                     )}
-                    <p className="text-lg font-bold text-primary">{formatCurrency(item.price)}</p>
+                    {'source' in item && item.source === 'moldes' ? (
+                      <p className="text-sm text-muted-foreground mt-1">Disponible</p>
+                    ) : (
+                      <p className="text-sm text-muted-foreground mt-1">
+                        Stock: {item.quantity} {item.unit}
+                      </p>
+                    )}
+                    <p className="text-lg font-bold text-primary mt-1">{formatCurrency(item.price)}</p>
                   </CardContent>
                 </Card>
               ))}
@@ -963,19 +1007,29 @@ export default function SalesModule() {
                     </TableCell>
                     <TableCell className="text-right font-bold">{formatCurrency(sale.total_amount)}</TableCell>
                     <TableCell>
-                      {sale.payment_status !== 'paid' && (
+                      <div className="flex gap-1">
+                        {sale.payment_status !== 'paid' && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => {
+                              setEditPaymentSale(sale);
+                              setEditPaymentType(sale.payment_status === 'partial' ? 'partial' : 'total');
+                              setEditPartialAmount(sale.paid_amount?.toString() || '');
+                            }}
+                          >
+                            <Pencil className="w-4 h-4" />
+                          </Button>
+                        )}
                         <Button
                           size="sm"
-                          variant="outline"
-                          onClick={() => {
-                            setEditPaymentSale(sale);
-                            setEditPaymentType(sale.payment_status === 'partial' ? 'partial' : 'total');
-                            setEditPartialAmount(sale.paid_amount?.toString() || '');
-                          }}
+                          variant="ghost"
+                          className="text-destructive hover:text-destructive"
+                          onClick={() => handleDeleteSale(sale.id)}
                         >
-                          <Pencil className="w-4 h-4" />
+                          <Trash2 className="w-4 h-4" />
                         </Button>
-                      )}
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))}
@@ -1083,6 +1137,7 @@ export default function SalesModule() {
                       <TableHead>Estado Pago</TableHead>
                       <TableHead className="text-center">Comprobante</TableHead>
                       <TableHead className="text-right">Total</TableHead>
+                      <TableHead></TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -1183,11 +1238,21 @@ export default function SalesModule() {
                           )}
                         </TableCell>
                         <TableCell className="text-right font-bold">{formatCurrency(sale.total_amount)}</TableCell>
+                        <TableCell>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="text-destructive hover:text-destructive"
+                            onClick={() => handleDeleteSale(sale.id)}
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        </TableCell>
                       </TableRow>
                     ))}
                     {filteredSalesHistory.length === 0 && (
                       <TableRow>
-                        <TableCell colSpan={9} className="text-center text-muted-foreground py-8">
+                        <TableCell colSpan={10} className="text-center text-muted-foreground py-8">
                           No hay datos de ventas
                         </TableCell>
                       </TableRow>
