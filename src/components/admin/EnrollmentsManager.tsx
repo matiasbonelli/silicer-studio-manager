@@ -190,7 +190,24 @@ export default function EnrollmentsManager({ onStudentCreated }: EnrollmentsMana
       payment_date: new Date().toISOString(),
     };
 
-    // Sin pago (pending) no afecta el estado de inscripción
+    // Sin pago (pending) → Revertir: eliminar alumno creado y resetear estado
+    if (paymentForm.status === 'pending' && selectedEnrollment.converted_to_student_id) {
+      // Nullify references in sales before deleting
+      await supabase
+        .from('sales')
+        .update({ student_id: null })
+        .eq('student_id', selectedEnrollment.converted_to_student_id);
+
+      // Delete the auto-created student
+      await supabase
+        .from('students')
+        .delete()
+        .eq('id', selectedEnrollment.converted_to_student_id);
+
+      updateData.converted_to_student_id = null;
+      updateData.status = 'pending';
+    }
+
     // Señado o Pagado → Confirmar y crear alumno
     if (paymentForm.status === 'deposit' || paymentForm.status === 'paid') {
       if (!selectedEnrollment.converted_to_student_id) {
@@ -208,6 +225,8 @@ export default function EnrollmentsManager({ onStudentCreated }: EnrollmentsMana
             birthday: selectedEnrollment.birthday,
             schedule_id: selectedEnrollment.schedule_id,
             payment_status: studentPaymentStatus,
+            paid_amount: paymentForm.amount ? parseFloat(paymentForm.amount) : null,
+            payment_date: new Date().toISOString(),
             notes: selectedEnrollment.message,
           })
           .select()
@@ -237,7 +256,10 @@ export default function EnrollmentsManager({ onStudentCreated }: EnrollmentsMana
         const studentPaymentStatus = paymentForm.status === 'paid' ? 'paid' : 'partial';
         await supabase
           .from('students')
-          .update({ payment_status: studentPaymentStatus })
+          .update({
+            payment_status: studentPaymentStatus,
+            paid_amount: paymentForm.amount ? parseFloat(paymentForm.amount) : null,
+          })
           .eq('id', selectedEnrollment.converted_to_student_id);
       }
     }
@@ -256,6 +278,7 @@ export default function EnrollmentsManager({ onStudentCreated }: EnrollmentsMana
     } else {
       if (paymentForm.status === 'pending') {
         toast({ title: 'Estado de pago actualizado' });
+        onStudentCreated?.();
       } else if (selectedEnrollment.converted_to_student_id) {
         toast({ title: 'Pago actualizado en inscripción y alumno' });
       }
