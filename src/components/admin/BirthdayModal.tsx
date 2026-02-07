@@ -33,10 +33,10 @@ export default function BirthdayModal() {
       if (data) {
         const todayBirthdays = data.filter(student => {
           if (!student.birthday) return false;
-          const birthday = new Date(student.birthday);
-          const birthMonth = String(birthday.getMonth() + 1).padStart(2, '0');
-          const birthDay = String(birthday.getDate()).padStart(2, '0');
-          return birthMonth === todayMonth && birthDay === todayDay;
+          // Compare month-day strings directly to avoid timezone issues
+          const parts = student.birthday.split('-');
+          if (parts.length < 3) return false;
+          return parts[1] === todayMonth && parts[2] === todayDay;
         });
 
         if (todayBirthdays.length > 0) {
@@ -58,7 +58,7 @@ export default function BirthdayModal() {
   if (birthdayStudents.length === 0) return null;
 
   return (
-    <Dialog open={isOpen} onOpenChange={setIsOpen}>
+    <Dialog open={isOpen} onOpenChange={(open) => { if (!open) handleDismiss(); }}>
       <DialogContent className="max-w-md">
         <div className="text-6xl text-center pt-2">🎂</div>
 
@@ -102,7 +102,7 @@ export default function BirthdayModal() {
           <Button variant="outline" onClick={handleDismiss}>
             <X className="w-4 h-4 mr-2" /> No mostrar más hoy
           </Button>
-          <Button onClick={() => setIsOpen(false)}>
+          <Button onClick={handleDismiss}>
             Entendido
           </Button>
         </DialogFooter>
