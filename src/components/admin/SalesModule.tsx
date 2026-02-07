@@ -725,6 +725,9 @@ export default function SalesModule() {
                   onClick={() => addToCart(item)}
                 >
                   <CardContent className="p-4">
+                    {'image_url' in item && item.image_url && (
+                      <img src={item.image_url} alt={item.name} className="w-full h-20 object-cover rounded-md mb-2" />
+                    )}
                     <div className="flex items-start justify-between gap-2">
                       <h4 className="font-medium truncate flex-1">{item.name}</h4>
                       {'category' in item && item.category === 'moldes' && (

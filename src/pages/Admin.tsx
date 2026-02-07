@@ -12,7 +12,8 @@ import SalesModule from '@/components/admin/SalesModule';
 import BirthdayModal from '@/components/admin/BirthdayModal';
 import EnrollmentsManager from '@/components/admin/EnrollmentsManager';
 import PricingCalculator from '@/components/admin/PricingCalculator';
-import { LogOut, Plus, Calendar, Users, Package, ShoppingCart, Loader2, ClipboardList, Calculator, Sun, Moon } from 'lucide-react';
+import EventsManager from '@/components/admin/EventsManager';
+import { LogOut, Plus, Calendar, Users, Package, ShoppingCart, Loader2, ClipboardList, Calculator, Sun, Moon, MessageSquare } from 'lucide-react';
 
 export default function Admin() {
   const { user, loading, signOut, isAdmin } = useAuth();
@@ -104,7 +105,7 @@ export default function Admin() {
       <main className="container mx-auto px-4 py-6">
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-            <TabsList className="grid w-full sm:w-auto grid-cols-6 gap-1">
+            <TabsList className="grid w-full sm:w-auto grid-cols-7 gap-1">
               <TabsTrigger value="schedule" className="flex items-center gap-1.5">
                 <Calendar className="w-4 h-4" />
                 <span className="hidden sm:inline">Horarios</span>
@@ -124,6 +125,10 @@ export default function Admin() {
               <TabsTrigger value="sales" className="flex items-center gap-1.5">
                 <ShoppingCart className="w-4 h-4" />
                 <span className="hidden sm:inline">Ventas</span>
+              </TabsTrigger>
+              <TabsTrigger value="events" className="flex items-center gap-1.5">
+                <MessageSquare className="w-4 h-4" />
+                <span className="hidden sm:inline">Eventos</span>
               </TabsTrigger>
               <TabsTrigger value="pricing" className="flex items-center gap-1.5">
                 <Calculator className="w-4 h-4" />
@@ -156,6 +161,10 @@ export default function Admin() {
 
           <TabsContent value="sales" className="mt-6">
             <SalesModule />
+          </TabsContent>
+
+          <TabsContent value="events" className="mt-6">
+            <EventsManager />
           </TabsContent>
 
           <TabsContent value="pricing" className="mt-6">
