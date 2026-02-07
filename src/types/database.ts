@@ -43,6 +43,7 @@ export interface InventoryItem {
   cost: number;
   for_sale: boolean;
   category: ProductCategory | null;
+  image_url: string | null;
   created_at: string;
   updated_at: string;
 }

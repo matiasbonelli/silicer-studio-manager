@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { InventoryItem, ProductCategory, PRODUCT_CATEGORY_LABELS } from '@/types/database';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -9,7 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
-import { Plus, Pencil, Trash2, Search, Loader2, AlertTriangle, ShoppingCart, Package, Tag } from 'lucide-react';
+import { Plus, Pencil, Trash2, Search, Loader2, AlertTriangle, ShoppingCart, Package, Tag, ImagePlus, X } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Switch } from '@/components/ui/switch';
 
@@ -66,6 +66,10 @@ export default function InventoryManager() {
     ? Math.round(unitCost * (1 + formData.margin_percent / 100))
     : 0;
   const [inventoryTab, setInventoryTab] = useState('all');
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [uploadingImage, setUploadingImage] = useState(false);
+  const imageInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
 
   const fetchItems = async () => {
@@ -108,6 +112,7 @@ export default function InventoryManager() {
         for_sale: item.for_sale ?? false,
         category: item.category || '',
       });
+      setImagePreview(item.image_url || null);
     } else {
       setEditingItem(null);
       setFormData({
@@ -123,7 +128,9 @@ export default function InventoryManager() {
         for_sale: false,
         category: '',
       });
+      setImagePreview(null);
     }
+    setImageFile(null);
     setIsModalOpen(true);
   };
 
@@ -132,6 +139,39 @@ export default function InventoryManager() {
 
     // Store unit as "bulk unit" format (e.g., "1 kg", "500 gr")
     const storedUnit = `${formData.bulk_quantity} ${formData.unit}`;
+
+    // Upload image if a new file was selected
+    let imageUrl = imagePreview;
+    if (imageFile) {
+      setUploadingImage(true);
+      const fileExt = imageFile.name.split('.').pop();
+      const fileName = `${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExt}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from('product-images')
+        .upload(fileName, imageFile, {
+          cacheControl: '3600',
+          contentType: imageFile.type,
+          upsert: false,
+        });
+
+      if (uploadError) {
+        toast({
+          title: 'Error al subir imagen',
+          description: uploadError.message,
+          variant: 'destructive',
+        });
+        setUploadingImage(false);
+        return;
+      }
+
+      const { data: urlData } = supabase.storage
+        .from('product-images')
+        .getPublicUrl(fileName);
+
+      imageUrl = urlData.publicUrl;
+      setUploadingImage(false);
+    }
 
     const dataToSave = {
       name: formData.name,
@@ -143,6 +183,7 @@ export default function InventoryManager() {
       cost: Math.round(unitCost * 100) / 100,
       for_sale: formData.for_sale,
       category: formData.category || null,
+      image_url: imageUrl || null,
     };
 
     let error;
@@ -257,11 +298,20 @@ export default function InventoryManager() {
             {filteredItems.map(item => (
               <TableRow key={item.id}>
                 <TableCell>
-                  <div>
-                    <span className="font-medium">{item.name}</span>
-                    {item.description && (
-                      <p className="text-sm text-muted-foreground">{item.description}</p>
+                  <div className="flex items-center gap-3">
+                    {item.image_url ? (
+                      <img src={item.image_url} alt={item.name} className="w-10 h-10 object-cover rounded-md border shrink-0" />
+                    ) : (
+                      <div className="w-10 h-10 bg-muted rounded-md flex items-center justify-center shrink-0">
+                        <Package className="w-5 h-5 text-muted-foreground" />
+                      </div>
                     )}
+                    <div>
+                      <span className="font-medium">{item.name}</span>
+                      {item.description && (
+                        <p className="text-sm text-muted-foreground">{item.description}</p>
+                      )}
+                    </div>
                   </div>
                 </TableCell>
                 <TableCell className="text-center">
@@ -327,7 +377,7 @@ export default function InventoryManager() {
       </div>
 
       <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
-        <DialogContent>
+        <DialogContent className="max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{editingItem ? 'Editar Producto' : 'Nuevo Producto'}</DialogTitle>
           </DialogHeader>
@@ -348,6 +398,43 @@ export default function InventoryManager() {
                 value={formData.description}
                 onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
               />
+            </div>
+            <div className="space-y-2">
+              <Label>Imagen</Label>
+              <input
+                ref={imageInputRef}
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                className="hidden"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) {
+                    if (file.size > 2 * 1024 * 1024) {
+                      toast({ title: 'La imagen no puede superar 2MB', variant: 'destructive' });
+                      return;
+                    }
+                    setImageFile(file);
+                    setImagePreview(URL.createObjectURL(file));
+                  }
+                  e.target.value = '';
+                }}
+              />
+              {imagePreview ? (
+                <div className="relative w-20 h-20">
+                  <img src={imagePreview} alt="Preview" className="w-20 h-20 object-cover rounded-lg border" />
+                  <button
+                    type="button"
+                    className="absolute -top-2 -right-2 bg-destructive text-destructive-foreground rounded-full p-0.5"
+                    onClick={() => { setImageFile(null); setImagePreview(null); }}
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                </div>
+              ) : (
+                <Button type="button" variant="outline" size="sm" onClick={() => imageInputRef.current?.click()}>
+                  <ImagePlus className="w-4 h-4 mr-2" /> Agregar imagen
+                </Button>
+              )}
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-2">
@@ -517,7 +604,9 @@ export default function InventoryManager() {
               <Button type="button" variant="outline" onClick={() => setIsModalOpen(false)}>
                 Cancelar
               </Button>
-              <Button type="submit">Guardar</Button>
+              <Button type="submit" disabled={uploadingImage}>
+                {uploadingImage ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Subiendo...</> : 'Guardar'}
+              </Button>
             </DialogFooter>
           </form>
         </DialogContent>
