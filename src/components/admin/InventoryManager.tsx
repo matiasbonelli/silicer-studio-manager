@@ -300,7 +300,7 @@ export default function InventoryManager() {
                 <TableCell>
                   <div className="flex items-center gap-3">
                     {item.image_url ? (
-                      <img src={item.image_url} alt={item.name} className="w-10 h-10 object-cover rounded-md border shrink-0" />
+                      <img src={item.image_url} alt={item.name} className="w-10 h-10 object-contain rounded-md border shrink-0 bg-muted" />
                     ) : (
                       <div className="w-10 h-10 bg-muted rounded-md flex items-center justify-center shrink-0">
                         <Package className="w-5 h-5 text-muted-foreground" />
@@ -421,7 +421,7 @@ export default function InventoryManager() {
               />
               {imagePreview ? (
                 <div className="relative w-20 h-20">
-                  <img src={imagePreview} alt="Preview" className="w-20 h-20 object-cover rounded-lg border" />
+                  <img src={imagePreview} alt="Preview" className="w-20 h-20 object-contain rounded-lg border bg-muted" />
                   <button
                     type="button"
                     className="absolute -top-2 -right-2 bg-destructive text-destructive-foreground rounded-full p-0.5"

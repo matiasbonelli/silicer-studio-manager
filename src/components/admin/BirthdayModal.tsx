@@ -3,7 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { Student } from '@/types/database';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { X } from 'lucide-react';
+import { MessageCircle } from 'lucide-react';
 
 export default function BirthdayModal() {
   const [isOpen, setIsOpen] = useState(false);
@@ -11,14 +11,6 @@ export default function BirthdayModal() {
 
   useEffect(() => {
     const checkBirthdays = async () => {
-      // Check if already dismissed today
-      const today = new Date().toISOString().split('T')[0];
-      const dismissedDate = localStorage.getItem('birthdayModalDismissed');
-
-      if (dismissedDate === today) {
-        return;
-      }
-
       // Get today's month and day
       const now = new Date();
       const todayMonth = String(now.getMonth() + 1).padStart(2, '0');
@@ -49,16 +41,21 @@ export default function BirthdayModal() {
     checkBirthdays();
   }, []);
 
-  const handleDismiss = () => {
-    const today = new Date().toISOString().split('T')[0];
-    localStorage.setItem('birthdayModalDismissed', today);
+  const handleClose = () => {
     setIsOpen(false);
+  };
+
+  const buildWhatsAppUrl = (student: Student) => {
+    const name = student.first_name;
+    const message = `Muy feliz cumple años ${name} 🥳, esperemos que disfrutes en tu hermoso día💫. Te saluda Caro y todo el equipo de Silicer🩷`;
+    const phone = student.phone ? `54${student.phone.replace(/\D/g, '')}` : '';
+    return `https://wa.me/${phone}?text=${encodeURIComponent(message)}`;
   };
 
   if (birthdayStudents.length === 0) return null;
 
   return (
-    <Dialog open={isOpen} onOpenChange={(open) => { if (!open) handleDismiss(); }}>
+    <Dialog open={isOpen} onOpenChange={(open) => { if (!open) handleClose(); }}>
       <DialogContent className="max-w-md">
         <div className="text-6xl text-center pt-2">🎂</div>
 
@@ -74,20 +71,25 @@ export default function BirthdayModal() {
             {birthdayStudents.map(student => (
               <div
                 key={student.id}
-                className="p-4 bg-gradient-to-r from-primary/10 to-primary/5 rounded-lg border border-primary/20 text-center"
+                className="p-4 bg-gradient-to-r from-primary/10 to-primary/5 rounded-lg border border-primary/20 text-center space-y-2"
               >
                 <p className="text-lg font-semibold">
                   {student.first_name} {student.last_name}
                 </p>
                 {student.phone && (
-                  <a
-                    href={`https://wa.me/54${student.phone.replace(/\D/g, '')}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-sm text-primary hover:underline"
-                  >
+                  <p className="text-sm text-muted-foreground">
                     {student.phone}
-                  </a>
+                  </p>
+                )}
+                {student.phone && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="mt-1"
+                    onClick={() => window.open(buildWhatsAppUrl(student), '_blank')}
+                  >
+                    <MessageCircle className="w-4 h-4 mr-2" /> Enviar mensaje
+                  </Button>
                 )}
               </div>
             ))}
@@ -99,10 +101,7 @@ export default function BirthdayModal() {
         </div>
 
         <DialogFooter className="flex justify-center sm:justify-center">
-          <Button variant="outline" onClick={handleDismiss}>
-            <X className="w-4 h-4 mr-2" /> No mostrar más hoy
-          </Button>
-          <Button onClick={handleDismiss}>
+          <Button onClick={handleClose}>
             Entendido
           </Button>
         </DialogFooter>
