@@ -30,7 +30,7 @@ export interface Student {
   schedule?: Schedule;
 }
 
-export type ProductCategory = 'insumos' | 'servicios' | 'moldes';
+export type ProductCategory = 'insumos' | 'servicios' | 'moldes' | 'bizcochado' | 'final';
 
 export interface InventoryItem {
   id: string;
@@ -117,6 +117,8 @@ export const PRODUCT_CATEGORY_LABELS: Record<ProductCategory, string> = {
   insumos: 'Insumos',
   servicios: 'Servicios',
   moldes: 'Moldes',
+  bizcochado: 'Bizcochado',
+  final: 'Final',
 };
 
 export const MONTH_NAMES: Record<string, string> = {

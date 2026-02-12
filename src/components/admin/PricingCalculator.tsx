@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -7,7 +7,8 @@ import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
-import { Settings, Save, Plus, Trash2, Loader2 } from 'lucide-react';
+import { Settings, Save, Plus, Trash2, Loader2, ImagePlus, X } from 'lucide-react';
+import { ProductCategory } from '@/types/database';
 
 const CATEGORIAS = [
   'Taza',
@@ -29,6 +30,8 @@ interface PricingConfig {
   pesoBidon: number;
   margenDefault: number;
   costoManoObraDefault: number;
+  costoHorneadoDefault: number;
+  costoEsmaltadoDefault: number;
 }
 
 interface ProductCost {
@@ -38,6 +41,14 @@ interface ProductCost {
   pesoGramos: number;
   costoManoObra: number;
   margen: number;
+  image_url: string | null;
+  // Etapa 2: Bizcochado
+  costoHorneado1: number;
+  margenBizcochado: number;
+  // Etapa 3: Final
+  costoEsmaltado: number;
+  costoHorneado2: number;
+  margenFinal: number;
 }
 
 const defaultConfig: PricingConfig = {
@@ -45,21 +56,24 @@ const defaultConfig: PricingConfig = {
   pesoBidon: 9000,
   margenDefault: 50,
   costoManoObraDefault: 1500,
+  costoHorneadoDefault: 0,
+  costoEsmaltadoDefault: 0,
 };
 
 const formatCurrency = (value: number) => {
-  return new Intl.NumberFormat('es-AR', {
-    style: 'currency',
-    currency: 'ARS',
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
-  }).format(value);
+  return `$${Math.round(value).toLocaleString('es-AR')}`;
 };
+
+// Select all text on focus
+const selectOnFocus = (e: React.FocusEvent<HTMLInputElement>) => e.target.select();
 
 export default function PricingCalculator() {
   const [config, setConfig] = useState<PricingConfig>(defaultConfig);
   const [products, setProducts] = useState<ProductCost[]>([]);
   const [syncing, setSyncing] = useState(false);
+  const [uploadingImage, setUploadingImage] = useState<string | null>(null);
+  const imageInputRef = useRef<HTMLInputElement>(null);
+  const [activeImageProductId, setActiveImageProductId] = useState<string | null>(null);
   const { toast } = useToast();
 
   // Cargar configuración y productos guardados
@@ -77,7 +91,18 @@ export default function PricingCalculator() {
     const savedProducts = localStorage.getItem(PRODUCTS_STORAGE_KEY);
     if (savedProducts) {
       try {
-        setProducts(JSON.parse(savedProducts));
+        const raw: ProductCost[] = JSON.parse(savedProducts);
+        // Migrar productos que no tienen los campos nuevos
+        const migrated = raw.map(p => ({
+          ...p,
+          image_url: p.image_url ?? null,
+          costoHorneado1: p.costoHorneado1 ?? 0,
+          margenBizcochado: p.margenBizcochado ?? p.margen ?? config.margenDefault,
+          costoEsmaltado: p.costoEsmaltado ?? 0,
+          costoHorneado2: p.costoHorneado2 ?? 0,
+          margenFinal: p.margenFinal ?? p.margen ?? config.margenDefault,
+        }));
+        setProducts(migrated);
       } catch {
         // Sin productos
       }
@@ -87,55 +112,125 @@ export default function PricingCalculator() {
   // Guardar configuración
   const saveConfig = () => {
     localStorage.setItem(CONFIG_STORAGE_KEY, JSON.stringify(config));
+    toast({ title: 'Configuración guardada' });
   };
 
-  // Sincronizar productos con inventario (Supabase)
+  // Calcular costos de un producto en las 3 etapas
+  const calculateCosts = (product: ProductCost) => {
+    // Etapa 1: Molde (crudo)
+    const costoBarbotina = (config.precioBarbotina / config.pesoBidon) * product.pesoGramos;
+    const costoTotalMolde = costoBarbotina + product.costoManoObra;
+    const precioVentaMolde = costoTotalMolde * (1 + product.margen / 100);
+
+    // Etapa 2: Bizcochado
+    const costoTotalBizcochado = costoTotalMolde + product.costoHorneado1;
+    const precioVentaBizcochado = costoTotalBizcochado * (1 + product.margenBizcochado / 100);
+
+    // Etapa 3: Final
+    const costoTotalFinal = costoTotalBizcochado + product.costoEsmaltado + product.costoHorneado2;
+    const precioVentaFinal = costoTotalFinal * (1 + product.margenFinal / 100);
+
+    return {
+      costoBarbotina,
+      costoTotalMolde,
+      precioVentaMolde,
+      costoTotalBizcochado,
+      precioVentaBizcochado,
+      costoTotalFinal,
+      precioVentaFinal,
+    };
+  };
+
+  // Subir imagen
+  const handleImageUpload = async (productId: string, file: File) => {
+    if (file.size > 2 * 1024 * 1024) {
+      toast({ title: 'La imagen no puede superar 2MB', variant: 'destructive' });
+      return;
+    }
+
+    setUploadingImage(productId);
+    const fileExt = file.name.split('.').pop();
+    const fileName = `molde-${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExt}`;
+
+    const { error: uploadError } = await supabase.storage
+      .from('product-images')
+      .upload(fileName, file, {
+        cacheControl: '3600',
+        contentType: file.type,
+        upsert: false,
+      });
+
+    if (uploadError) {
+      toast({ title: 'Error al subir imagen', description: uploadError.message, variant: 'destructive' });
+      setUploadingImage(null);
+      return;
+    }
+
+    const { data: urlData } = supabase.storage.from('product-images').getPublicUrl(fileName);
+    updateProduct(productId, 'image_url', urlData.publicUrl);
+    setUploadingImage(null);
+  };
+
+  // Sincronizar productos con inventario (Supabase) - 3 etapas por producto
   const syncToInventory = async (productsToSync: ProductCost[]) => {
     setSyncing(true);
 
     try {
-      // Obtener todos los productos moldes actuales en inventario
-      const { data: existingMoldes } = await supabase
+      // Obtener todos los productos de costos actuales en inventario
+      const { data: existingItems } = await supabase
         .from('inventory')
         .select('id, description')
-        .eq('category', 'moldes');
+        .in('category', ['moldes', 'bizcochado', 'final']);
 
       const existingMap = new Map<string, string>();
-      existingMoldes?.forEach(item => {
-        // Extraer el pricing ID del campo description: "molde-{id}"
-        const match = item.description?.match(/^molde-(.+)$/);
-        if (match) {
-          existingMap.set(match[1], item.id);
+      existingItems?.forEach(item => {
+        if (item.description) {
+          existingMap.set(item.description, item.id);
         }
       });
 
-      // Upsert cada producto
+      const stages: { suffix: string; category: ProductCategory; getCost: (c: ReturnType<typeof calculateCosts>) => number; getPrice: (c: ReturnType<typeof calculateCosts>) => number; label: string }[] = [
+        { suffix: 'molde', category: 'moldes', getCost: c => c.costoTotalMolde, getPrice: c => c.precioVentaMolde, label: 'Molde' },
+        { suffix: 'bizcochado', category: 'bizcochado', getCost: c => c.costoTotalBizcochado, getPrice: c => c.precioVentaBizcochado, label: 'Bizcochado' },
+        { suffix: 'final', category: 'final', getCost: c => c.costoTotalFinal, getPrice: c => c.precioVentaFinal, label: 'Final' },
+      ];
+
+      // Upsert cada producto en cada etapa
       for (const product of productsToSync) {
         if (!product.nombre || product.pesoGramos <= 0) continue;
 
         const costs = calculateCosts(product);
-        const inventoryData = {
-          name: product.nombre,
-          description: `molde-${product.id}`,
-          quantity: 999,
-          unit: '1 unidad',
-          min_stock: 0,
-          price: Math.round(costs.precioVentaCrudo),
-          cost: Math.round(costs.costoTotalCrudo * 100) / 100,
-          for_sale: true,
-          category: 'moldes' as const,
-        };
 
-        const existingId = existingMap.get(product.id);
-        if (existingId) {
-          await supabase.from('inventory').update(inventoryData).eq('id', existingId);
-          existingMap.delete(product.id);
-        } else {
-          await supabase.from('inventory').insert(inventoryData);
+        for (const stage of stages) {
+          const descKey = `${stage.suffix}-${product.id}`;
+          const stageName = stage.suffix === 'molde'
+            ? product.nombre
+            : `${product.nombre} (${stage.label})`;
+
+          const inventoryData = {
+            name: stageName,
+            description: descKey,
+            quantity: 999,
+            unit: '1 unidad',
+            min_stock: 0,
+            price: Math.round(stage.getPrice(costs)),
+            cost: Math.round(stage.getCost(costs) * 100) / 100,
+            for_sale: true,
+            category: stage.category,
+            image_url: product.image_url || null,
+          };
+
+          const existingId = existingMap.get(descKey);
+          if (existingId) {
+            await supabase.from('inventory').update(inventoryData).eq('id', existingId);
+            existingMap.delete(descKey);
+          } else {
+            await supabase.from('inventory').insert(inventoryData);
+          }
         }
       }
 
-      // Eliminar moldes que ya no existen en la calculadora
+      // Eliminar items que ya no existen
       const idsToDelete = Array.from(existingMap.values());
       if (idsToDelete.length > 0) {
         await supabase.from('inventory').delete().in('id', idsToDelete);
@@ -168,12 +263,18 @@ export default function PricingCalculator() {
       pesoGramos: 0,
       costoManoObra: config.costoManoObraDefault,
       margen: config.margenDefault,
+      image_url: null,
+      costoHorneado1: config.costoHorneadoDefault,
+      margenBizcochado: config.margenDefault,
+      costoEsmaltado: config.costoEsmaltadoDefault,
+      costoHorneado2: config.costoHorneadoDefault,
+      margenFinal: config.margenDefault,
     };
     setProducts([...products, newProduct]);
   };
 
   // Actualizar producto
-  const updateProduct = (id: string, field: keyof ProductCost, value: string | number) => {
+  const updateProduct = (id: string, field: keyof ProductCost, value: string | number | null) => {
     setProducts(prev =>
       prev.map(p => (p.id === id ? { ...p, [field]: value } : p))
     );
@@ -183,25 +284,11 @@ export default function PricingCalculator() {
   const removeProduct = async (id: string) => {
     setProducts(prev => prev.filter(p => p.id !== id));
 
-    // Eliminar del inventario por description match
+    // Eliminar las 3 etapas del inventario
     await supabase
       .from('inventory')
       .delete()
-      .eq('description', `molde-${id}`)
-      .eq('category', 'moldes');
-  };
-
-  // Calcular costos de un producto
-  const calculateCosts = (product: ProductCost) => {
-    const costoBarbotina = (config.precioBarbotina / config.pesoBidon) * product.pesoGramos;
-    const costoTotalCrudo = costoBarbotina + product.costoManoObra;
-    const precioVentaCrudo = costoTotalCrudo * (1 + product.margen / 100);
-
-    return {
-      costoBarbotina,
-      costoTotalCrudo,
-      precioVentaCrudo,
-    };
+      .in('description', [`molde-${id}`, `bizcochado-${id}`, `final-${id}`]);
   };
 
   return (
@@ -215,12 +302,13 @@ export default function PricingCalculator() {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="space-y-2">
               <Label>Precio Barbotina (bidón)</Label>
               <Input
                 type="number"
                 value={config.precioBarbotina}
+                onFocus={selectOnFocus}
                 onChange={(e) => setConfig(p => ({ ...p, precioBarbotina: parseFloat(e.target.value) || 0 }))}
                 placeholder="11500"
               />
@@ -231,30 +319,53 @@ export default function PricingCalculator() {
               <Input
                 type="number"
                 value={config.pesoBidon}
+                onFocus={selectOnFocus}
                 onChange={(e) => setConfig(p => ({ ...p, pesoBidon: parseFloat(e.target.value) || 9000 }))}
                 placeholder="9000"
               />
               <p className="text-xs text-muted-foreground">Peso total del bidón</p>
             </div>
             <div className="space-y-2">
-              <Label>Costo Mano de Obra Default ($)</Label>
-              <Input
-                type="number"
-                value={config.costoManoObraDefault}
-                onChange={(e) => setConfig(p => ({ ...p, costoManoObraDefault: parseFloat(e.target.value) || 0 }))}
-                placeholder="1500"
-              />
-              <p className="text-xs text-muted-foreground">Valor por defecto</p>
-            </div>
-            <div className="space-y-2">
               <Label>Margen Default (%)</Label>
               <Input
                 type="number"
                 value={config.margenDefault}
+                onFocus={selectOnFocus}
                 onChange={(e) => setConfig(p => ({ ...p, margenDefault: parseFloat(e.target.value) || 0 }))}
                 placeholder="50"
               />
-              <p className="text-xs text-muted-foreground">Margen por defecto</p>
+            </div>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
+            <div className="space-y-2">
+              <Label>Costo Mano de Obra Default ($)</Label>
+              <Input
+                type="number"
+                value={config.costoManoObraDefault}
+                onFocus={selectOnFocus}
+                onChange={(e) => setConfig(p => ({ ...p, costoManoObraDefault: parseFloat(e.target.value) || 0 }))}
+                placeholder="1500"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Costo Horneado Default ($)</Label>
+              <Input
+                type="number"
+                value={config.costoHorneadoDefault}
+                onFocus={selectOnFocus}
+                onChange={(e) => setConfig(p => ({ ...p, costoHorneadoDefault: parseFloat(e.target.value) || 0 }))}
+                placeholder="0"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Costo Esmaltado Default ($)</Label>
+              <Input
+                type="number"
+                value={config.costoEsmaltadoDefault}
+                onFocus={selectOnFocus}
+                onChange={(e) => setConfig(p => ({ ...p, costoEsmaltadoDefault: parseFloat(e.target.value) || 0 }))}
+                placeholder="0"
+              />
             </div>
           </div>
           <Button onClick={saveConfig} className="mt-4" variant="outline">
@@ -277,18 +388,40 @@ export default function PricingCalculator() {
           </div>
         </CardHeader>
         <CardContent>
+          {/* Hidden file input for images */}
+          <input
+            ref={imageInputRef}
+            type="file"
+            accept="image/jpeg,image/png,image/webp"
+            className="hidden"
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (file && activeImageProductId) {
+                handleImageUpload(activeImageProductId, file);
+              }
+              e.target.value = '';
+            }}
+          />
+
           <div className="rounded-lg border overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow>
+                  <TableHead className="min-w-[60px]">Imagen</TableHead>
                   <TableHead className="min-w-[150px]">Producto</TableHead>
                   <TableHead className="min-w-[120px]">Categoría</TableHead>
-                  <TableHead className="min-w-[100px] text-center">Peso (g)</TableHead>
-                  <TableHead className="min-w-[120px] text-right">Costo Barbotina</TableHead>
-                  <TableHead className="min-w-[130px] text-center">Mano de Obra ($)</TableHead>
-                  <TableHead className="min-w-[120px] text-right">Costo Total</TableHead>
-                  <TableHead className="min-w-[100px] text-center">Margen (%)</TableHead>
-                  <TableHead className="min-w-[130px] text-right">Precio Venta</TableHead>
+                  <TableHead className="min-w-[80px] text-center">Peso (g)</TableHead>
+                  <TableHead className="min-w-[100px] text-center">M. Obra ($)</TableHead>
+                  <TableHead className="min-w-[100px] text-right bg-blue-50 dark:bg-blue-950/30">Costo Molde</TableHead>
+                  <TableHead className="min-w-[70px] text-center bg-blue-50 dark:bg-blue-950/30">%</TableHead>
+                  <TableHead className="min-w-[110px] text-right bg-blue-50 dark:bg-blue-950/30">Venta Molde</TableHead>
+                  <TableHead className="min-w-[100px] text-center bg-amber-50 dark:bg-amber-950/30">Horneado ($)</TableHead>
+                  <TableHead className="min-w-[70px] text-center bg-amber-50 dark:bg-amber-950/30">%</TableHead>
+                  <TableHead className="min-w-[110px] text-right bg-amber-50 dark:bg-amber-950/30">Venta Bizc.</TableHead>
+                  <TableHead className="min-w-[100px] text-center bg-green-50 dark:bg-green-950/30">Esmaltado ($)</TableHead>
+                  <TableHead className="min-w-[100px] text-center bg-green-50 dark:bg-green-950/30">Horneado ($)</TableHead>
+                  <TableHead className="min-w-[70px] text-center bg-green-50 dark:bg-green-950/30">%</TableHead>
+                  <TableHead className="min-w-[110px] text-right bg-green-50 dark:bg-green-950/30">Venta Final</TableHead>
                   <TableHead className="w-[50px]"></TableHead>
                 </TableRow>
               </TableHeader>
@@ -297,14 +430,48 @@ export default function PricingCalculator() {
                   const costs = calculateCosts(product);
                   return (
                     <TableRow key={product.id}>
+                      {/* Imagen */}
+                      <TableCell>
+                        {uploadingImage === product.id ? (
+                          <div className="w-10 h-10 flex items-center justify-center">
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                          </div>
+                        ) : product.image_url ? (
+                          <div className="relative w-10 h-10 group">
+                            <img src={product.image_url} alt="" className="w-10 h-10 object-contain rounded border bg-muted" />
+                            <button
+                              type="button"
+                              className="absolute -top-1 -right-1 bg-destructive text-destructive-foreground rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity"
+                              onClick={() => updateProduct(product.id, 'image_url', null)}
+                            >
+                              <X className="w-3 h-3" />
+                            </button>
+                          </div>
+                        ) : (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="h-10 w-10 p-0"
+                            onClick={() => {
+                              setActiveImageProductId(product.id);
+                              imageInputRef.current?.click();
+                            }}
+                          >
+                            <ImagePlus className="w-4 h-4 text-muted-foreground" />
+                          </Button>
+                        )}
+                      </TableCell>
+                      {/* Nombre */}
                       <TableCell>
                         <Input
                           value={product.nombre}
                           onChange={(e) => updateProduct(product.id, 'nombre', e.target.value)}
-                          placeholder="Nombre del producto"
+                          placeholder="Nombre"
                           className="h-8"
                         />
                       </TableCell>
+                      {/* Categoría */}
                       <TableCell>
                         <Select
                           value={product.categoria}
@@ -320,42 +487,108 @@ export default function PricingCalculator() {
                           </SelectContent>
                         </Select>
                       </TableCell>
+                      {/* Peso */}
                       <TableCell>
                         <Input
                           type="number"
                           value={product.pesoGramos || ''}
+                          onFocus={selectOnFocus}
                           onChange={(e) => updateProduct(product.id, 'pesoGramos', parseFloat(e.target.value) || 0)}
                           placeholder="0"
-                          className="h-8 text-center"
+                          className="h-8 text-center w-[80px]"
                         />
                       </TableCell>
-                      <TableCell className="text-right font-medium">
-                        {formatCurrency(costs.costoBarbotina)}
-                      </TableCell>
+                      {/* Mano de Obra */}
                       <TableCell>
                         <Input
                           type="number"
                           value={product.costoManoObra || ''}
+                          onFocus={selectOnFocus}
                           onChange={(e) => updateProduct(product.id, 'costoManoObra', parseFloat(e.target.value) || 0)}
                           placeholder="0"
-                          className="h-8 text-center"
+                          className="h-8 text-center w-[80px]"
                         />
                       </TableCell>
-                      <TableCell className="text-right font-medium">
-                        {formatCurrency(costs.costoTotalCrudo)}
+
+                      {/* === ETAPA 1: MOLDE === */}
+                      <TableCell className="text-right font-medium bg-blue-50/50 dark:bg-blue-950/20">
+                        {formatCurrency(costs.costoTotalMolde)}
                       </TableCell>
-                      <TableCell>
+                      <TableCell className="bg-blue-50/50 dark:bg-blue-950/20">
                         <Input
                           type="number"
                           value={product.margen || ''}
+                          onFocus={selectOnFocus}
                           onChange={(e) => updateProduct(product.id, 'margen', parseFloat(e.target.value) || 0)}
                           placeholder="50"
-                          className="h-8 text-center"
+                          className="h-8 text-center w-[60px]"
                         />
                       </TableCell>
-                      <TableCell className="text-right font-bold text-primary">
-                        {formatCurrency(costs.precioVentaCrudo)}
+                      <TableCell className="text-right font-bold text-blue-700 dark:text-blue-400 bg-blue-50/50 dark:bg-blue-950/20">
+                        {formatCurrency(costs.precioVentaMolde)}
                       </TableCell>
+
+                      {/* === ETAPA 2: BIZCOCHADO === */}
+                      <TableCell className="bg-amber-50/50 dark:bg-amber-950/20">
+                        <Input
+                          type="number"
+                          value={product.costoHorneado1 || ''}
+                          onFocus={selectOnFocus}
+                          onChange={(e) => updateProduct(product.id, 'costoHorneado1', parseFloat(e.target.value) || 0)}
+                          placeholder="0"
+                          className="h-8 text-center w-[80px]"
+                        />
+                      </TableCell>
+                      <TableCell className="bg-amber-50/50 dark:bg-amber-950/20">
+                        <Input
+                          type="number"
+                          value={product.margenBizcochado || ''}
+                          onFocus={selectOnFocus}
+                          onChange={(e) => updateProduct(product.id, 'margenBizcochado', parseFloat(e.target.value) || 0)}
+                          placeholder="50"
+                          className="h-8 text-center w-[60px]"
+                        />
+                      </TableCell>
+                      <TableCell className="text-right font-bold text-amber-700 dark:text-amber-400 bg-amber-50/50 dark:bg-amber-950/20">
+                        {formatCurrency(costs.precioVentaBizcochado)}
+                      </TableCell>
+
+                      {/* === ETAPA 3: FINAL === */}
+                      <TableCell className="bg-green-50/50 dark:bg-green-950/20">
+                        <Input
+                          type="number"
+                          value={product.costoEsmaltado || ''}
+                          onFocus={selectOnFocus}
+                          onChange={(e) => updateProduct(product.id, 'costoEsmaltado', parseFloat(e.target.value) || 0)}
+                          placeholder="0"
+                          className="h-8 text-center w-[80px]"
+                        />
+                      </TableCell>
+                      <TableCell className="bg-green-50/50 dark:bg-green-950/20">
+                        <Input
+                          type="number"
+                          value={product.costoHorneado2 || ''}
+                          onFocus={selectOnFocus}
+                          onChange={(e) => updateProduct(product.id, 'costoHorneado2', parseFloat(e.target.value) || 0)}
+                          placeholder="0"
+                          className="h-8 text-center w-[80px]"
+                        />
+                      </TableCell>
+                      <TableCell className="bg-green-50/50 dark:bg-green-950/20">
+                        <Input
+                          type="number"
+                          value={product.margenFinal || ''}
+                          onFocus={selectOnFocus}
+                          onChange={(e) => updateProduct(product.id, 'margenFinal', parseFloat(e.target.value) || 0)}
+                          placeholder="50"
+                          className="h-8 text-center w-[60px]"
+                        />
+                      </TableCell>
+                      <TableCell className="text-right font-bold text-green-700 dark:text-green-400 bg-green-50/50 dark:bg-green-950/20">
+                        {formatCurrency(costs.precioVentaFinal)}
+                      </TableCell>
+
+                      {/* Eliminar */}
                       <TableCell>
                         <Button
                           size="sm"
@@ -371,7 +604,7 @@ export default function PricingCalculator() {
                 })}
                 {products.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={9} className="text-center text-muted-foreground py-8">
+                    <TableCell colSpan={16} className="text-center text-muted-foreground py-8">
                       No hay productos. Haz clic en "Agregar Producto" para comenzar.
                     </TableCell>
                   </TableRow>
@@ -380,18 +613,34 @@ export default function PricingCalculator() {
             </Table>
           </div>
 
-          {/* Fórmula explicada */}
-          <div className="mt-6 p-4 bg-muted/50 rounded-lg">
-            <h4 className="font-medium mb-2">Fórmulas utilizadas:</h4>
-            <ul className="text-sm text-muted-foreground space-y-1">
-              <li><strong>Costo Barbotina</strong> = (Precio Barbotina ÷ Peso Bidón) × Peso Pieza</li>
-              <li><strong>Costo Total Crudo</strong> = Costo Barbotina + Costo Mano de Obra</li>
-              <li><strong>Precio Venta Crudo</strong> = Costo Total × (1 + Margen%)</li>
-            </ul>
-            <p className="text-xs text-muted-foreground mt-3">
-              Precio barbotina por gramo: {formatCurrency(config.precioBarbotina / config.pesoBidon)} / gramo
-            </p>
+          {/* Leyenda de etapas */}
+          <div className="mt-6 grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="p-3 bg-blue-50 dark:bg-blue-950/30 rounded-lg border border-blue-200 dark:border-blue-900">
+              <h4 className="font-medium text-blue-700 dark:text-blue-400 mb-1">Etapa 1: Molde</h4>
+              <ul className="text-xs text-muted-foreground space-y-0.5">
+                <li>Costo = Barbotina + Mano de Obra</li>
+                <li>Precio = Costo × (1 + Margen%)</li>
+              </ul>
+            </div>
+            <div className="p-3 bg-amber-50 dark:bg-amber-950/30 rounded-lg border border-amber-200 dark:border-amber-900">
+              <h4 className="font-medium text-amber-700 dark:text-amber-400 mb-1">Etapa 2: Bizcochado</h4>
+              <ul className="text-xs text-muted-foreground space-y-0.5">
+                <li>Costo = Costo Molde + Horneado</li>
+                <li>Precio = Costo × (1 + Margen%)</li>
+              </ul>
+            </div>
+            <div className="p-3 bg-green-50 dark:bg-green-950/30 rounded-lg border border-green-200 dark:border-green-900">
+              <h4 className="font-medium text-green-700 dark:text-green-400 mb-1">Etapa 3: Final</h4>
+              <ul className="text-xs text-muted-foreground space-y-0.5">
+                <li>Costo = Costo Bizc. + Esmaltado + Horneado</li>
+                <li>Precio = Costo × (1 + Margen%)</li>
+              </ul>
+            </div>
           </div>
+
+          <p className="text-xs text-muted-foreground mt-3">
+            Precio barbotina por gramo: {formatCurrency(config.precioBarbotina / config.pesoBidon)} / gramo
+          </p>
         </CardContent>
       </Card>
     </div>

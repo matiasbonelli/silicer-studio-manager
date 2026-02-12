@@ -24,7 +24,7 @@ const formatCurrency = (amount: number): string => {
 };
 
 // Categorías de productos en ventas
-type ProductCategory = 'all' | 'insumos' | 'servicios' | 'moldes';
+type ProductCategory = 'all' | 'insumos' | 'servicios' | 'moldes' | 'bizcochado' | 'final';
 
 interface CartItem {
   inventory: InventoryItem;
@@ -587,39 +587,18 @@ export default function SalesModule() {
                   className="pl-10"
                 />
               </div>
-              <div className="flex gap-1 bg-muted p-1 rounded-lg">
-                <Button
-                  size="sm"
-                  variant={categoryFilter === 'all' ? 'default' : 'ghost'}
-                  onClick={() => setCategoryFilter('all')}
-                  className="text-xs"
-                >
-                  Todos
-                </Button>
-                <Button
-                  size="sm"
-                  variant={categoryFilter === 'insumos' ? 'default' : 'ghost'}
-                  onClick={() => setCategoryFilter('insumos')}
-                  className="text-xs"
-                >
-                  Insumos
-                </Button>
-                <Button
-                  size="sm"
-                  variant={categoryFilter === 'servicios' ? 'default' : 'ghost'}
-                  onClick={() => setCategoryFilter('servicios')}
-                  className="text-xs"
-                >
-                  Servicios
-                </Button>
-                <Button
-                  size="sm"
-                  variant={categoryFilter === 'moldes' ? 'default' : 'ghost'}
-                  onClick={() => setCategoryFilter('moldes')}
-                  className="text-xs"
-                >
-                  Moldes
-                </Button>
+              <div className="flex gap-1 bg-muted p-1 rounded-lg flex-wrap">
+                {([['all', 'Todos'], ['insumos', 'Insumos'], ['servicios', 'Servicios'], ['moldes', 'Moldes'], ['bizcochado', 'Bizc.'], ['final', 'Final']] as const).map(([value, label]) => (
+                  <Button
+                    key={value}
+                    size="sm"
+                    variant={categoryFilter === value ? 'default' : 'ghost'}
+                    onClick={() => setCategoryFilter(value)}
+                    className="text-xs"
+                  >
+                    {label}
+                  </Button>
+                ))}
               </div>
             </div>
 
@@ -636,14 +615,16 @@ export default function SalesModule() {
                     )}
                     <div className="flex items-start justify-between gap-2">
                       <h4 className="font-medium truncate flex-1">{item.name}</h4>
-                      {item.category === 'moldes' && (
-                        <Badge variant="secondary" className="text-xs shrink-0">Molde</Badge>
+                      {item.category && ['moldes', 'bizcochado', 'final'].includes(item.category) && (
+                        <Badge variant="secondary" className="text-xs shrink-0">
+                          {item.category === 'moldes' ? 'Molde' : item.category === 'bizcochado' ? 'Bizc.' : 'Final'}
+                        </Badge>
                       )}
                     </div>
-                    {item.category !== 'moldes' && item.description && (
+                    {item.category && !['moldes', 'bizcochado', 'final'].includes(item.category) && item.description && (
                       <p className="text-xs text-muted-foreground line-clamp-2 mt-1">{item.description}</p>
                     )}
-                    {item.category === 'moldes' ? (
+                    {item.category && ['moldes', 'bizcochado', 'final'].includes(item.category) ? (
                       <p className="text-sm text-muted-foreground mt-1">Disponible</p>
                     ) : (
                       <div className="mt-1">
@@ -661,8 +642,8 @@ export default function SalesModule() {
               ))}
               {filteredProducts.length === 0 && (
                 <p className="col-span-full text-center text-muted-foreground py-8">
-                  {categoryFilter === 'moldes'
-                    ? 'No hay moldes. Agrega productos en la Calculadora de Precios.'
+                  {['moldes', 'bizcochado', 'final'].includes(categoryFilter)
+                    ? 'No hay productos. Agrega productos en la Calculadora de Precios y guarda.'
                     : categoryFilter === 'servicios'
                       ? 'No hay servicios disponibles'
                       : 'No hay productos disponibles para venta'}
