@@ -66,6 +66,7 @@ export default function InventoryManager() {
     ? Math.round(unitCost * (1 + formData.margin_percent / 100))
     : 0;
   const [inventoryTab, setInventoryTab] = useState('all');
+  const [categoryFilter, setCategoryFilter] = useState<ProductCategory | 'all'>('all');
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [uploadingImage, setUploadingImage] = useState(false);
@@ -230,12 +231,13 @@ export default function InventoryManager() {
 
   const filteredItems = items.filter(item => {
     const matchesSearch = item.name.toLowerCase().includes(search.toLowerCase());
+    const matchesCategory = categoryFilter === 'all' || item.category === categoryFilter;
     if (inventoryTab === 'for_sale') {
-      return matchesSearch && item.for_sale;
+      return matchesSearch && matchesCategory && item.for_sale;
     } else if (inventoryTab === 'general') {
-      return matchesSearch && !item.for_sale;
+      return matchesSearch && matchesCategory && !item.for_sale;
     }
-    return matchesSearch; // 'all' tab
+    return matchesSearch && matchesCategory; // 'all' tab
   });
 
   if (loading) {
@@ -270,14 +272,29 @@ export default function InventoryManager() {
         </div>
       </Tabs>
 
-      <div className="relative">
-        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
-        <Input
-          placeholder="Buscar producto..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="pl-10"
-        />
+      <div className="flex flex-col sm:flex-row gap-3">
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
+          <Input
+            placeholder="Buscar producto..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="pl-10"
+          />
+        </div>
+        <div className="flex gap-1 bg-muted p-1 rounded-lg">
+          {([['all', 'Todos'], ['insumos', 'Insumos'], ['servicios', 'Servicios'], ['moldes', 'Moldes'], ['bizcochado', 'Bizc.'], ['final', 'Final']] as const).map(([value, label]) => (
+            <Button
+              key={value}
+              size="sm"
+              variant={categoryFilter === value ? 'default' : 'ghost'}
+              onClick={() => setCategoryFilter(value)}
+              className="text-xs"
+            >
+              {label}
+            </Button>
+          ))}
+        </div>
       </div>
 
       <div className="rounded-lg border bg-card">

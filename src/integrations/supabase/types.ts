@@ -85,11 +85,13 @@ export type Database = {
       }
       inventory: {
         Row: {
+          category: string | null
           cost: number | null
           created_at: string
           description: string | null
           for_sale: boolean | null
           id: string
+          image_url: string | null
           margin_percent: number | null
           min_stock: number
           name: string
@@ -99,11 +101,13 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          category?: string | null
           cost?: number | null
           created_at?: string
           description?: string | null
           for_sale?: boolean | null
           id?: string
+          image_url?: string | null
           margin_percent?: number | null
           min_stock?: number
           name: string
@@ -113,11 +117,13 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          category?: string | null
           cost?: number | null
           created_at?: string
           description?: string | null
           for_sale?: boolean | null
           id?: string
+          image_url?: string | null
           margin_percent?: number | null
           min_stock?: number
           name?: string
