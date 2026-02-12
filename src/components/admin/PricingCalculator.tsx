@@ -1,11 +1,13 @@
 import { useState, useEffect } from 'react';
+import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Settings, Save, Plus, Trash2 } from 'lucide-react';
+import { useToast } from '@/hooks/use-toast';
+import { Settings, Save, Plus, Trash2, Loader2 } from 'lucide-react';
 
 const CATEGORIAS = [
   'Taza',
@@ -57,6 +59,8 @@ const formatCurrency = (value: number) => {
 export default function PricingCalculator() {
   const [config, setConfig] = useState<PricingConfig>(defaultConfig);
   const [products, setProducts] = useState<ProductCost[]>([]);
+  const [syncing, setSyncing] = useState(false);
+  const { toast } = useToast();
 
   // Cargar configuración y productos guardados
   useEffect(() => {
@@ -85,9 +89,74 @@ export default function PricingCalculator() {
     localStorage.setItem(CONFIG_STORAGE_KEY, JSON.stringify(config));
   };
 
-  // Guardar productos
-  const saveProducts = () => {
+  // Sincronizar productos con inventario (Supabase)
+  const syncToInventory = async (productsToSync: ProductCost[]) => {
+    setSyncing(true);
+
+    try {
+      // Obtener todos los productos moldes actuales en inventario
+      const { data: existingMoldes } = await supabase
+        .from('inventory')
+        .select('id, description')
+        .eq('category', 'moldes');
+
+      const existingMap = new Map<string, string>();
+      existingMoldes?.forEach(item => {
+        // Extraer el pricing ID del campo description: "molde-{id}"
+        const match = item.description?.match(/^molde-(.+)$/);
+        if (match) {
+          existingMap.set(match[1], item.id);
+        }
+      });
+
+      // Upsert cada producto
+      for (const product of productsToSync) {
+        if (!product.nombre || product.pesoGramos <= 0) continue;
+
+        const costs = calculateCosts(product);
+        const inventoryData = {
+          name: product.nombre,
+          description: `molde-${product.id}`,
+          quantity: 999,
+          unit: '1 unidad',
+          min_stock: 0,
+          price: Math.round(costs.precioVentaCrudo),
+          cost: Math.round(costs.costoTotalCrudo * 100) / 100,
+          for_sale: true,
+          category: 'moldes' as const,
+        };
+
+        const existingId = existingMap.get(product.id);
+        if (existingId) {
+          await supabase.from('inventory').update(inventoryData).eq('id', existingId);
+          existingMap.delete(product.id);
+        } else {
+          await supabase.from('inventory').insert(inventoryData);
+        }
+      }
+
+      // Eliminar moldes que ya no existen en la calculadora
+      const idsToDelete = Array.from(existingMap.values());
+      if (idsToDelete.length > 0) {
+        await supabase.from('inventory').delete().in('id', idsToDelete);
+      }
+
+      toast({ title: 'Productos guardados y sincronizados con inventario y ventas' });
+    } catch {
+      toast({
+        title: 'Error',
+        description: 'Se guardaron localmente pero hubo un error al sincronizar con inventario',
+        variant: 'destructive',
+      });
+    }
+
+    setSyncing(false);
+  };
+
+  // Guardar productos (localStorage + inventario)
+  const saveProducts = async () => {
     localStorage.setItem(PRODUCTS_STORAGE_KEY, JSON.stringify(products));
+    await syncToInventory(products);
   };
 
   // Agregar nuevo producto
@@ -110,9 +179,16 @@ export default function PricingCalculator() {
     );
   };
 
-  // Eliminar producto
-  const removeProduct = (id: string) => {
+  // Eliminar producto (también del inventario)
+  const removeProduct = async (id: string) => {
     setProducts(prev => prev.filter(p => p.id !== id));
+
+    // Eliminar del inventario por description match
+    await supabase
+      .from('inventory')
+      .delete()
+      .eq('description', `molde-${id}`)
+      .eq('category', 'moldes');
   };
 
   // Calcular costos de un producto
@@ -192,8 +268,8 @@ export default function PricingCalculator() {
         <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle>Calculadora de Precios - Productos</CardTitle>
           <div className="flex gap-2">
-            <Button onClick={saveProducts} variant="outline" size="sm">
-              <Save className="w-4 h-4 mr-2" /> Guardar Todo
+            <Button onClick={saveProducts} variant="outline" size="sm" disabled={syncing}>
+              {syncing ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Guardando...</> : <><Save className="w-4 h-4 mr-2" /> Guardar Todo</>}
             </Button>
             <Button onClick={addProduct} size="sm">
               <Plus className="w-4 h-4 mr-2" /> Agregar Producto

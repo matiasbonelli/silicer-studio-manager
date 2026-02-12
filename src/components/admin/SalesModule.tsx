@@ -23,42 +23,11 @@ const formatCurrency = (amount: number): string => {
   }).format(amount);
 };
 
-// Keys para localStorage de la calculadora de costos
-const PRICING_CONFIG_KEY = 'silicer-pricing-config';
-const PRICING_PRODUCTS_KEY = 'silicer-pricing-products';
-
 // Categorías de productos en ventas
 type ProductCategory = 'all' | 'insumos' | 'servicios' | 'moldes';
 
-interface PricingProduct {
-  id: string;
-  nombre: string;
-  categoria: string;
-  pesoGramos: number;
-  costoManoObra: number;
-  margen: number;
-}
-
-interface PricingConfig {
-  precioBarbotina: number;
-  pesoBidon: number;
-  margenDefault: number;
-  costoManoObraDefault: number;
-}
-
-// Producto unificado para ventas
-interface SaleProduct {
-  id: string;
-  name: string;
-  price: number;
-  quantity: number; // stock disponible
-  unit: string;
-  category: ProductCategory;
-  source: 'inventory' | 'moldes';
-}
-
 interface CartItem {
-  inventory: InventoryItem | SaleProduct;
+  inventory: InventoryItem;
   quantity: number;
 }
 
@@ -68,7 +37,6 @@ interface SaleWithItems extends Sale {
 
 export default function SalesModule() {
   const [inventory, setInventory] = useState<InventoryItem[]>([]);
-  const [moldesProducts, setMoldesProducts] = useState<SaleProduct[]>([]);
   const [students, setStudents] = useState<Student[]>([]);
   const [cart, setCart] = useState<CartItem[]>([]);
   const [selectedStudent, setSelectedStudent] = useState<string>('');
@@ -150,43 +118,6 @@ export default function SalesModule() {
     window.open(data.signedUrl, '_blank');
   };
 
-  // Cargar productos de la calculadora de costos desde localStorage
-  const loadMoldesProducts = () => {
-    try {
-      const savedProducts = localStorage.getItem(PRICING_PRODUCTS_KEY);
-      const savedConfig = localStorage.getItem(PRICING_CONFIG_KEY);
-
-      if (savedProducts) {
-        const products: PricingProduct[] = JSON.parse(savedProducts);
-        const config: PricingConfig = savedConfig
-          ? JSON.parse(savedConfig)
-          : { precioBarbotina: 11500, pesoBidon: 9000, margenDefault: 50, costoManoObraDefault: 1500 };
-
-        // Convertir productos de calculadora a formato de venta
-        const moldes: SaleProduct[] = products.map(p => {
-          // Calcular precio usando la misma fórmula de la calculadora
-          const costoBarbotina = (config.precioBarbotina / config.pesoBidon) * p.pesoGramos;
-          const costoTotal = costoBarbotina + p.costoManoObra;
-          const precioVenta = Math.round(costoTotal * (1 + p.margen / 100));
-
-          return {
-            id: `molde-${p.id}`,
-            name: p.nombre || 'Sin nombre',
-            price: precioVenta,
-            quantity: 999, // Stock ilimitado para moldes
-            unit: 'unidad',
-            category: 'moldes' as ProductCategory,
-            source: 'moldes' as const,
-          };
-        }).filter(p => p.name && p.price > 0);
-
-        setMoldesProducts(moldes);
-      }
-    } catch {
-      // Error parsing localStorage
-    }
-  };
-
   // Get available years for filter (current year and 2 years back)
   const currentYear = new Date().getFullYear();
   const availableYears = [currentYear, currentYear - 1, currentYear - 2];
@@ -228,25 +159,13 @@ export default function SalesModule() {
       if (invRes.data) setInventory(invRes.data as InventoryItem[]);
       if (studRes.data) setStudents(studRes.data as Student[]);
 
-      // Cargar moldes de la calculadora
-      loadMoldesProducts();
-
       await fetchSalesHistory();
       setLoading(false);
     };
     fetchData();
-
-    // Escuchar cambios en localStorage para actualizar moldes
-    const handleStorageChange = (e: StorageEvent) => {
-      if (e.key === PRICING_PRODUCTS_KEY || e.key === PRICING_CONFIG_KEY) {
-        loadMoldesProducts();
-      }
-    };
-    window.addEventListener('storage', handleStorageChange);
-    return () => window.removeEventListener('storage', handleStorageChange);
   }, []);
 
-  const addToCart = (item: InventoryItem | SaleProduct) => {
+  const addToCart = (item: InventoryItem) => {
     const existing = cart.find(c => c.inventory.id === item.id);
     if (existing) {
       if (existing.quantity >= item.quantity) {
@@ -271,9 +190,7 @@ export default function SalesModule() {
         if (c.inventory.id === itemId) {
           const newQty = c.quantity + delta;
           if (newQty <= 0) return null;
-          // Moldes no tienen límite de stock
-          const isMolde = 'source' in c.inventory && c.inventory.source === 'moldes';
-          if (!isMolde && newQty > c.inventory.quantity) {
+          if (newQty > c.inventory.quantity) {
             toast({
               title: 'Stock insuficiente',
               variant: 'destructive',
@@ -328,16 +245,14 @@ export default function SalesModule() {
       return;
     }
 
-    // Create sale items - solo para items de inventario (no moldes)
-    const inventoryItems = cart.filter(c => !('source' in c.inventory) || c.inventory.source !== 'moldes');
-    const saleItems = inventoryItems.map(c => ({
+    // Create sale items
+    const saleItems = cart.map(c => ({
       sale_id: saleData.id,
       inventory_id: c.inventory.id,
       quantity: c.quantity,
       unit_price: c.inventory.price,
     }));
 
-    // Solo insertar si hay items de inventario
     let itemsError = null;
     if (saleItems.length > 0) {
       const result = await supabase.from('sale_items').insert(saleItems);
@@ -558,22 +473,13 @@ export default function SalesModule() {
     }
   };
 
-  // Combinar productos de inventario y moldes
-  const allProducts: (InventoryItem | SaleProduct)[] = [
-    // Inventario - usar la categoría del producto o 'insumos' por defecto
-    ...inventory.filter(item => item.quantity > 0 && item.for_sale).map(item => ({
-      ...item,
-      category: (item.category || 'insumos') as ProductCategory,
-      source: 'inventory' as const,
-    })),
-    // Moldes de la calculadora
-    ...moldesProducts,
-  ];
+  // Productos disponibles para venta
+  const allProducts = inventory.filter(item => item.quantity > 0 && item.for_sale);
 
   // Filtrar por búsqueda y categoría
   const filteredProducts = allProducts.filter(item => {
     const matchesSearch = item.name.toLowerCase().includes(search.toLowerCase());
-    const matchesCategory = categoryFilter === 'all' || ('category' in item && item.category === categoryFilter);
+    const matchesCategory = categoryFilter === 'all' || item.category === categoryFilter;
     return matchesSearch && matchesCategory;
   });
 
@@ -725,19 +631,19 @@ export default function SalesModule() {
                   onClick={() => addToCart(item)}
                 >
                   <CardContent className="p-4">
-                    {'image_url' in item && item.image_url && (
+                    {item.image_url && (
                       <img src={item.image_url} alt={item.name} className="w-full h-24 object-contain rounded-md mb-2 bg-muted" />
                     )}
                     <div className="flex items-start justify-between gap-2">
                       <h4 className="font-medium truncate flex-1">{item.name}</h4>
-                      {'category' in item && item.category === 'moldes' && (
+                      {item.category === 'moldes' && (
                         <Badge variant="secondary" className="text-xs shrink-0">Molde</Badge>
                       )}
                     </div>
-                    {'description' in item && item.description && (
+                    {item.category !== 'moldes' && item.description && (
                       <p className="text-xs text-muted-foreground line-clamp-2 mt-1">{item.description}</p>
                     )}
-                    {'source' in item && item.source === 'moldes' ? (
+                    {item.category === 'moldes' ? (
                       <p className="text-sm text-muted-foreground mt-1">Disponible</p>
                     ) : (
                       <div className="mt-1">
