@@ -142,6 +142,7 @@ export default function PricingCalculator() {
   };
 
   // Calcular costos de un producto en las 3 etapas
+  // Cada etapa suma su precio de venta sobre la etapa anterior
   const calculateCosts = (product: ProductCost) => {
     // Etapa 1: Molde (crudo)
     const costoBarbotina = (config.precioBarbotina / config.pesoBidon) * product.pesoGramos;
@@ -151,13 +152,14 @@ export default function PricingCalculator() {
     // Costo de horneado según categoría
     const horneadoCost = getHorneadoCost(product);
 
-    // Etapa 2: Bizcochado
+    // Etapa 2: Bizcochado = Precio Venta Etapa 1 + costo horneado con su margen
     const costoTotalBizcochado = costoTotalMolde + horneadoCost;
-    const precioVentaBizcochado = costoTotalBizcochado * (1 + product.margenBizcochado / 100);
+    const precioVentaBizcochado = precioVentaMolde + horneadoCost * (1 + product.margenBizcochado / 100);
 
-    // Etapa 3: Final (usa el mismo costo de horneado para la segunda cocción)
+    // Etapa 3: Final = Precio Venta Etapa 2 + (esmaltado + horneado2) con su margen
+    const costoEtapa3 = product.costoEsmaltado + horneadoCost;
     const costoTotalFinal = costoTotalBizcochado + product.costoEsmaltado + horneadoCost;
-    const precioVentaFinal = costoTotalFinal * (1 + product.margenFinal / 100);
+    const precioVentaFinal = precioVentaBizcochado + costoEtapa3 * (1 + product.margenFinal / 100);
 
     return {
       costoBarbotina,
