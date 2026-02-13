@@ -90,48 +90,139 @@ export default function PricingCalculator() {
   const [config, setConfig] = useState<PricingConfig>(defaultConfig);
   const [products, setProducts] = useState<ProductCost[]>([]);
   const [syncing, setSyncing] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [uploadingImage, setUploadingImage] = useState<string | null>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
   const [activeImageProductId, setActiveImageProductId] = useState<string | null>(null);
   const { toast } = useToast();
 
-  // Cargar configuración y productos guardados
+  // Cargar configuración y productos desde Supabase (fallback a localStorage)
   useEffect(() => {
-    const savedConfig = localStorage.getItem(CONFIG_STORAGE_KEY);
-    if (savedConfig) {
-      try {
-        const parsed = JSON.parse(savedConfig);
-        setConfig({ ...defaultConfig, ...parsed });
-      } catch {
-        // Usar default
-      }
-    }
+    const loadData = async () => {
+      setLoading(true);
+      let configLoaded = false;
+      let productsLoaded = false;
 
-    const savedProducts = localStorage.getItem(PRODUCTS_STORAGE_KEY);
-    if (savedProducts) {
       try {
-        const raw: ProductCost[] = JSON.parse(savedProducts);
-        // Migrar productos que no tienen los campos nuevos
-        const migrated = raw.map(p => ({
-          ...p,
-          image_url: p.image_url ?? null,
-          costoHorneado1: p.costoHorneado1 ?? 0,
-          margenBizcochado: p.margenBizcochado ?? p.margen ?? config.margenDefault,
-          costoEsmaltado: p.costoEsmaltado ?? 0,
-          costoHorneado2: p.costoHorneado2 ?? 0,
-          margenFinal: p.margenFinal ?? p.margen ?? config.margenDefault,
-        }));
-        setProducts(migrated);
+        // Intentar cargar config desde Supabase
+        const { data: configData } = await supabase
+          .from('pricing_config')
+          .select('*')
+          .limit(1)
+          .maybeSingle();
+
+        if (configData) {
+          setConfig({
+            precioBarbotina: Number(configData.precio_barbotina),
+            pesoBidon: Number(configData.peso_bidon),
+            margenDefault: Number(configData.margen_default),
+            costoManoObraDefault: Number(configData.costo_mano_obra_default),
+            costoHorneadoDefault: Number(configData.costo_horneado_default),
+            costoEsmaltadoDefault: Number(configData.costo_esmaltado_default),
+            precioEsmalteKg: Number(configData.precio_esmalte_kg),
+            porcentajeEsmalte: Number(configData.porcentaje_esmalte),
+          });
+          configLoaded = true;
+        }
+
+        // Intentar cargar productos desde Supabase
+        const { data: productsData } = await supabase
+          .from('pricing_products')
+          .select('*')
+          .order('sort_order', { ascending: true });
+
+        if (productsData && productsData.length > 0) {
+          setProducts(productsData.map(p => ({
+            id: p.id,
+            nombre: p.nombre,
+            categoria: p.categoria,
+            pesoGramos: Number(p.peso_gramos),
+            costoManoObra: Number(p.costo_mano_obra),
+            margen: Number(p.margen),
+            image_url: p.image_url,
+            costoHorneado1: Number(p.costo_horneado1),
+            margenBizcochado: Number(p.margen_bizcochado),
+            costoEsmaltado: Number(p.costo_esmaltado),
+            costoHorneado2: Number(p.costo_horneado2),
+            margenFinal: Number(p.margen_final),
+          })));
+          productsLoaded = true;
+        }
       } catch {
-        // Sin productos
+        // Supabase no disponible, usar localStorage
       }
-    }
+
+      // Fallback a localStorage si Supabase no tenía datos
+      if (!configLoaded) {
+        const savedConfig = localStorage.getItem(CONFIG_STORAGE_KEY);
+        if (savedConfig) {
+          try {
+            const parsed = JSON.parse(savedConfig);
+            setConfig({ ...defaultConfig, ...parsed });
+          } catch {
+            // Usar default
+          }
+        }
+      }
+
+      if (!productsLoaded) {
+        const savedProducts = localStorage.getItem(PRODUCTS_STORAGE_KEY);
+        if (savedProducts) {
+          try {
+            const raw: ProductCost[] = JSON.parse(savedProducts);
+            const migrated = raw.map(p => ({
+              ...p,
+              image_url: p.image_url ?? null,
+              costoHorneado1: p.costoHorneado1 ?? 0,
+              margenBizcochado: p.margenBizcochado ?? p.margen ?? defaultConfig.margenDefault,
+              costoEsmaltado: p.costoEsmaltado ?? 0,
+              costoHorneado2: p.costoHorneado2 ?? 0,
+              margenFinal: p.margenFinal ?? p.margen ?? defaultConfig.margenDefault,
+            }));
+            setProducts(migrated);
+          } catch {
+            // Sin productos
+          }
+        }
+      }
+
+      setLoading(false);
+    };
+
+    loadData();
   }, []);
 
-  // Guardar configuración
-  const saveConfig = () => {
+  // Guardar configuración en Supabase + localStorage
+  const saveConfig = async () => {
+    // Siempre guardar en localStorage como cache
     localStorage.setItem(CONFIG_STORAGE_KEY, JSON.stringify(config));
-    toast({ title: 'Configuración guardada' });
+
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('No autenticado');
+
+      const configRow = {
+        user_id: user.id,
+        precio_barbotina: config.precioBarbotina,
+        peso_bidon: config.pesoBidon,
+        margen_default: config.margenDefault,
+        costo_mano_obra_default: config.costoManoObraDefault,
+        costo_horneado_default: config.costoHorneadoDefault,
+        costo_esmaltado_default: config.costoEsmaltadoDefault,
+        precio_esmalte_kg: config.precioEsmalteKg,
+        porcentaje_esmalte: config.porcentajeEsmalte,
+      };
+
+      // Upsert: si ya existe una fila para este user, la actualiza
+      const { error } = await supabase
+        .from('pricing_config')
+        .upsert(configRow, { onConflict: 'user_id' });
+
+      if (error) throw error;
+      toast({ title: 'Configuración guardada' });
+    } catch {
+      toast({ title: 'Configuración guardada localmente', description: 'No se pudo sincronizar con la nube', variant: 'destructive' });
+    }
   };
 
   // Calcular el costo de horneado efectivo para un producto según su categoría
@@ -289,16 +380,51 @@ export default function PricingCalculator() {
     setSyncing(false);
   };
 
-  // Guardar productos (localStorage + inventario)
+  // Guardar productos en Supabase + localStorage + sincronizar inventario
   const saveProducts = async () => {
+    // Siempre guardar en localStorage como cache
     localStorage.setItem(PRODUCTS_STORAGE_KEY, JSON.stringify(products));
+
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('No autenticado');
+
+      // Eliminar productos existentes del usuario y reinsertar todos
+      await supabase.from('pricing_products').delete().eq('user_id', user.id);
+
+      if (products.length > 0) {
+        const rows = products.map((p, index) => ({
+          id: p.id,
+          user_id: user.id,
+          nombre: p.nombre,
+          categoria: p.categoria,
+          peso_gramos: p.pesoGramos,
+          costo_mano_obra: p.costoManoObra,
+          margen: p.margen,
+          image_url: p.image_url,
+          costo_horneado1: p.costoHorneado1,
+          margen_bizcochado: p.margenBizcochado,
+          costo_esmaltado: p.costoEsmaltado,
+          costo_horneado2: p.costoHorneado2,
+          margen_final: p.margenFinal,
+          sort_order: index,
+        }));
+
+        const { error } = await supabase.from('pricing_products').insert(rows);
+        if (error) throw error;
+      }
+    } catch {
+      // Si falla Supabase, al menos quedó en localStorage
+    }
+
+    // Sincronizar con inventario (ya existente)
     await syncToInventory(products);
   };
 
   // Agregar nuevo producto
   const addProduct = () => {
     const newProduct: ProductCost = {
-      id: Date.now().toString(),
+      id: crypto.randomUUID(),
       nombre: '',
       categoria: '',
       pesoGramos: 0,
@@ -331,6 +457,15 @@ export default function PricingCalculator() {
       .delete()
       .in('description', [`molde-${id}`, `bizcochado-${id}`, `final-${id}`]);
   };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <Loader2 className="w-6 h-6 animate-spin mr-2" />
+        <span>Cargando configuración...</span>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
