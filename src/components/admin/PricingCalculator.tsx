@@ -46,6 +46,9 @@ interface PricingConfig {
   costoManoObraDefault: number;
   costoHorneadoDefault: number;
   costoEsmaltadoDefault: number;
+  // Esmalte: precio por kg y % del peso del producto
+  precioEsmalteKg: number;
+  porcentajeEsmalte: number;
 }
 
 interface ProductCost {
@@ -72,6 +75,8 @@ const defaultConfig: PricingConfig = {
   costoManoObraDefault: 1500,
   costoHorneadoDefault: 0,
   costoEsmaltadoDefault: 0,
+  precioEsmalteKg: 0,
+  porcentajeEsmalte: 0,
 };
 
 const formatCurrency = (value: number) => {
@@ -156,9 +161,12 @@ export default function PricingCalculator() {
     const costoTotalBizcochado = costoTotalMolde + horneadoCost;
     const precioVentaBizcochado = precioVentaMolde + horneadoCost * (1 + product.margenBizcochado / 100);
 
-    // Etapa 3: Final = Precio Venta Etapa 2 + (esmaltado + horneado2) con su margen
-    const costoEtapa3 = product.costoEsmaltado + horneadoCost;
-    const costoTotalFinal = costoTotalBizcochado + product.costoEsmaltado + horneadoCost;
+    // Costo de esmalte = peso del producto * (% esmalte / 100) * (precio esmalte por kg / 1000)
+    const costoEsmalte = product.pesoGramos * (config.porcentajeEsmalte / 100) * (config.precioEsmalteKg / 1000);
+
+    // Etapa 3: Final = Precio Venta Etapa 2 + (esmalte + horneado2) con su margen
+    const costoEtapa3 = costoEsmalte + horneadoCost;
+    const costoTotalFinal = costoTotalBizcochado + costoEsmalte + horneadoCost;
     const precioVentaFinal = precioVentaBizcochado + costoEtapa3 * (1 + product.margenFinal / 100);
 
     return {
@@ -168,6 +176,7 @@ export default function PricingCalculator() {
       horneadoCost,
       costoTotalBizcochado,
       precioVentaBizcochado,
+      costoEsmalte,
       costoTotalFinal,
       precioVentaFinal,
     };
@@ -393,14 +402,27 @@ export default function PricingCalculator() {
               </p>
             </div>
             <div className="space-y-2">
-              <Label>Costo Esmaltado Default ($)</Label>
+              <Label>Precio Esmalte ($/kg)</Label>
               <Input
                 type="number"
-                value={config.costoEsmaltadoDefault}
+                value={config.precioEsmalteKg}
                 onFocus={selectOnFocus}
-                onChange={(e) => setConfig(p => ({ ...p, costoEsmaltadoDefault: parseFloat(e.target.value) || 0 }))}
+                onChange={(e) => setConfig(p => ({ ...p, precioEsmalteKg: parseFloat(e.target.value) || 0 }))}
                 placeholder="0"
               />
+            </div>
+            <div className="space-y-2">
+              <Label>% del peso en esmalte</Label>
+              <Input
+                type="number"
+                value={config.porcentajeEsmalte}
+                onFocus={selectOnFocus}
+                onChange={(e) => setConfig(p => ({ ...p, porcentajeEsmalte: parseFloat(e.target.value) || 0 }))}
+                placeholder="0"
+              />
+              <p className="text-xs text-muted-foreground">
+                Ej: si una pieza pesa 500g y el % es 10, usa 50g de esmalte
+              </p>
             </div>
           </div>
           <Button onClick={saveConfig} className="mt-4" variant="outline">
@@ -596,14 +618,9 @@ export default function PricingCalculator() {
 
                       {/* === ETAPA 3: FINAL === */}
                       <TableCell className="bg-green-50/50 dark:bg-green-950/20">
-                        <Input
-                          type="number"
-                          value={product.costoEsmaltado || ''}
-                          onFocus={selectOnFocus}
-                          onChange={(e) => updateProduct(product.id, 'costoEsmaltado', parseFloat(e.target.value) || 0)}
-                          placeholder="0"
-                          className="h-8 text-center w-[80px]"
-                        />
+                        <span className="text-sm font-medium text-center block w-[80px]">
+                          {formatCurrency(costs.costoEsmalte)}
+                        </span>
                       </TableCell>
                       <TableCell className="bg-green-50/50 dark:bg-green-950/20">
                         {product.categoria === 'A medida' || !product.categoria ? (
@@ -673,14 +690,15 @@ export default function PricingCalculator() {
               <h4 className="font-medium text-amber-700 dark:text-amber-400 mb-1">Etapa 2: Bizcochado</h4>
               <ul className="text-xs text-muted-foreground space-y-0.5">
                 <li>Costo = Costo Molde + Horneado</li>
-                <li>Precio = Costo × (1 + Margen%)</li>
+                <li>Precio = PV Etapa 1 + Horneado × (1 + Margen%)</li>
               </ul>
             </div>
             <div className="p-3 bg-green-50 dark:bg-green-950/30 rounded-lg border border-green-200 dark:border-green-900">
               <h4 className="font-medium text-green-700 dark:text-green-400 mb-1">Etapa 3: Final</h4>
               <ul className="text-xs text-muted-foreground space-y-0.5">
-                <li>Costo = Costo Bizc. + Esmaltado + Horneado</li>
-                <li>Precio = Costo × (1 + Margen%)</li>
+                <li>Esmalte = Peso × {config.porcentajeEsmalte}% × ${config.precioEsmalteKg}/kg</li>
+                <li>Costo = Costo Bizc. + Esmalte + Horneado</li>
+                <li>Precio = PV Etapa 2 + (Esmalte + Horneado) × (1 + Margen%)</li>
               </ul>
             </div>
           </div>
