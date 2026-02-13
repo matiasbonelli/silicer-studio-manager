@@ -10,17 +10,31 @@ import { useToast } from '@/hooks/use-toast';
 import { Settings, Save, Plus, Trash2, Loader2, ImagePlus, X } from 'lucide-react';
 import { ProductCategory } from '@/types/database';
 
-const CATEGORIAS = [
-  'Taza',
-  'Plato',
-  'Cuenco',
-  'Vaso',
-  'Jarra',
-  'Fuente',
-  'Maceta',
-  'Bandeja',
-  'Otros',
-];
+// Capacidad del horno: cuadrícula 2x2x2 = 8 bloques
+const CAPACIDAD_HORNO = 8;
+
+// Categorías con su valor en bloques (fracción del horno que ocupa cada pieza)
+const CATEGORIAS_BLOQUES: Record<string, number | null> = {
+  'Tazas': 0.25,
+  'Platos S': 0.09,
+  'Platos M': 0.25,
+  'Platos L': 0.33,
+  'Platos XL': 0.5,
+  'Bandejas y fuentes': 0.5,
+  'Jarras': 0.33,
+  'Bowl XS': 0.09,
+  'Bowl S': 0.12,
+  'Bowl M': 0.166,
+  'Bowl L': 0.25,
+  'Bowl XL': 0.66,
+  'Compotera': 0.09,
+  'Locreras': 0.166,
+  'Pequeñeses': 0.05,
+  'Mates y vasos': 0.0625,
+  'A medida': null, // ingreso manual
+};
+
+const CATEGORIAS = Object.keys(CATEGORIAS_BLOQUES);
 
 const CONFIG_STORAGE_KEY = 'silicer-pricing-config';
 const PRODUCTS_STORAGE_KEY = 'silicer-pricing-products';
@@ -115,6 +129,18 @@ export default function PricingCalculator() {
     toast({ title: 'Configuración guardada' });
   };
 
+  // Calcular el costo de horneado efectivo para un producto según su categoría
+  const getHorneadoCost = (product: ProductCost): number => {
+    const bloqueValue = CATEGORIAS_BLOQUES[product.categoria];
+    if (bloqueValue === null || bloqueValue === undefined) {
+      // "A medida" o sin categoría: usar el valor manual del producto
+      return product.costoHorneado1;
+    }
+    // Costo por bloque = costoHorneadoDefault / CAPACIDAD_HORNO
+    // Costo pieza = costo por bloque * valor de bloque de la categoría
+    return (config.costoHorneadoDefault / CAPACIDAD_HORNO) * bloqueValue;
+  };
+
   // Calcular costos de un producto en las 3 etapas
   const calculateCosts = (product: ProductCost) => {
     // Etapa 1: Molde (crudo)
@@ -122,18 +148,22 @@ export default function PricingCalculator() {
     const costoTotalMolde = costoBarbotina + product.costoManoObra;
     const precioVentaMolde = costoTotalMolde * (1 + product.margen / 100);
 
+    // Costo de horneado según categoría
+    const horneadoCost = getHorneadoCost(product);
+
     // Etapa 2: Bizcochado
-    const costoTotalBizcochado = costoTotalMolde + product.costoHorneado1;
+    const costoTotalBizcochado = costoTotalMolde + horneadoCost;
     const precioVentaBizcochado = costoTotalBizcochado * (1 + product.margenBizcochado / 100);
 
-    // Etapa 3: Final
-    const costoTotalFinal = costoTotalBizcochado + product.costoEsmaltado + product.costoHorneado2;
+    // Etapa 3: Final (usa el mismo costo de horneado para la segunda cocción)
+    const costoTotalFinal = costoTotalBizcochado + product.costoEsmaltado + horneadoCost;
     const precioVentaFinal = costoTotalFinal * (1 + product.margenFinal / 100);
 
     return {
       costoBarbotina,
       costoTotalMolde,
       precioVentaMolde,
+      horneadoCost,
       costoTotalBizcochado,
       precioVentaBizcochado,
       costoTotalFinal,
@@ -356,6 +386,9 @@ export default function PricingCalculator() {
                 onChange={(e) => setConfig(p => ({ ...p, costoHorneadoDefault: parseFloat(e.target.value) || 0 }))}
                 placeholder="0"
               />
+              <p className="text-xs text-muted-foreground">
+                Costo por bloque: {formatCurrency(config.costoHorneadoDefault / CAPACIDAD_HORNO)} (horno {CAPACIDAD_HORNO} bloques)
+              </p>
             </div>
             <div className="space-y-2">
               <Label>Costo Esmaltado Default ($)</Label>
@@ -477,7 +510,7 @@ export default function PricingCalculator() {
                           value={product.categoria}
                           onValueChange={(value) => updateProduct(product.id, 'categoria', value)}
                         >
-                          <SelectTrigger className="h-8 w-[110px]">
+                          <SelectTrigger className="h-8 w-[160px]">
                             <SelectValue placeholder="Categoría" />
                           </SelectTrigger>
                           <SelectContent>
@@ -530,14 +563,20 @@ export default function PricingCalculator() {
 
                       {/* === ETAPA 2: BIZCOCHADO === */}
                       <TableCell className="bg-amber-50/50 dark:bg-amber-950/20">
-                        <Input
-                          type="number"
-                          value={product.costoHorneado1 || ''}
-                          onFocus={selectOnFocus}
-                          onChange={(e) => updateProduct(product.id, 'costoHorneado1', parseFloat(e.target.value) || 0)}
-                          placeholder="0"
-                          className="h-8 text-center w-[80px]"
-                        />
+                        {product.categoria === 'A medida' || !product.categoria ? (
+                          <Input
+                            type="number"
+                            value={product.costoHorneado1 || ''}
+                            onFocus={selectOnFocus}
+                            onChange={(e) => updateProduct(product.id, 'costoHorneado1', parseFloat(e.target.value) || 0)}
+                            placeholder="0"
+                            className="h-8 text-center w-[80px]"
+                          />
+                        ) : (
+                          <span className="text-sm font-medium text-center block w-[80px]">
+                            {formatCurrency(costs.horneadoCost)}
+                          </span>
+                        )}
                       </TableCell>
                       <TableCell className="bg-amber-50/50 dark:bg-amber-950/20">
                         <Input
@@ -565,14 +604,20 @@ export default function PricingCalculator() {
                         />
                       </TableCell>
                       <TableCell className="bg-green-50/50 dark:bg-green-950/20">
-                        <Input
-                          type="number"
-                          value={product.costoHorneado2 || ''}
-                          onFocus={selectOnFocus}
-                          onChange={(e) => updateProduct(product.id, 'costoHorneado2', parseFloat(e.target.value) || 0)}
-                          placeholder="0"
-                          className="h-8 text-center w-[80px]"
-                        />
+                        {product.categoria === 'A medida' || !product.categoria ? (
+                          <Input
+                            type="number"
+                            value={product.costoHorneado2 || ''}
+                            onFocus={selectOnFocus}
+                            onChange={(e) => updateProduct(product.id, 'costoHorneado2', parseFloat(e.target.value) || 0)}
+                            placeholder="0"
+                            className="h-8 text-center w-[80px]"
+                          />
+                        ) : (
+                          <span className="text-sm font-medium text-center block w-[80px]">
+                            {formatCurrency(costs.horneadoCost)}
+                          </span>
+                        )}
                       </TableCell>
                       <TableCell className="bg-green-50/50 dark:bg-green-950/20">
                         <Input
