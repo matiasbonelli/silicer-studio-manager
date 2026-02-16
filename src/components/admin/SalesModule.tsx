@@ -563,12 +563,6 @@ export default function SalesModule() {
           <ShoppingCart className="w-4 h-4" />
           Nueva Venta
         </TabsTrigger>
-
-        <TabsTrigger value="stats" className="flex items-center gap-1.5">
-          <TrendingUp className="w-4 h-4" />
-          Resumen
-        </TabsTrigger>
-
         <TabsTrigger value="history" className="flex items-center gap-1.5">
           <History className="w-4 h-4" />
           Historial
@@ -577,6 +571,7 @@ export default function SalesModule() {
           <TrendingUp className="w-4 h-4" />
           Resumen
         </TabsTrigger>
+      </TabsList>
 
       <TabsContent value="new">
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">

@@ -11,7 +11,7 @@ import InventoryManager from '@/components/admin/InventoryManager';
 import SalesModule from '@/components/admin/SalesModule';
 import BirthdayModal from '@/components/admin/BirthdayModal';
 import EnrollmentsManager from '@/components/admin/EnrollmentsManager';
-import PendingOrdersTable from '@/components/admin/PendingOrdersTable';
+import PricingCalculator from '@/components/admin/PricingCalculator';
 import { LogOut, Plus, Calendar, Users, Package, ShoppingCart, Loader2, ClipboardList, Calculator, Sun, Moon } from 'lucide-react';
 
 export default function Admin() {
@@ -125,10 +125,6 @@ export default function Admin() {
                 <ShoppingCart className="w-4 h-4" />
                 <span className="hidden sm:inline">Ventas</span>
               </TabsTrigger>
-              <TabsTrigger value="pending-orders" className="flex items-center gap-1.5">
-                <Package className="w-4 h-4" />
-                <span className="hidden sm:inline">Pedidos Pendientes</span>
-              </TabsTrigger
               <TabsTrigger value="pricing" className="flex items-center gap-1.5">
                 <Calculator className="w-4 h-4" />
                 <span className="hidden sm:inline">Calculadora de Costos</span>
@@ -158,9 +154,10 @@ export default function Admin() {
             <InventoryManager />
           </TabsContent>
 
-          <TabsContent value="pending-orders" className="mt-6">
-            <PendingOrdersTable />
+          <TabsContent value="sales" className="mt-6">
+            <SalesModule />
           </TabsContent>
+
           <TabsContent value="pricing" className="mt-6">
             <PricingCalculator />
           </TabsContent>
