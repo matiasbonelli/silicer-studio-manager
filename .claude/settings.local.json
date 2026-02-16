@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git add src/pages/Admin.tsx)",
+      "Bash(git commit:*)",
+      "Bash(git config:*)"
+    ]
+  }
+}
