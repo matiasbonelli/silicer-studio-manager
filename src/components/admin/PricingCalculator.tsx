@@ -394,6 +394,7 @@ export default function PricingCalculator() {
 
       if (products.length > 0) {
         const rows = products.map((p, index) => ({
+          id: p.id,
           user_id: user.id,
           nombre: p.nombre,
           categoria: p.categoria,
