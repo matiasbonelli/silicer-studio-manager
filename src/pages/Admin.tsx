@@ -127,7 +127,7 @@ export default function Admin() {
               </TabsTrigger>
               <TabsTrigger value="pricing" className="flex items-center gap-1.5">
                 <Calculator className="w-4 h-4" />
-                <span className="hidden sm:inline">Costos</span>
+                <span className="hidden sm:inline">Calculadora de Costos</span>
               </TabsTrigger>
             </TabsList>
 
