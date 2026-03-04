@@ -42,22 +42,7 @@ CREATE TABLE public.schedules (
     created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now()
 );
 
--- Insertar horarios fijos
-INSERT INTO public.schedules (day_of_week, start_time, end_time) VALUES
-('monday', '14:00', '16:00'),
-('monday', '16:00', '18:00'),
-('monday', '18:30', '20:30'),
-('tuesday', '09:30', '11:30'),
-('tuesday', '16:00', '18:00'),
-('tuesday', '18:30', '20:30'),
-('wednesday', '14:00', '16:00'),
-('wednesday', '16:00', '18:00'),
-('wednesday', '18:30', '20:30'),
-('thursday', '09:30', '11:30'),
-('thursday', '16:00', '18:00'),
-('thursday', '18:30', '20:30'),
-('friday', '16:00', '18:00'),
-('friday', '18:30', '20:30');
+-- Sin seed data: los horarios se importan desde data/lovable-csv.
 
 -- Tabla de alumnos
 CREATE TABLE public.students (

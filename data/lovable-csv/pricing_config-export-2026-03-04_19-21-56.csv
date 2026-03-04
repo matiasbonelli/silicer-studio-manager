@@ -1,0 +1,2 @@
+id;user_id;precio_barbotina;peso_bidon;margen_default;costo_mano_obra_default;costo_horneado_default;costo_esmaltado_default;precio_esmalte_kg;porcentaje_esmalte;created_at;updated_at
+973d8e53-12ed-476e-89a6-4db22aaf699c;f18026d7-cbad-43e4-a369-022a54417c72;7900.00;9000.00;50.00;1500.00;30000.00;0.00;8532.00;14.00;2026-02-27 21:06:10.97816+00;2026-02-27 21:06:10.97816+00

@@ -1,0 +1,3 @@
+id;user_id;nombre;categoria;peso_gramos;costo_mano_obra;margen;image_url;costo_horneado1;margen_bizcochado;costo_esmaltado;costo_horneado2;margen_final;sort_order;created_at;updated_at
+b6f8cd60-e8c2-43ea-9439-0ca12e59f3ec;f18026d7-cbad-43e4-a369-022a54417c72;Florero Nube;Jarras;907.00;1500.00;50.00;;30000.00;100.00;0.00;30000.00;100.00;0;2026-03-04 14:00:38.380744+00;2026-03-04 14:00:38.380744+00
+7d3ac057-dc22-4ddf-b58b-a11375dd576c;f18026d7-cbad-43e4-a369-022a54417c72;Ensaladera;Bandejas y fuentes;1000.00;1500.00;50.00;;30000.00;100.00;0.00;30000.00;100.00;1;2026-03-04 14:00:38.380744+00;2026-03-04 14:00:38.380744+00
