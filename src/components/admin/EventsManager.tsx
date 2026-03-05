@@ -56,8 +56,6 @@ const DEFAULT_TEMPLATES: MessageTemplate[] = [
   },
 ];
 
-const TEMPLATES_STORAGE_KEY = 'silicer-message-templates';
-
 export default function EventsManager() {
   const [students, setStudents] = useState<Student[]>([]);
   const [templates, setTemplates] = useState<MessageTemplate[]>([]);
@@ -78,20 +76,11 @@ export default function EventsManager() {
       setLoading(false);
     };
     fetchStudents();
-
-    // Load templates from localStorage
-    const saved = localStorage.getItem(TEMPLATES_STORAGE_KEY);
-    if (saved) {
-      setTemplates(JSON.parse(saved));
-    } else {
-      setTemplates(DEFAULT_TEMPLATES);
-      localStorage.setItem(TEMPLATES_STORAGE_KEY, JSON.stringify(DEFAULT_TEMPLATES));
-    }
+    setTemplates(DEFAULT_TEMPLATES);
   }, []);
 
   const saveTemplates = (updated: MessageTemplate[]) => {
     setTemplates(updated);
-    localStorage.setItem(TEMPLATES_STORAGE_KEY, JSON.stringify(updated));
   };
 
   const openTemplateModal = (template?: MessageTemplate) => {

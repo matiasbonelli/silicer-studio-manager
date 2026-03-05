@@ -22,9 +22,7 @@ export default function Admin() {
   const [isNewStudent, setIsNewStudent] = useState(false);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
   const [activeTab, setActiveTab] = useState('schedule');
-  const [darkMode, setDarkMode] = useState(() => {
-    return localStorage.getItem('silicer-admin-dark-mode') === 'true';
-  });
+  const [darkMode, setDarkMode] = useState(false);
 
   useEffect(() => {
     if (darkMode) {
@@ -32,7 +30,6 @@ export default function Admin() {
     } else {
       document.documentElement.classList.remove('dark');
     }
-    localStorage.setItem('silicer-admin-dark-mode', String(darkMode));
 
     // Cleanup: remove dark class when leaving admin
     return () => {

@@ -326,6 +326,18 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      get_public_schedule_availability: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          created_at: string
+          current_count: number
+          day_of_week: string
+          end_time: string
+          id: string
+          max_capacity: number
+          start_time: string
+        }[]
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]

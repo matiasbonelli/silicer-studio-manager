@@ -51,28 +51,26 @@ export default function Index() {
 
   useEffect(() => {
     const fetchSchedules = async () => {
-      const { data: schedulesData } = await supabase
-        .from('schedules')
-        .select('*')
-        .order('day_of_week')
-        .order('start_time');
+      setLoading(true);
+      const { data, error } = await supabase.rpc('get_public_schedule_availability');
 
-      const { data: studentsData } = await supabase
-        .from('students')
-        .select('schedule_id');
-
-      if (schedulesData) {
-        const counts = (studentsData || []).reduce((acc, s) => {
-          if (s.schedule_id) {
-            acc[s.schedule_id] = (acc[s.schedule_id] || 0) + 1;
-          }
-          return acc;
-        }, {} as Record<string, number>);
-
+      if (error) {
+        toast({
+          title: 'Error',
+          description: 'No se pudieron cargar los horarios disponibles.',
+          variant: 'destructive',
+        });
+        setSchedules([]);
+      } else if (data) {
         setSchedules(
-          (schedulesData as Schedule[]).map(s => ({
-            ...s,
-            current_count: counts[s.id] || 0,
+          data.map((s) => ({
+            id: s.id,
+            day_of_week: s.day_of_week,
+            start_time: s.start_time,
+            end_time: s.end_time,
+            max_capacity: s.max_capacity,
+            created_at: s.created_at,
+            current_count: Number(s.current_count),
           }))
         );
       }
@@ -81,7 +79,7 @@ export default function Index() {
     };
 
     fetchSchedules();
-  }, []);
+  }, [toast]);
 
   // Auto-close success modal after 15 seconds
   useEffect(() => {
@@ -138,6 +136,13 @@ export default function Index() {
     } else {
       // Show success modal instead of toast
       setShowSuccessModal(true);
+      setSchedules(prev =>
+        prev.map(s =>
+          s.id === formData.schedule_id
+            ? { ...s, current_count: s.current_count + 1 }
+            : s
+        )
+      );
       setSelectedDay('');
       setFormData({
         first_name: '',

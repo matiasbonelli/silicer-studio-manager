@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+﻿import { useState, useEffect, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -10,10 +10,10 @@ import { useToast } from '@/hooks/use-toast';
 import { Settings, Save, Plus, Trash2, Loader2, ImagePlus, X } from 'lucide-react';
 import { ProductCategory } from '@/types/database';
 
-// Capacidad del horno: cuadrícula 2x2x2 = 8 bloques
+// Capacidad del horno: cuadrÃ­cula 2x2x2 = 8 bloques
 const CAPACIDAD_HORNO = 8;
 
-// Categorías con su valor en bloques (fracción del horno que ocupa cada pieza)
+// CategorÃ­as con su valor en bloques (fracciÃ³n del horno que ocupa cada pieza)
 const CATEGORIAS_BLOQUES: Record<string, number | null> = {
   'Tazas': 0.25,
   'Platos S': 0.09,
@@ -29,15 +29,12 @@ const CATEGORIAS_BLOQUES: Record<string, number | null> = {
   'Bowl XL': 0.66,
   'Compotera': 0.09,
   'Locreras': 0.166,
-  'Pequeñeses': 0.05,
+  'PequeÃ±eses': 0.05,
   'Mates y vasos': 0.0625,
   'A medida': null, // ingreso manual
 };
 
 const CATEGORIAS = Object.keys(CATEGORIAS_BLOQUES);
-
-const CONFIG_STORAGE_KEY = 'silicer-pricing-config';
-const PRODUCTS_STORAGE_KEY = 'silicer-pricing-products';
 
 interface PricingConfig {
   precioBarbotina: number;
@@ -96,15 +93,12 @@ export default function PricingCalculator() {
   const [activeImageProductId, setActiveImageProductId] = useState<string | null>(null);
   const { toast } = useToast();
 
-  // Cargar configuración y productos desde Supabase (fallback a localStorage)
+  // Cargar configuración y productos desde Supabase
   useEffect(() => {
     const loadData = async () => {
       setLoading(true);
-      let configLoaded = false;
-      let productsLoaded = false;
 
       try {
-        // Intentar cargar config desde Supabase
         const { data: configData } = await supabase
           .from('pricing_config')
           .select('*')
@@ -122,10 +116,8 @@ export default function PricingCalculator() {
             precioEsmalteKg: Number(configData.precio_esmalte_kg),
             porcentajeEsmalte: Number(configData.porcentaje_esmalte),
           });
-          configLoaded = true;
         }
 
-        // Intentar cargar productos desde Supabase
         const { data: productsData } = await supabase
           .from('pricing_products')
           .select('*')
@@ -146,57 +138,25 @@ export default function PricingCalculator() {
             costoHorneado2: Number(p.costo_horneado2),
             margenFinal: Number(p.margen_final),
           })));
-          productsLoaded = true;
+        } else {
+          setProducts([]);
         }
       } catch {
-        // Supabase no disponible, usar localStorage
-      }
-
-      // Fallback a localStorage si Supabase no tenía datos
-      if (!configLoaded) {
-        const savedConfig = localStorage.getItem(CONFIG_STORAGE_KEY);
-        if (savedConfig) {
-          try {
-            const parsed = JSON.parse(savedConfig);
-            setConfig({ ...defaultConfig, ...parsed });
-          } catch {
-            // Usar default
-          }
-        }
-      }
-
-      if (!productsLoaded) {
-        const savedProducts = localStorage.getItem(PRODUCTS_STORAGE_KEY);
-        if (savedProducts) {
-          try {
-            const raw: ProductCost[] = JSON.parse(savedProducts);
-            const migrated = raw.map(p => ({
-              ...p,
-              image_url: p.image_url ?? null,
-              costoHorneado1: p.costoHorneado1 ?? 0,
-              margenBizcochado: p.margenBizcochado ?? p.margen ?? defaultConfig.margenDefault,
-              costoEsmaltado: p.costoEsmaltado ?? 0,
-              costoHorneado2: p.costoHorneado2 ?? 0,
-              margenFinal: p.margenFinal ?? p.margen ?? defaultConfig.margenDefault,
-            }));
-            setProducts(migrated);
-          } catch {
-            // Sin productos
-          }
-        }
+        toast({
+          title: 'Error',
+          description: 'No se pudieron cargar costos desde la base de datos',
+          variant: 'destructive',
+        });
       }
 
       setLoading(false);
     };
 
     loadData();
-  }, []);
+  }, [toast]);
 
-  // Guardar configuración en Supabase + localStorage
+  // Guardar configuración en Supabase
   const saveConfig = async () => {
-    // Siempre guardar en localStorage como cache
-    localStorage.setItem(CONFIG_STORAGE_KEY, JSON.stringify(config));
-
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('No autenticado');
@@ -219,21 +179,25 @@ export default function PricingCalculator() {
         .upsert(configRow, { onConflict: 'user_id' });
 
       if (error) throw error;
-      toast({ title: 'Configuración guardada' });
+      toast({ title: 'ConfiguraciÃ³n guardada' });
     } catch {
-      toast({ title: 'Configuración guardada localmente', description: 'No se pudo sincronizar con la nube', variant: 'destructive' });
+      toast({
+        title: 'Error',
+        description: 'No se pudo guardar la configuración en la base de datos',
+        variant: 'destructive',
+      });
     }
   };
 
-  // Calcular el costo de horneado efectivo para un producto según su categoría
+  // Calcular el costo de horneado efectivo para un producto segÃºn su categorÃ­a
   const getHorneadoCost = (product: ProductCost): number => {
     const bloqueValue = CATEGORIAS_BLOQUES[product.categoria];
     if (bloqueValue === null || bloqueValue === undefined) {
-      // "A medida" o sin categoría: usar el valor manual del producto
+      // "A medida" o sin categorÃ­a: usar el valor manual del producto
       return product.costoHorneado1;
     }
     // Costo por bloque = costoHorneadoDefault / CAPACIDAD_HORNO
-    // Costo pieza = costo por bloque * valor de bloque de la categoría
+    // Costo pieza = costo por bloque * valor de bloque de la categorÃ­a
     return (config.costoHorneadoDefault / CAPACIDAD_HORNO) * bloqueValue;
   };
 
@@ -245,7 +209,7 @@ export default function PricingCalculator() {
     const costoTotalMolde = costoBarbotina + product.costoManoObra;
     const precioVentaMolde = costoTotalMolde * (1 + product.margen / 100);
 
-    // Costo de horneado según categoría
+    // Costo de horneado segÃºn categorÃ­a
     const horneadoCost = getHorneadoCost(product);
 
     // Etapa 2: Bizcochado = Precio Venta Etapa 1 + costo horneado con su margen
@@ -372,7 +336,7 @@ export default function PricingCalculator() {
     } catch {
       toast({
         title: 'Error',
-        description: 'Se guardaron localmente pero hubo un error al sincronizar con inventario',
+        description: 'No se pudo sincronizar con inventario',
         variant: 'destructive',
       });
     }
@@ -380,11 +344,8 @@ export default function PricingCalculator() {
     setSyncing(false);
   };
 
-  // Guardar productos en Supabase + localStorage + sincronizar inventario
+  // Guardar productos en Supabase y sincronizar inventario
   const saveProducts = async () => {
-    // Siempre guardar en localStorage como cache
-    localStorage.setItem(PRODUCTS_STORAGE_KEY, JSON.stringify(products));
-
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('No autenticado');
@@ -414,7 +375,12 @@ export default function PricingCalculator() {
         if (error) throw error;
       }
     } catch {
-      // Si falla Supabase, al menos quedó en localStorage
+      toast({
+        title: 'Error',
+        description: 'No se pudieron guardar los productos en la base de datos',
+        variant: 'destructive',
+      });
+      return;
     }
 
     // Sincronizar con inventario (ya existente)
@@ -447,7 +413,7 @@ export default function PricingCalculator() {
     );
   };
 
-  // Eliminar producto (también del inventario)
+  // Eliminar producto (tambiÃ©n del inventario)
   const removeProduct = async (id: string) => {
     setProducts(prev => prev.filter(p => p.id !== id));
 
@@ -462,25 +428,25 @@ export default function PricingCalculator() {
     return (
       <div className="flex items-center justify-center py-12">
         <Loader2 className="w-6 h-6 animate-spin mr-2" />
-        <span>Cargando configuración...</span>
+        <span>Cargando configuraciÃ³n...</span>
       </div>
     );
   }
 
   return (
     <div className="space-y-6">
-      {/* Configuración */}
+      {/* ConfiguraciÃ³n */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Settings className="w-5 h-5" />
-            Configuración de Costos
+            ConfiguraciÃ³n de Costos
           </CardTitle>
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="space-y-2">
-              <Label>Precio Barbotina (bidón)</Label>
+              <Label>Precio Barbotina (bidÃ³n)</Label>
               <Input
                 type="number"
                 value={config.precioBarbotina}
@@ -488,10 +454,10 @@ export default function PricingCalculator() {
                 onChange={(e) => setConfig(p => ({ ...p, precioBarbotina: parseFloat(e.target.value) || 0 }))}
                 placeholder="11500"
               />
-              <p className="text-xs text-muted-foreground">Precio del bidón completo</p>
+              <p className="text-xs text-muted-foreground">Precio del bidÃ³n completo</p>
             </div>
             <div className="space-y-2">
-              <Label>Peso del Bidón (gramos)</Label>
+              <Label>Peso del BidÃ³n (gramos)</Label>
               <Input
                 type="number"
                 value={config.pesoBidon}
@@ -499,7 +465,7 @@ export default function PricingCalculator() {
                 onChange={(e) => setConfig(p => ({ ...p, pesoBidon: parseFloat(e.target.value) || 9000 }))}
                 placeholder="9000"
               />
-              <p className="text-xs text-muted-foreground">Peso total del bidón</p>
+              <p className="text-xs text-muted-foreground">Peso total del bidÃ³n</p>
             </div>
             <div className="space-y-2">
               <Label>Margen Default (%)</Label>
@@ -561,7 +527,7 @@ export default function PricingCalculator() {
             </div>
           </div>
           <Button onClick={saveConfig} className="mt-4" variant="outline">
-            <Save className="w-4 h-4 mr-2" /> Guardar Configuración
+            <Save className="w-4 h-4 mr-2" /> Guardar ConfiguraciÃ³n
           </Button>
         </CardContent>
       </Card>
@@ -601,7 +567,7 @@ export default function PricingCalculator() {
                 <TableRow>
                   <TableHead className="min-w-[60px]">Imagen</TableHead>
                   <TableHead className="min-w-[150px]">Producto</TableHead>
-                  <TableHead className="min-w-[120px]">Categoría</TableHead>
+                  <TableHead className="min-w-[120px]">CategorÃ­a</TableHead>
                   <TableHead className="min-w-[80px] text-center">Peso (g)</TableHead>
                   <TableHead className="min-w-[100px] text-center">M. Obra ($)</TableHead>
                   <TableHead className="min-w-[100px] text-right bg-blue-50 dark:bg-blue-950/30">Costo Molde</TableHead>
@@ -663,14 +629,14 @@ export default function PricingCalculator() {
                           className="h-8"
                         />
                       </TableCell>
-                      {/* Categoría */}
+                      {/* CategorÃ­a */}
                       <TableCell>
                         <Select
                           value={product.categoria}
                           onValueChange={(value) => updateProduct(product.id, 'categoria', value)}
                         >
                           <SelectTrigger className="h-8 w-[160px]">
-                            <SelectValue placeholder="Categoría" />
+                            <SelectValue placeholder="CategorÃ­a" />
                           </SelectTrigger>
                           <SelectContent>
                             {CATEGORIAS.map(cat => (
@@ -818,22 +784,22 @@ export default function PricingCalculator() {
               <h4 className="font-medium text-blue-700 dark:text-blue-400 mb-1">Etapa 1: Molde</h4>
               <ul className="text-xs text-muted-foreground space-y-0.5">
                 <li>Costo = Barbotina + Mano de Obra</li>
-                <li>Precio = Costo × (1 + Margen%)</li>
+                <li>Precio = Costo Ã— (1 + Margen%)</li>
               </ul>
             </div>
             <div className="p-3 bg-amber-50 dark:bg-amber-950/30 rounded-lg border border-amber-200 dark:border-amber-900">
               <h4 className="font-medium text-amber-700 dark:text-amber-400 mb-1">Etapa 2: Bizcochado</h4>
               <ul className="text-xs text-muted-foreground space-y-0.5">
                 <li>Costo = Costo Molde + Horneado</li>
-                <li>Precio = PV Etapa 1 + Horneado × (1 + Margen%)</li>
+                <li>Precio = PV Etapa 1 + Horneado Ã— (1 + Margen%)</li>
               </ul>
             </div>
             <div className="p-3 bg-green-50 dark:bg-green-950/30 rounded-lg border border-green-200 dark:border-green-900">
               <h4 className="font-medium text-green-700 dark:text-green-400 mb-1">Etapa 3: Final</h4>
               <ul className="text-xs text-muted-foreground space-y-0.5">
-                <li>Esmalte = Peso × {config.porcentajeEsmalte}% × ${config.precioEsmalteKg}/kg</li>
+                <li>Esmalte = Peso Ã— {config.porcentajeEsmalte}% Ã— ${config.precioEsmalteKg}/kg</li>
                 <li>Costo = Costo Bizc. + Esmalte + Horneado</li>
-                <li>Precio = PV Etapa 2 + (Esmalte + Horneado) × (1 + Margen%)</li>
+                <li>Precio = PV Etapa 2 + (Esmalte + Horneado) Ã— (1 + Margen%)</li>
               </ul>
             </div>
           </div>
@@ -846,3 +812,4 @@ export default function PricingCalculator() {
     </div>
   );
 }
+
