@@ -4,7 +4,54 @@ import type { Database } from './types';
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_PUBLISHABLE_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
-const authStorage = typeof window !== 'undefined' ? window.sessionStorage : undefined;
+const AUTH_COOKIE_MAX_AGE_SECONDS = 60 * 60 * 24 * 30; // 30 days
+
+const getCookie = (key: string): string | null => {
+  if (typeof document === 'undefined') return null;
+  const encodedKey = encodeURIComponent(key);
+  const entries = document.cookie ? document.cookie.split('; ') : [];
+  for (const entry of entries) {
+    if (entry.startsWith(`${encodedKey}=`)) {
+      return decodeURIComponent(entry.slice(encodedKey.length + 1));
+    }
+  }
+  return null;
+};
+
+const setCookie = (key: string, value: string) => {
+  if (typeof document === 'undefined') return;
+  const secure = typeof window !== 'undefined' && window.location.protocol === 'https:' ? '; secure' : '';
+  document.cookie = `${encodeURIComponent(key)}=${encodeURIComponent(value)}; path=/; max-age=${AUTH_COOKIE_MAX_AGE_SECONDS}; samesite=lax${secure}`;
+};
+
+const removeCookie = (key: string) => {
+  if (typeof document === 'undefined') return;
+  document.cookie = `${encodeURIComponent(key)}=; path=/; max-age=0; samesite=lax`;
+};
+
+const authStorage = typeof window !== 'undefined'
+  ? {
+      getItem: (key: string) => {
+        const cookieValue = getCookie(key);
+        if (cookieValue !== null) return cookieValue;
+
+        // One-time migration for older sessions stored in localStorage.
+        const legacyValue = window.localStorage.getItem(key);
+        if (legacyValue !== null) {
+          setCookie(key, legacyValue);
+          window.localStorage.removeItem(key);
+        }
+        return legacyValue;
+      },
+      setItem: (key: string, value: string) => {
+        setCookie(key, value);
+      },
+      removeItem: (key: string) => {
+        removeCookie(key);
+        window.localStorage.removeItem(key);
+      },
+    }
+  : undefined;
 
 // Import the supabase client like this:
 // import { supabase } from "@/integrations/supabase/client";
