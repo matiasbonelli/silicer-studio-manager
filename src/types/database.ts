@@ -98,6 +98,7 @@ export const DAY_NAMES: Record<string, string> = {
   wednesday: 'Miércoles',
   thursday: 'Jueves',
   friday: 'Viernes',
+  saturday: 'Sábado (sólo niños)',
 };
 
 export const PAYMENT_STATUS_LABELS: Record<PaymentStatus, string> = {

@@ -100,7 +100,7 @@ export default function ScheduleGrid({ onStudentClick, refreshTrigger }: Schedul
     return acc;
   }, {} as Record<string, Schedule[]>);
 
-  const dayOrder = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday'];
+  const dayOrder = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
 
   if (loading) {
     return (
@@ -123,7 +123,7 @@ export default function ScheduleGrid({ onStudentClick, refreshTrigger }: Schedul
       </div>
 
       <DragDropContext onDragEnd={handleDragEnd}>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4">
           {dayOrder.map(day => (
             <div key={day} className="space-y-3">
               <h3 className="font-bold text-lg text-primary text-center">{DAY_NAMES[day]}</h3>
