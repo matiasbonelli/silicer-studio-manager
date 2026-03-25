@@ -189,11 +189,26 @@ export default function Index() {
 
   const availableSchedules = schedules.filter(s => s.current_count < s.max_capacity);
   const dayOrder = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
-  const availableDays = [...new Set(availableSchedules.map(s => s.day_of_week))]
+  const availableDays = [...new Set(schedules.map(s => s.day_of_week))]
     .sort((a, b) => dayOrder.indexOf(a) - dayOrder.indexOf(b));
   const schedulesForSelectedDay = selectedDay
-    ? availableSchedules.filter(s => s.day_of_week === selectedDay)
+    ? schedules.filter(s => s.day_of_week === selectedDay)
     : [];
+const age = formData.birthday
+  ? Math.floor(
+      (new Date().getTime() - new Date(formData.birthday).getTime()) /
+      (365.25 * 24 * 60 * 60 * 1000)
+    )
+  : null;
+
+const validAge = age !== null && age >= 0 && age < 14;
+
+useEffect(() => {
+  if (!validAge) {
+    setSelectedDay(null);
+    setFormData(prev => ({ ...prev, schedule_id: "" }));
+  }
+}, [formData.birthday]);
 
   return (
     <div className="min-h-screen bg-[#EBEBEB] landing-page">
@@ -464,40 +479,34 @@ export default function Index() {
                     </Select>
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="schedule" className="text-[#4a3f35]">Horario *</Label>
-                    <Select
-                      value={formData.schedule_id}
-                      onValueChange={(value) => setFormData(prev => ({ ...prev, schedule_id: value }))}
-                      disabled={
-                        !selectedDay ||
-                        schedulesForSelectedDay.length === 0 ||
-                        loading ||
-                        (selectedDay === "saturday" && new Date(formData.birthday).getTime() > new Date().getTime()) ||
-                        (!!formData.birthday &&
-                          Math.floor((new Date().getTime() - new Date(formData.birthday).getTime()) / (365.25 * 24 * 60 * 60 * 1000)) > 14)
-                      }                 >
-                      <SelectTrigger className="border-[#d4c4b0] focus:border-[#4a3f35]">
-                        <SelectValue
-                          placeholder={!selectedDay ? 'Elegí un día' : 'Seleccionar horario'}
-
-                        />                      </SelectTrigger>
-                      <SelectContent>
-                        {schedulesForSelectedDay.map(schedule => (
-                          <SelectItem key={schedule.id} value={schedule.id}>
-                            {schedule.start_time.slice(0, 5)} - {schedule.end_time.slice(0, 5)}
-                            <span className="text-muted-foreground ml-2">
-                              ({schedule.max_capacity - schedule.current_count} cupos)
-                            </span>
-                          </SelectItem>
-                        ))}
-                        {schedulesForSelectedDay.length === 0 && selectedDay && (
-                          <SelectItem value="none" disabled>
-                            No hay horarios disponibles
-                          </SelectItem>
-                        )}
-                      </SelectContent>
-                    </Select>
-                  </div>
+  <Label htmlFor="schedule" className="text-[#4a3f35]">Horario *</Label>
+  <Select
+    value={formData.schedule_id}
+    onValueChange={(value) => setFormData(prev => ({ ...prev, schedule_id: value }))}
+    disabled={!selectedDay  || loading || (!validAge && selectedDay === "saturday")}
+  >
+    <SelectTrigger className="border-[#d4c4b0] focus:border-[#4a3f35]">
+      <SelectValue
+        placeholder={!selectedDay ? 'Elegí un día' : 'Seleccionar horario'}
+      />
+    </SelectTrigger>
+    <SelectContent>
+      {schedulesForSelectedDay.map(schedule => (
+        <SelectItem key={schedule.id} value={schedule.id} disabled={schedule.current_count >= schedule.max_capacity}>
+          {schedule.start_time.slice(0, 5)} - {schedule.end_time.slice(0, 5)}
+          <span className="text-muted-foreground ml-2">
+           {schedule.current_count >= schedule.max_capacity ? 'Completo' : `${schedule.max_capacity - schedule.current_count} cupos`}
+          </span>
+        </SelectItem>
+      ))}
+      {schedulesForSelectedDay.length === 0 && selectedDay && (
+        <SelectItem value="none" disabled>
+          No hay horarios disponibles
+        </SelectItem>
+      )}
+    </SelectContent>
+  </Select>
+</div>
                 </div>
 
                 <div className="space-y-2">
