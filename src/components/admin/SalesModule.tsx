@@ -293,7 +293,7 @@ export default function SalesModule() {
 
   const printReceipt = () => {
     if (receiptRef.current) {
-      const printWindow = window.open('', '_blank', 'noopener,noreferrer');
+      const printWindow = window.open('', '_blank');
       if (printWindow) {
         printWindow.document.write(`
           <html>
@@ -1378,7 +1378,7 @@ export default function SalesModule() {
 
               <Button
                 onClick={() => {
-                  const printWindow = window.open('', '_blank', 'noopener,noreferrer');
+                  const printWindow = window.open('', '_blank');
                   if (printWindow && historyReceiptSale) {
                     const itemsHtml = historyReceiptSale.sale_items?.map(item => `
                       <tr>
