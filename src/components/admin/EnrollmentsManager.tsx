@@ -168,6 +168,7 @@ export default function EnrollmentsManager({ onStudentCreated }: EnrollmentsMana
   useEffect(() => {
     fetchEnrollments();
     fetchSchedules();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const openPaymentModal = (enrollment: Enrollment) => {

@@ -12,16 +12,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Plus, Pencil, Trash2, Search, Loader2, AlertTriangle, ShoppingCart, Package, Tag, ImagePlus, X } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Switch } from '@/components/ui/switch';
-
-// Formato moneda pesos argentinos
-const formatCurrency = (amount: number): string => {
-  return new Intl.NumberFormat('es-AR', {
-    style: 'currency',
-    currency: 'ARS',
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
-  }).format(amount);
-};
+import { formatCurrency } from '@/lib/format';
 
 // Parse stored unit field: "1 kg" → { bulk: 1, unit: "kg" }
 // Falls back to { bulk: 1, unit: raw } for legacy data like "unidad"

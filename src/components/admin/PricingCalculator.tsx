@@ -8,6 +8,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import { Settings, Save, Plus, Trash2, Loader2, ImagePlus, X } from 'lucide-react';
+import { formatCurrency } from '@/lib/format';
 import { ProductCategory } from '@/types/database';
 
 // Capacidad del horno: cuadrícula 2x2x2 = 8 bloques
@@ -74,10 +75,6 @@ const defaultConfig: PricingConfig = {
   costoEsmaltadoDefault: 0,
   precioEsmalteKg: 0,
   porcentajeEsmalte: 0,
-};
-
-const formatCurrency = (value: number) => {
-  return `$${Math.round(value).toLocaleString('es-AR')}`;
 };
 
 // Select all text on focus

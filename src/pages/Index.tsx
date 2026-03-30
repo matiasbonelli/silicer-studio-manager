@@ -199,6 +199,7 @@ useEffect(() => {
     setSelectedDay(null);
     setFormData(prev => ({ ...prev, schedule_id: "" }));
   }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
 }, [formData.birthday]);
 
   return (
@@ -209,7 +210,7 @@ useEffect(() => {
         <div
           className="absolute inset-0"
           style={{
-            backgroundImage: 'url(/hero-background.jpg)',
+            backgroundImage: 'url(/hero-background.png)',
             backgroundSize: 'cover',
             backgroundPosition: 'center',
             opacity: 0.5,
