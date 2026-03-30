@@ -86,7 +86,7 @@ export default function BirthdayModal() {
                     size="sm"
                     variant="outline"
                     className="mt-1"
-                    onClick={() => window.open(buildWhatsAppUrl(student), '_blank')}
+                    onClick={() => window.open(buildWhatsAppUrl(student), '_blank', 'noopener,noreferrer')}
                   >
                     <MessageCircle className="w-4 h-4 mr-2" /> Enviar mensaje
                   </Button>

@@ -15,7 +15,7 @@ import PricingCalculator from '@/components/admin/PricingCalculator';
 import { LogOut, Plus, Calendar, Users, Package, ShoppingCart, Loader2, ClipboardList, Calculator, Sun, Moon } from 'lucide-react';
 
 export default function Admin() {
-  const { user, loading, signOut, isAdmin } = useAuth();
+  const { user, loading, signOut, isAdmin, isAdminLoading } = useAuth();
   const navigate = useNavigate();
   const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
   const [isStudentModalOpen, setIsStudentModalOpen] = useState(false);
@@ -37,7 +37,7 @@ export default function Admin() {
     };
   }, [darkMode]);
 
-  if (loading) {
+  if (loading || isAdminLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <Loader2 className="w-8 h-8 animate-spin text-primary" />
@@ -47,6 +47,11 @@ export default function Admin() {
 
   if (!user) {
     navigate('/auth');
+    return null;
+  }
+
+  if (!isAdmin) {
+    navigate('/');
     return null;
   }
 

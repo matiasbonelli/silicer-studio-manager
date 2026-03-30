@@ -657,7 +657,7 @@ export default function EnrollmentsManager({ onStudentCreated }: EnrollmentsMana
                           const message = encodeURIComponent(
                             `Hola de nuevo!\n\nTe escribimos para confirmar tu turno:\n\nDia: ${day}\nHorario: ${time}\n\nMuchas gracias, te esperamos!`
                           );
-                          window.open(`https://wa.me/54${phone}?text=${message}`, '_blank');
+                          window.open(`https://wa.me/54${phone}?text=${message}`, '_blank', 'noopener,noreferrer');
                           // Actualizar estado a "contacted" si está pendiente y no convertido
                           if (enrollment.status === 'pending' && !enrollment.converted_to_student_id) {
                             await supabase
@@ -791,7 +791,7 @@ export default function EnrollmentsManager({ onStudentCreated }: EnrollmentsMana
                     className="mt-2 w-full"
                     onClick={async () => {
                       const url = await getSignedReceiptUrl(selectedEnrollment.payment_receipt_url!);
-                      if (url) window.open(url, '_blank');
+                      if (url) window.open(url, '_blank', 'noopener,noreferrer');
                     }}
                   >
                     <FileText className="w-4 h-4 mr-2" />

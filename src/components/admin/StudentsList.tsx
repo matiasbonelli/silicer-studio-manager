@@ -312,7 +312,7 @@ export default function StudentsList({ onStudentClick, refreshTrigger, onStudent
                       onClick={(e) => {
                         e.stopPropagation();
                         const phone = student.phone?.replace(/\D/g, '');
-                        window.open(`https://wa.me/54${phone}`, '_blank');
+                        window.open(`https://wa.me/54${phone}`, '_blank', 'noopener,noreferrer');
                       }}
                     >
                       <MessageCircle className="w-4 h-4" />
@@ -331,7 +331,7 @@ export default function StudentsList({ onStudentClick, refreshTrigger, onStudent
                       variant="outline"
                       onClick={(e) => {
                         e.stopPropagation();
-                        window.open(student.payment_receipt_url!, '_blank');
+                        window.open(student.payment_receipt_url!, '_blank', 'noopener,noreferrer');
                       }}
                     >
                       <FileText className="w-4 h-4" />

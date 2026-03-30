@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import { escapeHtml } from '@/lib/utils';
 import { InventoryItem, Student, Sale, SaleItem, PaymentMethod, PaymentStatus, PAYMENT_METHOD_LABELS, PAYMENT_STATUS_LABELS, PRODUCT_CATEGORY_LABELS, ProductCategory as DBProductCategory } from '@/types/database';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -115,7 +116,7 @@ export default function SalesModule() {
       });
       return;
     }
-    window.open(data.signedUrl, '_blank');
+    window.open(data.signedUrl, '_blank', 'noopener,noreferrer');
   };
 
   // Get available years for filter (current year and 2 years back)
@@ -292,7 +293,7 @@ export default function SalesModule() {
 
   const printReceipt = () => {
     if (receiptRef.current) {
-      const printWindow = window.open('', '_blank');
+      const printWindow = window.open('', '_blank', 'noopener,noreferrer');
       if (printWindow) {
         printWindow.document.write(`
           <html>
@@ -1377,11 +1378,11 @@ export default function SalesModule() {
 
               <Button
                 onClick={() => {
-                  const printWindow = window.open('', '_blank');
+                  const printWindow = window.open('', '_blank', 'noopener,noreferrer');
                   if (printWindow && historyReceiptSale) {
                     const itemsHtml = historyReceiptSale.sale_items?.map(item => `
                       <tr>
-                        <td style="text-align: left; padding: 8px 4px; border-bottom: 1px solid #eee;">${item.inventory?.name || 'Producto eliminado'}</td>
+                        <td style="text-align: left; padding: 8px 4px; border-bottom: 1px solid #eee;">${escapeHtml(item.inventory?.name || 'Producto eliminado')}</td>
                         <td style="text-align: center; padding: 8px 4px; border-bottom: 1px solid #eee;">${item.quantity}</td>
                         <td style="text-align: right; padding: 8px 4px; border-bottom: 1px solid #eee;">${formatCurrency(item.unit_price * item.quantity)}</td>
                       </tr>

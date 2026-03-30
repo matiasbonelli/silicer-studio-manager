@@ -370,7 +370,7 @@ export default function StudentModal({ student, isOpen, onClose, onSave, isNew =
                       .createSignedUrl(filePath, 3600); // 1 hour expiry
                     
                     if (data?.signedUrl) {
-                      window.open(data.signedUrl, '_blank');
+                      window.open(data.signedUrl, '_blank', 'noopener,noreferrer');
                     }
                   }}
                 >

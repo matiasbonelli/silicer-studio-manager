@@ -106,31 +106,22 @@ export default function Index() {
       return;
     }
 
-    const selectedSchedule = schedules.find(s => s.id === formData.schedule_id);
-    if (selectedSchedule && selectedSchedule.current_count >= selectedSchedule.max_capacity) {
-      toast({
-        title: 'Horario sin cupos',
-        description: 'Este horario ya no tiene lugares disponibles',
-        variant: 'destructive',
-      });
-      setSubmitting(false);
-      return;
-    }
-
-    const { error } = await supabase.from('enrollments').insert({
-      first_name: formData.first_name.trim(),
-      last_name: formData.last_name.trim(),
-      email: formData.email?.trim() || null,
-      phone: formData.phone.trim(),
-      birthday: formData.birthday || null,
-      schedule_id: formData.schedule_id,
-      message: formData.message?.trim() || null,
+    const { data: rpcResult, error } = await supabase.rpc('submit_enrollment', {
+      p_first_name: formData.first_name,
+      p_last_name: formData.last_name,
+      p_email: formData.email || null,
+      p_phone: formData.phone,
+      p_birthday: formData.birthday || null,
+      p_schedule_id: formData.schedule_id,
+      p_message: formData.message || null,
     });
 
-    if (error) {
+    const result = rpcResult as { success: boolean; message: string } | null;
+
+    if (error || !result?.success) {
       toast({
         title: 'Error',
-        description: 'No se pudo enviar la inscripción. Intenta de nuevo.',
+        description: result?.message || 'No se pudo enviar la inscripción. Intenta de nuevo.',
         variant: 'destructive',
       });
     } else {
