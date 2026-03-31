@@ -10,7 +10,7 @@ import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
-import { Check, X, Search, Loader2, MessageCircle, FileText, Trash2, DollarSign, Calendar } from 'lucide-react';
+import { Check, X, Search, Loader2, MessageCircle, FileText, Trash2, DollarSign, Calendar, Users } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 
 interface StudentsListProps {
@@ -282,8 +282,21 @@ export default function StudentsList({ onStudentClick, refreshTrigger, onStudent
               ))
             ) : filteredStudents.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={9} className="text-center text-muted-foreground py-8">
-                  No se encontraron alumnos
+                <TableCell colSpan={9} className="py-16">
+                  <div className="flex flex-col items-center gap-3 text-muted-foreground">
+                    <Users className="h-10 w-10 opacity-30" />
+                    {search ? (
+                      <>
+                        <p className="font-medium">No se encontraron alumnos</p>
+                        <p className="text-sm">Intentá con otro nombre o limpiá la búsqueda.</p>
+                      </>
+                    ) : (
+                      <>
+                        <p className="font-medium">Todavía no hay alumnos registrados</p>
+                        <p className="text-sm">Los alumnos aparecerán aquí una vez que se inscriban.</p>
+                      </>
+                    )}
+                  </div>
                 </TableCell>
               </TableRow>
             ) : filteredStudents.map(student => (

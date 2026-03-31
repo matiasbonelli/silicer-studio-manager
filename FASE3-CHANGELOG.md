@@ -28,6 +28,21 @@
 
 ---
 
+### Punto 3 — Empty states mejorados
+
+**Archivos modificados:** `src/components/admin/StudentsList.tsx`, `src/components/admin/InventoryManager.tsx`, `src/components/admin/EnrollmentsManager.tsx`
+
+- Reemplazados los textos planos por bloques centrados con icono + mensaje principal + sugerencia de acción.
+- Los mensajes son contextuales: distinguen entre "sin datos" y "sin resultados para la búsqueda/filtro activo".
+- Iconos usados: `Users` (alumnos), `Package` (inventario), `UserPlus` (pre-inscripciones), todos con `opacity-30` para no saturar.
+
+**Casos cubiertos:**
+- **StudentsList:** sin búsqueda activa → "Todavía no hay alumnos registrados"; con búsqueda → "No se encontraron alumnos / Intentá con otro nombre".
+- **InventoryManager:** sin filtros → "El inventario está vacío / Agregá productos con el botón…"; con filtro → "No se encontraron productos / Probá con otro nombre o cambiá la categoría".
+- **EnrollmentsManager:** sin filtros → "Todavía no hay pre-inscripciones / Cuando alguien complete el formulario…"; con filtro → "No se encontraron pre-inscripciones / Intentá con otro nombre o estado".
+
+---
+
 ### Fix adicional — Modal de cumpleaños
 
 **Archivo modificado:** `src/components/admin/BirthdayModal.tsx`
@@ -39,12 +54,6 @@
 ---
 
 ## Pendiente de implementación
-
-### Punto 3 — Empty states mejorados
-
-**Archivos:** `StudentsList.tsx`, `InventoryManager.tsx`, `EnrollmentsManager.tsx`
-
-Reemplazar textos planos como "No se encontraron alumnos" por bloques con icono + mensaje descriptivo + sugerencia de acción.
 
 ### Punto 4 — Ordenamiento + paginación en tablas
 

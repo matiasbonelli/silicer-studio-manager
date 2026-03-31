@@ -579,8 +579,21 @@ export default function EnrollmentsManager({ onStudentCreated }: EnrollmentsMana
               ))
             ) : filteredEnrollments.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={7} className="text-center text-muted-foreground py-8">
-                  No se encontraron pre-inscripciones
+                <TableCell colSpan={7} className="py-16">
+                  <div className="flex flex-col items-center gap-3 text-muted-foreground">
+                    <UserPlus className="h-10 w-10 opacity-30" />
+                    {search || statusFilter !== 'all' ? (
+                      <>
+                        <p className="font-medium">No se encontraron pre-inscripciones</p>
+                        <p className="text-sm">Intentá con otro nombre o cambiá el filtro de estado.</p>
+                      </>
+                    ) : (
+                      <>
+                        <p className="font-medium">Todavía no hay pre-inscripciones</p>
+                        <p className="text-sm">Cuando alguien complete el formulario de inscripción, aparecerá aquí.</p>
+                      </>
+                    )}
+                  </div>
                 </TableCell>
               </TableRow>
             ) : filteredEnrollments.map(enrollment => (
