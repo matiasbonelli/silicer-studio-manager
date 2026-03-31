@@ -28,6 +28,32 @@
 
 ---
 
+### Punto 7 — Gestor de cuotas + Tab Resumen (Dashboard KPIs)
+
+**Archivos modificados/creados:** `src/components/admin/StudentsList.tsx`, `src/components/admin/Dashboard.tsx` (nuevo), `src/pages/Admin.tsx`
+
+#### Gestor de cuotas (StudentsList)
+- El selector de mes ya **no filtra** alumnos — ahora los muestra a todos y **calcula el estado de pago** de cada uno para el mes seleccionado.
+- Lógica de estado computado:
+  - `payment_month === mes seleccionado` → estado real (pagado / parcial / pendiente)
+  - `payment_month` anterior al seleccionado → 🔴 Pendiente + chip "Pagó hasta [mes]"
+  - `payment_month` posterior al seleccionado → 🔵 Adelantado + chip "Pagó hasta [mes]"
+  - Sin `payment_month` → 🔴 Pendiente
+- Contador resumen encima de la tabla: `● X pagados · ● Y parciales · ● Z pendientes · ● W adelantados`
+- El sort por columna Estado usa el estado computado (no el campo crudo).
+
+#### Tab Resumen (Dashboard)
+- Nuevo tab **"Resumen"** al final de la barra de navegación (`LayoutDashboard` icon).
+- Nuevo componente `Dashboard.tsx` con 4 secciones:
+  - **💰 Ingresos del mes:** total recaudado, N ventas, cobrado vs pendiente.
+  - **👩‍🎨 Cuotas del mes:** X/Y pagaron, barra de progreso, pendientes y parciales.
+  - **⏳ Cobros pendientes:** monto de ventas sin cobrar, N transacciones.
+  - **📦 Stock bajo:** productos con `quantity ≤ min_stock`.
+- Paneles de detalle: lista de alumnos con cuota pendiente (+ WhatsApp), desglose de ventas por método de pago, lista de productos bajo mínimo, cumpleaños de esta semana (+ WhatsApp).
+- Skeleton loaders durante la carga, empty states en cada panel, botón "Actualizar".
+
+---
+
 ### Punto 6 — Accesibilidad (aria-labels)
 
 **Archivos modificados:** `src/components/admin/StudentsList.tsx`, `src/components/admin/EnrollmentsManager.tsx`, `src/components/admin/SalesModule.tsx`
@@ -88,9 +114,7 @@
 
 ## Pendiente de implementación
 
-### Punto 7 — Dashboard KPIs (solo planificación)
-
-No implementar aún. Discutir con el usuario qué métricas mostrar, ubicación y diseño.
+_Todos los puntos de la Fase 3 están implementados._
 
 ---
 

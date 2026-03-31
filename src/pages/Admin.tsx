@@ -12,7 +12,8 @@ import SalesModule from '@/components/admin/SalesModule';
 import BirthdayModal from '@/components/admin/BirthdayModal';
 import EnrollmentsManager from '@/components/admin/EnrollmentsManager';
 import PricingCalculator from '@/components/admin/PricingCalculator';
-import { LogOut, Plus, Calendar, Users, Package, ShoppingCart, Loader2, ClipboardList, Calculator, Sun, Moon } from 'lucide-react';
+import Dashboard from '@/components/admin/Dashboard';
+import { LogOut, Plus, Calendar, Users, Package, ShoppingCart, Loader2, ClipboardList, Calculator, Sun, Moon, LayoutDashboard } from 'lucide-react';
 
 export default function Admin() {
   const { user, loading, signOut } = useAuth();
@@ -101,7 +102,7 @@ export default function Admin() {
       <main className="container mx-auto px-4 py-6">
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-            <TabsList className="grid w-full sm:w-auto grid-cols-6 gap-1">
+            <TabsList className="grid w-full sm:w-auto grid-cols-7 gap-1">
               <TabsTrigger value="schedule" className="flex items-center gap-1.5">
                 <Calendar className="w-4 h-4" />
                 <span className="hidden sm:inline">Horarios</span>
@@ -125,6 +126,10 @@ export default function Admin() {
               <TabsTrigger value="pricing" className="flex items-center gap-1.5">
                 <Calculator className="w-4 h-4" />
                 <span className="hidden sm:inline">Calculadora de Costos</span>
+              </TabsTrigger>
+              <TabsTrigger value="dashboard" className="flex items-center gap-1.5">
+                <LayoutDashboard className="w-4 h-4" />
+                <span className="hidden sm:inline">Resumen</span>
               </TabsTrigger>
             </TabsList>
 
@@ -157,6 +162,10 @@ export default function Admin() {
 
           <TabsContent value="pricing" className="mt-6">
             <PricingCalculator />
+          </TabsContent>
+
+          <TabsContent value="dashboard" className="mt-6">
+            <Dashboard />
           </TabsContent>
         </Tabs>
       </main>
