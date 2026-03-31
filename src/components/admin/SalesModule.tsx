@@ -772,8 +772,8 @@ export default function SalesModule() {
               )}
             </div>
           </div>
-          <div className="rounded-lg border bg-card">
-            <Table>
+          <div className="rounded-lg border bg-card overflow-x-auto">
+            <Table className="min-w-[750px]">
               <TableHeader>
                 <TableRow>
                   <TableHead>Fecha</TableHead>
@@ -1004,8 +1004,8 @@ export default function SalesModule() {
               <CardTitle>Ventas por Producto</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="rounded-lg border">
-                <Table>
+              <div className="rounded-lg border overflow-x-auto">
+                <Table className="min-w-[750px]">
                   <TableHeader>
                     <TableRow>
                       <TableHead>Fecha</TableHead>

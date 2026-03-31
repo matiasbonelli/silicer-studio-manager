@@ -28,6 +28,17 @@
 
 ---
 
+### Punto 5 — Tablas responsive (mobile)
+
+**Archivos modificados:** `src/components/admin/StudentsList.tsx`, `src/components/admin/InventoryManager.tsx`, `src/components/admin/EnrollmentsManager.tsx`, `src/components/admin/SalesModule.tsx`
+
+- Todos los wrappers de tabla tienen `overflow-x-auto` para habilitar scroll horizontal en pantallas pequeñas.
+- Cada `<Table>` tiene un `min-w` acorde a su cantidad de columnas: `min-w-[800px]` (alumnos, 9 col), `min-w-[700px]` (inventario y pre-inscripciones, 7–8 col), `min-w-[750px]` (ventas, 10 col).
+- `SalesModule` tenía dos tablas separadas (historial y resumen por producto); ambas fueron actualizadas.
+- `EnrollmentsManager` ya tenía `overflow-x-auto`; solo se le agregó el `min-w`.
+
+---
+
 ### Punto 4 — Ordenamiento + paginación en tablas
 
 **Archivo modificado:** `src/components/admin/StudentsList.tsx`
@@ -65,12 +76,6 @@
 ---
 
 ## Pendiente de implementación
-
-### Punto 5 — Tablas responsive (mobile)
-
-**Archivos:** `StudentsList.tsx`, `EnrollmentsManager.tsx`, `InventoryManager.tsx`, `SalesModule.tsx`
-
-Envolver tablas con `overflow-x-auto` y `min-w` para scroll horizontal en mobile.
 
 ### Punto 6 — Accesibilidad (aria-labels)
 

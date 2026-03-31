@@ -552,7 +552,7 @@ export default function EnrollmentsManager({ onStudentCreated }: EnrollmentsMana
 
       {/* Table */}
       <div className="rounded-lg border bg-card overflow-x-auto">
-        <Table>
+        <Table className="min-w-[700px]">
           <TableHeader>
             <TableRow>
               <TableHead>Fecha</TableHead>
