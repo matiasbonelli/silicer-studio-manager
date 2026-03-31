@@ -32,8 +32,11 @@ export default function BirthdayModal() {
         });
 
         if (todayBirthdays.length > 0) {
-          setBirthdayStudents(todayBirthdays as Student[]);
-          setIsOpen(true);
+          const dismissedKey = `birthday-dismissed-${todayMonth}-${todayDay}`;
+          if (!sessionStorage.getItem(dismissedKey)) {
+            setBirthdayStudents(todayBirthdays as Student[]);
+            setIsOpen(true);
+          }
         }
       }
     };
@@ -42,6 +45,9 @@ export default function BirthdayModal() {
   }, []);
 
   const handleClose = () => {
+    const now = new Date();
+    const key = `birthday-dismissed-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+    sessionStorage.setItem(key, '1');
     setIsOpen(false);
   };
 
