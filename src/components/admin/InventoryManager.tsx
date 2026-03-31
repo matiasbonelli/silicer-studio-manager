@@ -375,8 +375,12 @@ export default function InventoryManager() {
             ))}
             {filteredItems.length === 0 && (
               <TableRow>
-                <TableCell colSpan={8} className="text-center text-muted-foreground py-8">
-                  No hay productos en el inventario
+                <TableCell colSpan={8}>
+                  <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
+                    <Package className="h-12 w-12 mb-4 opacity-50" />
+                    <p className="text-lg font-medium">No hay productos en el inventario</p>
+                    <p className="text-sm">Ajustá los filtros o agregá un nuevo producto</p>
+                  </div>
                 </TableCell>
               </TableRow>
             )}

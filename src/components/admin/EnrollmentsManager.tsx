@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
-import { Search, Loader2, MessageCircle, UserPlus, DollarSign, Eye, Trash2, FileText, ExternalLink, Pencil, Plus } from 'lucide-react';
+import { Search, Loader2, MessageCircle, UserPlus, DollarSign, Eye, Trash2, FileText, ExternalLink, Pencil, Plus, ClipboardList } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 
@@ -709,8 +709,12 @@ export default function EnrollmentsManager({ onStudentCreated }: EnrollmentsMana
             ))}
             {filteredEnrollments.length === 0 && (
               <TableRow>
-                <TableCell colSpan={7} className="text-center text-muted-foreground py-8">
-                  No se encontraron pre-inscripciones
+                <TableCell colSpan={7}>
+                  <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
+                    <ClipboardList className="h-12 w-12 mb-4 opacity-50" />
+                    <p className="text-lg font-medium">No se encontraron pre-inscripciones</p>
+                    <p className="text-sm">Ajustá los filtros o esperá nuevas inscripciones</p>
+                  </div>
                 </TableCell>
               </TableRow>
             )}

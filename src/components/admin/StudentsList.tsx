@@ -10,7 +10,7 @@ import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
-import { Check, X, Search, Loader2, MessageCircle, FileText, Trash2, DollarSign, Calendar } from 'lucide-react';
+import { Check, X, Search, Loader2, MessageCircle, FileText, Trash2, DollarSign, Calendar, Users } from 'lucide-react';
 
 interface StudentsListProps {
   onStudentClick: (student: Student) => void;
@@ -364,8 +364,12 @@ export default function StudentsList({ onStudentClick, refreshTrigger, onStudent
             ))}
             {filteredStudents.length === 0 && (
               <TableRow>
-                <TableCell colSpan={9} className="text-center text-muted-foreground py-8">
-                  No se encontraron alumnos
+                <TableCell colSpan={9}>
+                  <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
+                    <Users className="h-12 w-12 mb-4 opacity-50" />
+                    <p className="text-lg font-medium">No se encontraron alumnos</p>
+                    <p className="text-sm">Ajustá los filtros o agregá un nuevo alumno</p>
+                  </div>
                 </TableCell>
               </TableRow>
             )}
