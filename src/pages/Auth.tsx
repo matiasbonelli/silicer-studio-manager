@@ -72,7 +72,7 @@ export default function Auth() {
           <CardDescription>Accede al panel de administración</CardDescription>
         </CardHeader>
         <CardContent>
-          <form onSubmit={(e) => { e.preventDefault(); handleSubmit(); }} className="space-y-4">
+          <form onSubmit={(e) => { e.preventDefault(); handleSubmit(); }} noValidate className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="signin-email">Email</Label>
               <Input

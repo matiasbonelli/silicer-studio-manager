@@ -11,7 +11,7 @@ export default function BirthdayModal() {
 
   useEffect(() => {
     const dismissedKey = `birthday-modal-dismissed-${new Date().toISOString().slice(0, 10)}`;
-    if (sessionStorage.getItem(dismissedKey)) return;
+    if (localStorage.getItem(dismissedKey)) return;
 
     const checkBirthdays = async () => {
       // Get today's month and day
@@ -46,7 +46,7 @@ export default function BirthdayModal() {
 
   const handleClose = () => {
     const dismissedKey = `birthday-modal-dismissed-${new Date().toISOString().slice(0, 10)}`;
-    sessionStorage.setItem(dismissedKey, '1');
+    localStorage.setItem(dismissedKey, '1');
     setIsOpen(false);
   };
 
