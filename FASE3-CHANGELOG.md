@@ -28,6 +28,17 @@
 
 ---
 
+### Punto 4 — Ordenamiento + paginación en tablas
+
+**Archivo modificado:** `src/components/admin/StudentsList.tsx`
+
+- Headers **Nombre** y **Estado** son clickeables; un segundo click invierte el orden. Icono visual indica el campo y dirección activos (`ArrowUp`/`ArrowDown`/`ArrowUpDown`).
+- Orden de estado de pago: Pendiente → Parcial → Pagado (ascendente).
+- Paginación de 20 registros por página con controles Anterior/Siguiente y conteo "X–Y de Z alumnos".
+- Cambiar búsqueda, mes o columna de sort reinicia a la primera página.
+
+---
+
 ### Punto 3 — Empty states mejorados
 
 **Archivos modificados:** `src/components/admin/StudentsList.tsx`, `src/components/admin/InventoryManager.tsx`, `src/components/admin/EnrollmentsManager.tsx`
@@ -54,13 +65,6 @@
 ---
 
 ## Pendiente de implementación
-
-### Punto 4 — Ordenamiento + paginación en tablas
-
-**Archivo:** `StudentsList.tsx`
-
-- Headers clickeables para ordenar por Nombre y Estado de pago.
-- Paginación de 20 registros con controles Anterior/Siguiente.
 
 ### Punto 5 — Tablas responsive (mobile)
 

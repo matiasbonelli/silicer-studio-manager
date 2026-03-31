@@ -10,7 +10,7 @@ import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
-import { Check, X, Search, Loader2, MessageCircle, FileText, Trash2, DollarSign, Calendar, Users } from 'lucide-react';
+import { Check, X, Search, Loader2, MessageCircle, FileText, Trash2, DollarSign, Calendar, Users, ArrowUpDown, ArrowUp, ArrowDown, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 
 interface StudentsListProps {
@@ -37,6 +37,10 @@ export default function StudentsList({ onStudentClick, refreshTrigger, onStudent
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [selectedMonth, setSelectedMonth] = useState<string>(getCurrentMonth());
+  const [sortField, setSortField] = useState<'name' | 'payment_status' | null>(null);
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
+  const [page, setPage] = useState(0);
+  const PAGE_SIZE = 20;
   const [studentToDelete, setStudentToDelete] = useState<Student | null>(null);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -203,6 +207,41 @@ export default function StudentsList({ onStudentClick, refreshTrigger, onStudent
     return matchesSearch && matchesMonth;
   });
 
+  const PAYMENT_STATUS_ORDER: Record<string, number> = { pending: 0, partial: 1, paid: 2 };
+
+  const sortedStudents = [...filteredStudents].sort((a, b) => {
+    if (!sortField) return 0;
+    let cmp = 0;
+    if (sortField === 'name') {
+      const nameA = `${a.first_name} ${a.last_name}`.toLowerCase();
+      const nameB = `${b.first_name} ${b.last_name}`.toLowerCase();
+      cmp = nameA.localeCompare(nameB, 'es');
+    } else if (sortField === 'payment_status') {
+      cmp = (PAYMENT_STATUS_ORDER[a.payment_status] ?? 0) - (PAYMENT_STATUS_ORDER[b.payment_status] ?? 0);
+    }
+    return sortDir === 'asc' ? cmp : -cmp;
+  });
+
+  const totalPages = Math.ceil(sortedStudents.length / PAGE_SIZE);
+  const paginatedStudents = sortedStudents.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
+
+  const toggleSort = (field: 'name' | 'payment_status') => {
+    if (sortField === field) {
+      setSortDir(d => d === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortField(field);
+      setSortDir('asc');
+    }
+    setPage(0);
+  };
+
+  const SortIcon = ({ field }: { field: 'name' | 'payment_status' }) => {
+    if (sortField !== field) return <ArrowUpDown className="w-3 h-3 ml-1 opacity-40" />;
+    return sortDir === 'asc'
+      ? <ArrowUp className="w-3 h-3 ml-1" />
+      : <ArrowDown className="w-3 h-3 ml-1" />;
+  };
+
   // Generar opciones de meses (últimos 12 meses + próximos 3)
   const generateMonthOptions = () => {
     const options: { value: string; label: string }[] = [];
@@ -228,12 +267,12 @@ export default function StudentsList({ onStudentClick, refreshTrigger, onStudent
           <Input
             placeholder="Buscar alumno..."
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={(e) => { setSearch(e.target.value); setPage(0); }}
             className="pl-10"
           />
         </div>
         <div className="w-full sm:w-56">
-          <Select value={selectedMonth} onValueChange={setSelectedMonth}>
+          <Select value={selectedMonth} onValueChange={(v) => { setSelectedMonth(v); setPage(0); }}>
             <SelectTrigger>
               <Calendar className="w-4 h-4 mr-2" />
               <SelectValue placeholder="Filtrar por mes" />
@@ -254,12 +293,26 @@ export default function StudentsList({ onStudentClick, refreshTrigger, onStudent
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>Nombre</TableHead>
+              <TableHead>
+                <button
+                  className="flex items-center hover:text-foreground transition-colors"
+                  onClick={() => toggleSort('name')}
+                >
+                  Nombre <SortIcon field="name" />
+                </button>
+              </TableHead>
               <TableHead>Horario</TableHead>
               <TableHead className="text-center">Mes Cuota</TableHead>
               <TableHead className="text-center">Fecha Pago</TableHead>
               <TableHead className="text-center">WhatsApp</TableHead>
-              <TableHead className="text-center">Estado</TableHead>
+              <TableHead className="text-center">
+                <button
+                  className="flex items-center mx-auto hover:text-foreground transition-colors"
+                  onClick={() => toggleSort('payment_status')}
+                >
+                  Estado <SortIcon field="payment_status" />
+                </button>
+              </TableHead>
               <TableHead className="text-center">Comprobante</TableHead>
               <TableHead className="text-center">Pago</TableHead>
               <TableHead className="text-center">Eliminar</TableHead>
@@ -299,7 +352,7 @@ export default function StudentsList({ onStudentClick, refreshTrigger, onStudent
                   </div>
                 </TableCell>
               </TableRow>
-            ) : filteredStudents.map(student => (
+            ) : paginatedStudents.map(student => (
               <TableRow 
                 key={student.id} 
                 className="cursor-pointer hover:bg-accent"
@@ -391,6 +444,35 @@ export default function StudentsList({ onStudentClick, refreshTrigger, onStudent
           </TableBody>
         </Table>
       </div>
+
+      {totalPages > 1 && (
+        <div className="flex items-center justify-between text-sm text-muted-foreground">
+          <span>
+            {page * PAGE_SIZE + 1}–{Math.min((page + 1) * PAGE_SIZE, sortedStudents.length)} de {sortedStudents.length} alumnos
+          </span>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setPage(p => p - 1)}
+              disabled={page === 0}
+            >
+              <ChevronLeft className="w-4 h-4" />
+              Anterior
+            </Button>
+            <span className="px-2">Página {page + 1} de {totalPages}</span>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setPage(p => p + 1)}
+              disabled={page >= totalPages - 1}
+            >
+              Siguiente
+              <ChevronRight className="w-4 h-4" />
+            </Button>
+          </div>
+        </div>
+      )}
 
       {/* Delete Confirmation Modal */}
       <Dialog open={isDeleteModalOpen} onOpenChange={setIsDeleteModalOpen}>
