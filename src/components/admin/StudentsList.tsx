@@ -10,7 +10,8 @@ import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
-import { Check, X, Search, Loader2, MessageCircle, FileText, Trash2, DollarSign, Calendar, Users } from 'lucide-react';
+import { Check, X, Search, Loader2, MessageCircle, FileText, Trash2, DollarSign, Calendar } from 'lucide-react';
+import { Skeleton } from '@/components/ui/skeleton';
 
 interface StudentsListProps {
   onStudentClick: (student: Student) => void;
@@ -202,14 +203,6 @@ export default function StudentsList({ onStudentClick, refreshTrigger, onStudent
     return matchesSearch && matchesMonth;
   });
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <Loader2 className="w-8 h-8 animate-spin text-primary" />
-      </div>
-    );
-  }
-
   // Generar opciones de meses (últimos 12 meses + próximos 3)
   const generateMonthOptions = () => {
     const options: { value: string; label: string }[] = [];
@@ -273,7 +266,27 @@ export default function StudentsList({ onStudentClick, refreshTrigger, onStudent
             </TableRow>
           </TableHeader>
           <TableBody>
-            {filteredStudents.map(student => (
+            {loading ? (
+              Array.from({ length: 5 }).map((_, i) => (
+                <TableRow key={i}>
+                  <TableCell><Skeleton className="h-4 w-32" /></TableCell>
+                  <TableCell><Skeleton className="h-4 w-28" /></TableCell>
+                  <TableCell className="text-center"><Skeleton className="h-4 w-20 mx-auto" /></TableCell>
+                  <TableCell className="text-center"><Skeleton className="h-4 w-20 mx-auto" /></TableCell>
+                  <TableCell className="text-center"><Skeleton className="h-8 w-8 mx-auto rounded" /></TableCell>
+                  <TableCell className="text-center"><Skeleton className="h-5 w-16 mx-auto rounded-full" /></TableCell>
+                  <TableCell className="text-center"><Skeleton className="h-8 w-8 mx-auto rounded" /></TableCell>
+                  <TableCell className="text-center"><Skeleton className="h-8 w-8 mx-auto rounded" /></TableCell>
+                  <TableCell className="text-center"><Skeleton className="h-8 w-8 mx-auto rounded" /></TableCell>
+                </TableRow>
+              ))
+            ) : filteredStudents.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={9} className="text-center text-muted-foreground py-8">
+                  No se encontraron alumnos
+                </TableCell>
+              </TableRow>
+            ) : filteredStudents.map(student => (
               <TableRow 
                 key={student.id} 
                 className="cursor-pointer hover:bg-accent"
@@ -362,17 +375,6 @@ export default function StudentsList({ onStudentClick, refreshTrigger, onStudent
                 </TableCell>
               </TableRow>
             ))}
-            {filteredStudents.length === 0 && (
-              <TableRow>
-                <TableCell colSpan={9}>
-                  <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
-                    <Users className="h-12 w-12 mb-4 opacity-50" />
-                    <p className="text-lg font-medium">No se encontraron alumnos</p>
-                    <p className="text-sm">Ajustá los filtros o agregá un nuevo alumno</p>
-                  </div>
-                </TableCell>
-              </TableRow>
-            )}
           </TableBody>
         </Table>
       </div>

@@ -34,11 +34,13 @@ export default function Auth() {
     const validation = authSchema.safeParse({ email, password });
     if (!validation.success) {
       const fieldErrors = validation.error.flatten().fieldErrors;
-      const mapped: Record<string, string> = {};
-      for (const [key, msgs] of Object.entries(fieldErrors)) {
-        if (msgs && msgs.length > 0) mapped[key] = msgs[0];
+      const errorMap: Record<string, string> = {};
+      for (const [key, messages] of Object.entries(fieldErrors)) {
+        if (messages && messages.length > 0) {
+          errorMap[key] = messages[0];
+        }
       }
-      setFormErrors(mapped);
+      setFormErrors(errorMap);
       setLoading(false);
       return;
     }
@@ -70,7 +72,7 @@ export default function Auth() {
           <CardDescription>Accede al panel de administración</CardDescription>
         </CardHeader>
         <CardContent>
-          <form onSubmit={(e) => { e.preventDefault(); handleSubmit(); }} className="space-y-4">
+          <form onSubmit={(e) => { e.preventDefault(); handleSubmit(); }} noValidate className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="signin-email">Email</Label>
               <Input
@@ -80,9 +82,14 @@ export default function Auth() {
                 value={email}
                 onChange={(e) => {
                   setEmail(e.target.value);
-                  setFormErrors(prev => ({ ...prev, email: '' }));
+                  if (formErrors.email) {
+                    setFormErrors(prev => {
+                      const next = { ...prev };
+                      delete next.email;
+                      return next;
+                    });
+                  }
                 }}
-                required
               />
               {formErrors.email && (
                 <p className="text-sm text-destructive mt-1">{formErrors.email}</p>
@@ -97,9 +104,14 @@ export default function Auth() {
                 value={password}
                 onChange={(e) => {
                   setPassword(e.target.value);
-                  setFormErrors(prev => ({ ...prev, password: '' }));
+                  if (formErrors.password) {
+                    setFormErrors(prev => {
+                      const next = { ...prev };
+                      delete next.password;
+                      return next;
+                    });
+                  }
                 }}
-                required
               />
               {formErrors.password && (
                 <p className="text-sm text-destructive mt-1">{formErrors.password}</p>

@@ -10,6 +10,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import { Plus, Pencil, Trash2, Search, Loader2, AlertTriangle, ShoppingCart, Package, Tag, ImagePlus, X } from 'lucide-react';
+import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Switch } from '@/components/ui/switch';
 import { formatCurrency } from '@/lib/format';
@@ -231,14 +232,6 @@ export default function InventoryManager() {
     return matchesSearch && matchesCategory; // 'all' tab
   });
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <Loader2 className="w-8 h-8 animate-spin text-primary" />
-      </div>
-    );
-  }
-
   return (
     <div className="space-y-4">
       <Tabs value={inventoryTab} onValueChange={setInventoryTab}>
@@ -303,7 +296,26 @@ export default function InventoryManager() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {filteredItems.map(item => (
+            {loading ? (
+              Array.from({ length: 5 }).map((_, i) => (
+                <TableRow key={i}>
+                  <TableCell><div className="flex items-center gap-3"><Skeleton className="w-10 h-10 rounded-md" /><Skeleton className="h-4 w-28" /></div></TableCell>
+                  <TableCell className="text-center"><Skeleton className="h-5 w-16 mx-auto rounded-full" /></TableCell>
+                  <TableCell className="text-center"><Skeleton className="h-5 w-16 mx-auto rounded-full" /></TableCell>
+                  <TableCell className="text-center"><Skeleton className="h-5 w-10 mx-auto rounded-full" /></TableCell>
+                  <TableCell className="text-right"><Skeleton className="h-4 w-16 ml-auto" /></TableCell>
+                  <TableCell className="text-right"><Skeleton className="h-4 w-16 ml-auto" /></TableCell>
+                  <TableCell className="text-right"><Skeleton className="h-5 w-20 ml-auto rounded-full" /></TableCell>
+                  <TableCell><div className="flex justify-center gap-2"><Skeleton className="h-8 w-8 rounded" /><Skeleton className="h-8 w-8 rounded" /></div></TableCell>
+                </TableRow>
+              ))
+            ) : filteredItems.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={8} className="text-center text-muted-foreground py-8">
+                  No hay productos en el inventario
+                </TableCell>
+              </TableRow>
+            ) : filteredItems.map(item => (
               <TableRow key={item.id}>
                 <TableCell>
                   <div className="flex items-center gap-3">
@@ -373,17 +385,6 @@ export default function InventoryManager() {
                 </TableCell>
               </TableRow>
             ))}
-            {filteredItems.length === 0 && (
-              <TableRow>
-                <TableCell colSpan={8}>
-                  <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
-                    <Package className="h-12 w-12 mb-4 opacity-50" />
-                    <p className="text-lg font-medium">No hay productos en el inventario</p>
-                    <p className="text-sm">Ajustá los filtros o agregá un nuevo producto</p>
-                  </div>
-                </TableCell>
-              </TableRow>
-            )}
           </TableBody>
         </Table>
       </div>
