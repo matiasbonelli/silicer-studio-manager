@@ -11,6 +11,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
 import { Search, Loader2, MessageCircle, UserPlus, DollarSign, Eye, Trash2, FileText, ExternalLink, Pencil, Plus } from 'lucide-react';
+import { Skeleton } from '@/components/ui/skeleton';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 
@@ -482,14 +483,6 @@ export default function EnrollmentsManager({ onStudentCreated }: EnrollmentsMana
     return matchesSearch && matchesStatus && matchesPayment;
   });
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <Loader2 className="w-8 h-8 animate-spin text-primary" />
-      </div>
-    );
-  }
-
   return (
     <div className="space-y-4">
       {/* Filters */}
@@ -572,7 +565,25 @@ export default function EnrollmentsManager({ onStudentCreated }: EnrollmentsMana
             </TableRow>
           </TableHeader>
           <TableBody>
-            {filteredEnrollments.map(enrollment => (
+            {loading ? (
+              Array.from({ length: 5 }).map((_, i) => (
+                <TableRow key={i}>
+                  <TableCell><Skeleton className="h-4 w-16" /></TableCell>
+                  <TableCell><div className="space-y-1"><Skeleton className="h-4 w-32" /><Skeleton className="h-3 w-40" /></div></TableCell>
+                  <TableCell><Skeleton className="h-4 w-28" /></TableCell>
+                  <TableCell className="text-center"><Skeleton className="h-5 w-10 mx-auto rounded-full" /></TableCell>
+                  <TableCell className="text-center"><Skeleton className="h-5 w-20 mx-auto rounded-full" /></TableCell>
+                  <TableCell className="text-center"><Skeleton className="h-5 w-16 mx-auto rounded-full" /></TableCell>
+                  <TableCell><div className="flex justify-center gap-1"><Skeleton className="h-8 w-8 rounded" /><Skeleton className="h-8 w-8 rounded" /><Skeleton className="h-8 w-8 rounded" /></div></TableCell>
+                </TableRow>
+              ))
+            ) : filteredEnrollments.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={7} className="text-center text-muted-foreground py-8">
+                  No se encontraron pre-inscripciones
+                </TableCell>
+              </TableRow>
+            ) : filteredEnrollments.map(enrollment => (
               <TableRow
                 key={enrollment.id}
                 className={enrollment.converted_to_student_id ? 'opacity-50 bg-muted/30' : ''}
@@ -707,13 +718,6 @@ export default function EnrollmentsManager({ onStudentCreated }: EnrollmentsMana
                 </TableCell>
               </TableRow>
             ))}
-            {filteredEnrollments.length === 0 && (
-              <TableRow>
-                <TableCell colSpan={7} className="text-center text-muted-foreground py-8">
-                  No se encontraron pre-inscripciones
-                </TableCell>
-              </TableRow>
-            )}
           </TableBody>
         </Table>
       </div>
