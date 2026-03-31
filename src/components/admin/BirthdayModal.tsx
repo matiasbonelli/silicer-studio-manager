@@ -10,6 +10,9 @@ export default function BirthdayModal() {
   const [birthdayStudents, setBirthdayStudents] = useState<Student[]>([]);
 
   useEffect(() => {
+    const dismissedKey = `birthday-modal-dismissed-${new Date().toISOString().slice(0, 10)}`;
+    if (sessionStorage.getItem(dismissedKey)) return;
+
     const checkBirthdays = async () => {
       // Get today's month and day
       const now = new Date();
@@ -42,6 +45,8 @@ export default function BirthdayModal() {
   }, []);
 
   const handleClose = () => {
+    const dismissedKey = `birthday-modal-dismissed-${new Date().toISOString().slice(0, 10)}`;
+    sessionStorage.setItem(dismissedKey, '1');
     setIsOpen(false);
   };
 
