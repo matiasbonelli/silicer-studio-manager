@@ -650,6 +650,7 @@ export default function EnrollmentsManager({ onStudentCreated }: EnrollmentsMana
                     <Button
                       size="sm"
                       variant="ghost"
+                      aria-label="Ver detalle"
                       onClick={() => {
                         setSelectedEnrollment(enrollment);
                         setIsDetailModalOpen(true);
@@ -662,6 +663,7 @@ export default function EnrollmentsManager({ onStudentCreated }: EnrollmentsMana
                     <Button
                       size="sm"
                       variant="ghost"
+                      aria-label="Editar pre-inscripción"
                       onClick={() => openEditModal(enrollment)}
                     >
                       <Pencil className="w-4 h-4" />
@@ -673,6 +675,7 @@ export default function EnrollmentsManager({ onStudentCreated }: EnrollmentsMana
                         size="sm"
                         variant="ghost"
                         className="text-green-600 hover:text-green-700"
+                        aria-label="Enviar WhatsApp"
                         onClick={async () => {
                           const phone = enrollment.phone?.replace(/\D/g, '');
                           const day = enrollment.schedule ? DAY_NAMES[enrollment.schedule.day_of_week] : '[Completar día]';
@@ -701,6 +704,7 @@ export default function EnrollmentsManager({ onStudentCreated }: EnrollmentsMana
                     <Button
                       size="sm"
                       variant="ghost"
+                      aria-label="Registrar pago"
                       onClick={() => openPaymentModal(enrollment)}
                     >
                       <DollarSign className="w-4 h-4" />
@@ -712,6 +716,7 @@ export default function EnrollmentsManager({ onStudentCreated }: EnrollmentsMana
                         size="sm"
                         variant="ghost"
                         className="text-primary"
+                        aria-label="Convertir a alumno"
                         onClick={() => openConvertModal(enrollment)}
                       >
                         <UserPlus className="w-4 h-4" />
@@ -723,6 +728,7 @@ export default function EnrollmentsManager({ onStudentCreated }: EnrollmentsMana
                       size="sm"
                       variant="ghost"
                       className="text-destructive hover:text-destructive"
+                      aria-label="Eliminar pre-inscripción"
                       onClick={() => openDeleteModal(enrollment)}
                     >
                       <Trash2 className="w-4 h-4" />

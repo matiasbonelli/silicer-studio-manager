@@ -382,6 +382,7 @@ export default function StudentsList({ onStudentClick, refreshTrigger, onStudent
                       size="sm"
                       variant="outline"
                       className="text-green-600 hover:text-green-700"
+                      aria-label="Abrir WhatsApp"
                       onClick={(e) => {
                         e.stopPropagation();
                         const phone = student.phone?.replace(/\D/g, '');
@@ -402,6 +403,7 @@ export default function StudentsList({ onStudentClick, refreshTrigger, onStudent
                     <Button
                       size="sm"
                       variant="outline"
+                      aria-label="Ver comprobante de pago"
                       onClick={(e) => {
                         e.stopPropagation();
                         window.open(student.payment_receipt_url!, '_blank', 'noopener,noreferrer');
@@ -417,6 +419,7 @@ export default function StudentsList({ onStudentClick, refreshTrigger, onStudent
                   <Button
                     size="sm"
                     variant="outline"
+                    aria-label="Registrar pago"
                     onClick={(e) => {
                       e.stopPropagation();
                       openPaymentModal(student);
@@ -430,6 +433,7 @@ export default function StudentsList({ onStudentClick, refreshTrigger, onStudent
                     size="sm"
                     variant="ghost"
                     className="text-destructive hover:text-destructive"
+                    aria-label="Eliminar alumno"
                     onClick={(e) => {
                       e.stopPropagation();
                       setStudentToDelete(student);

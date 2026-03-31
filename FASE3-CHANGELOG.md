@@ -28,6 +28,17 @@
 
 ---
 
+### Punto 6 — Accesibilidad (aria-labels)
+
+**Archivos modificados:** `src/components/admin/StudentsList.tsx`, `src/components/admin/EnrollmentsManager.tsx`, `src/components/admin/SalesModule.tsx`
+
+- Agregado `aria-label` a los **17 botones de solo icono** identificados en los tres archivos.
+- **StudentsList (4):** Abrir WhatsApp, Ver comprobante de pago, Registrar pago, Eliminar alumno.
+- **EnrollmentsManager (6):** Ver detalle, Editar pre-inscripción, Enviar WhatsApp, Registrar pago, Convertir a alumno, Eliminar pre-inscripción.
+- **SalesModule (7):** Ver comprobante ×2, Subir comprobante ×2, Editar estado de pago, Eliminar venta ×2 (una por cada tabla).
+
+---
+
 ### Punto 5 — Tablas responsive (mobile)
 
 **Archivos modificados:** `src/components/admin/StudentsList.tsx`, `src/components/admin/InventoryManager.tsx`, `src/components/admin/EnrollmentsManager.tsx`, `src/components/admin/SalesModule.tsx`
@@ -76,12 +87,6 @@
 ---
 
 ## Pendiente de implementación
-
-### Punto 6 — Accesibilidad (aria-labels)
-
-**Archivos:** `StudentsList.tsx`, `EnrollmentsManager.tsx`, `SalesModule.tsx`
-
-Agregar `aria-label` a los 15 botones de solo icono para lectores de pantalla.
 
 ### Punto 7 — Dashboard KPIs (solo planificación)
 

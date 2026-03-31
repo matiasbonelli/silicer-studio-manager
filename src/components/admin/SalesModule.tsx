@@ -851,6 +851,7 @@ export default function SalesModule() {
                           size="sm"
                           variant="ghost"
                           className="text-green-600 hover:text-green-700"
+                          aria-label="Ver comprobante"
                           onClick={() => viewReceipt(sale.receipt_url!)}
                         >
                           <FileText className="w-4 h-4" />
@@ -871,6 +872,7 @@ export default function SalesModule() {
                             size="sm"
                             variant="ghost"
                             className="text-muted-foreground"
+                            aria-label="Subir comprobante"
                             disabled={uploadingSaleId === sale.id}
                             asChild
                           >
@@ -892,6 +894,7 @@ export default function SalesModule() {
                           <Button
                             size="sm"
                             variant="outline"
+                            aria-label="Editar estado de pago"
                             onClick={() => {
                               setEditPaymentSale(sale);
                               setEditPaymentType(sale.payment_status === 'partial' ? 'partial' : 'total');
@@ -905,6 +908,7 @@ export default function SalesModule() {
                           size="sm"
                           variant="ghost"
                           className="text-destructive hover:text-destructive"
+                          aria-label="Eliminar venta"
                           onClick={() => handleDeleteSale(sale.id)}
                         >
                           <Trash2 className="w-4 h-4" />
@@ -1083,6 +1087,7 @@ export default function SalesModule() {
                               size="sm"
                               variant="ghost"
                               className="text-green-600 hover:text-green-700"
+                              aria-label="Ver comprobante"
                               onClick={() => viewReceipt(sale.receipt_url!)}
                             >
                               <FileText className="w-4 h-4" />
@@ -1103,6 +1108,7 @@ export default function SalesModule() {
                                 size="sm"
                                 variant="ghost"
                                 className="text-muted-foreground"
+                                aria-label="Subir comprobante"
                                 disabled={uploadingSaleId === sale.id}
                                 asChild
                               >
@@ -1123,6 +1129,7 @@ export default function SalesModule() {
                             size="sm"
                             variant="ghost"
                             className="text-destructive hover:text-destructive"
+                            aria-label="Eliminar venta"
                             onClick={() => handleDeleteSale(sale.id)}
                           >
                             <Trash2 className="w-4 h-4" />
