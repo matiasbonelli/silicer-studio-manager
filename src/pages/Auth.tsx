@@ -5,7 +5,6 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
 import { z } from 'zod';
 
@@ -18,7 +17,8 @@ export default function Auth() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
-  const { signIn, signUp, user } = useAuth();
+  const [formErrors, setFormErrors] = useState<Record<string, string>>({});
+  const { signIn, user } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
 
@@ -28,41 +28,36 @@ export default function Auth() {
     }
   }, [user, navigate]);
 
-  const handleSubmit = async (action: 'signin' | 'signup') => {
+  const handleSubmit = async () => {
     setLoading(true);
 
     const validation = authSchema.safeParse({ email, password });
     if (!validation.success) {
-      toast({
-        title: 'Error de validación',
-        description: validation.error.errors[0].message,
-        variant: 'destructive',
-      });
+      const fieldErrors = validation.error.flatten().fieldErrors;
+      const errorMap: Record<string, string> = {};
+      for (const [key, messages] of Object.entries(fieldErrors)) {
+        if (messages && messages.length > 0) {
+          errorMap[key] = messages[0];
+        }
+      }
+      setFormErrors(errorMap);
       setLoading(false);
       return;
     }
+    setFormErrors({});
 
-    const { error } = action === 'signin' 
-      ? await signIn(email, password)
-      : await signUp(email, password);
+    const { error } = await signIn(email, password);
 
     if (error) {
       let message = error.message;
       if (message.includes('Invalid login credentials')) {
         message = 'Credenciales inválidas';
-      } else if (message.includes('User already registered')) {
-        message = 'Este email ya está registrado';
       }
-      
+
       toast({
         title: 'Error',
         description: message,
         variant: 'destructive',
-      });
-    } else if (action === 'signup') {
-      toast({
-        title: 'Registro exitoso',
-        description: 'Revisa tu email para confirmar tu cuenta',
       });
     }
 
@@ -77,72 +72,55 @@ export default function Auth() {
           <CardDescription>Accede al panel de administración</CardDescription>
         </CardHeader>
         <CardContent>
-          <Tabs defaultValue="signin">
-            <TabsList className="grid w-full grid-cols-2 mb-6">
-              <TabsTrigger value="signin">Iniciar Sesión</TabsTrigger>
-              <TabsTrigger value="signup">Registrarse</TabsTrigger>
-            </TabsList>
-            
-            <TabsContent value="signin">
-              <form onSubmit={(e) => { e.preventDefault(); handleSubmit('signin'); }} className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="signin-email">Email</Label>
-                  <Input
-                    id="signin-email"
-                    type="email"
-                    placeholder="tu@email.com"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    required
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="signin-password">Contraseña</Label>
-                  <Input
-                    id="signin-password"
-                    type="password"
-                    placeholder="••••••••"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    required
-                  />
-                </div>
-                <Button type="submit" className="w-full" disabled={loading}>
-                  {loading ? 'Cargando...' : 'Iniciar Sesión'}
-                </Button>
-              </form>
-            </TabsContent>
-            
-            <TabsContent value="signup">
-              <form onSubmit={(e) => { e.preventDefault(); handleSubmit('signup'); }} className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="signup-email">Email</Label>
-                  <Input
-                    id="signup-email"
-                    type="email"
-                    placeholder="tu@email.com"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    required
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="signup-password">Contraseña</Label>
-                  <Input
-                    id="signup-password"
-                    type="password"
-                    placeholder="••••••••"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    required
-                  />
-                </div>
-                <Button type="submit" className="w-full" disabled={loading}>
-                  {loading ? 'Cargando...' : 'Crear Cuenta'}
-                </Button>
-              </form>
-            </TabsContent>
-          </Tabs>
+          <form onSubmit={(e) => { e.preventDefault(); handleSubmit(); }} noValidate className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="signin-email">Email</Label>
+              <Input
+                id="signin-email"
+                type="email"
+                placeholder="tu@email.com"
+                value={email}
+                onChange={(e) => {
+                  setEmail(e.target.value);
+                  if (formErrors.email) {
+                    setFormErrors(prev => {
+                      const next = { ...prev };
+                      delete next.email;
+                      return next;
+                    });
+                  }
+                }}
+              />
+              {formErrors.email && (
+                <p className="text-sm text-destructive mt-1">{formErrors.email}</p>
+              )}
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="signin-password">Contraseña</Label>
+              <Input
+                id="signin-password"
+                type="password"
+                placeholder="••••••••"
+                value={password}
+                onChange={(e) => {
+                  setPassword(e.target.value);
+                  if (formErrors.password) {
+                    setFormErrors(prev => {
+                      const next = { ...prev };
+                      delete next.password;
+                      return next;
+                    });
+                  }
+                }}
+              />
+              {formErrors.password && (
+                <p className="text-sm text-destructive mt-1">{formErrors.password}</p>
+              )}
+            </div>
+            <Button type="submit" className="w-full" disabled={loading}>
+              {loading ? 'Cargando...' : 'Iniciar Sesión'}
+            </Button>
+          </form>
         </CardContent>
       </Card>
     </div>

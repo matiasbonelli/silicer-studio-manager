@@ -10,6 +10,9 @@ export default function BirthdayModal() {
   const [birthdayStudents, setBirthdayStudents] = useState<Student[]>([]);
 
   useEffect(() => {
+    const dismissedKey = `birthday-modal-dismissed-${new Date().toISOString().slice(0, 10)}`;
+    if (localStorage.getItem(dismissedKey)) return;
+
     const checkBirthdays = async () => {
       // Get today's month and day
       const now = new Date();
@@ -32,8 +35,11 @@ export default function BirthdayModal() {
         });
 
         if (todayBirthdays.length > 0) {
-          setBirthdayStudents(todayBirthdays as Student[]);
-          setIsOpen(true);
+          const dismissedKey = `birthday-dismissed-${todayMonth}-${todayDay}`;
+          if (!sessionStorage.getItem(dismissedKey)) {
+            setBirthdayStudents(todayBirthdays as Student[]);
+            setIsOpen(true);
+          }
         }
       }
     };
@@ -42,6 +48,8 @@ export default function BirthdayModal() {
   }, []);
 
   const handleClose = () => {
+    const dismissedKey = `birthday-modal-dismissed-${new Date().toISOString().slice(0, 10)}`;
+    localStorage.setItem(dismissedKey, '1');
     setIsOpen(false);
   };
 
@@ -86,7 +94,7 @@ export default function BirthdayModal() {
                     size="sm"
                     variant="outline"
                     className="mt-1"
-                    onClick={() => window.open(buildWhatsAppUrl(student), '_blank')}
+                    onClick={() => window.open(buildWhatsAppUrl(student), '_blank', 'noopener,noreferrer')}
                   >
                     <MessageCircle className="w-4 h-4 mr-2" /> Enviar mensaje
                   </Button>

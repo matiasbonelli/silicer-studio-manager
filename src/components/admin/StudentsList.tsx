@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Student, DAY_NAMES, PAYMENT_STATUS_LABELS, PaymentStatus, MONTH_NAMES } from '@/types/database';
+import { formatDate } from '@/lib/format';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -10,6 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import { Check, X, Search, Loader2, MessageCircle, FileText, Trash2, DollarSign, Calendar } from 'lucide-react';
+import { Skeleton } from '@/components/ui/skeleton';
 
 interface StudentsListProps {
   onStudentClick: (student: Student) => void;
@@ -28,13 +30,6 @@ const formatMonth = (monthStr: string | null) => {
   if (!monthStr) return '-';
   const [year, month] = monthStr.split('-');
   return `${MONTH_NAMES[month]} ${year}`;
-};
-
-// Helper para formatear fecha
-const formatDate = (dateStr: string | null) => {
-  if (!dateStr) return '-';
-  const date = new Date(dateStr);
-  return date.toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' });
 };
 
 export default function StudentsList({ onStudentClick, refreshTrigger, onStudentDeleted }: StudentsListProps) {
@@ -208,14 +203,6 @@ export default function StudentsList({ onStudentClick, refreshTrigger, onStudent
     return matchesSearch && matchesMonth;
   });
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <Loader2 className="w-8 h-8 animate-spin text-primary" />
-      </div>
-    );
-  }
-
   // Generar opciones de meses (últimos 12 meses + próximos 3)
   const generateMonthOptions = () => {
     const options: { value: string; label: string }[] = [];
@@ -279,7 +266,27 @@ export default function StudentsList({ onStudentClick, refreshTrigger, onStudent
             </TableRow>
           </TableHeader>
           <TableBody>
-            {filteredStudents.map(student => (
+            {loading ? (
+              Array.from({ length: 5 }).map((_, i) => (
+                <TableRow key={i}>
+                  <TableCell><Skeleton className="h-4 w-32" /></TableCell>
+                  <TableCell><Skeleton className="h-4 w-28" /></TableCell>
+                  <TableCell className="text-center"><Skeleton className="h-4 w-20 mx-auto" /></TableCell>
+                  <TableCell className="text-center"><Skeleton className="h-4 w-20 mx-auto" /></TableCell>
+                  <TableCell className="text-center"><Skeleton className="h-8 w-8 mx-auto rounded" /></TableCell>
+                  <TableCell className="text-center"><Skeleton className="h-5 w-16 mx-auto rounded-full" /></TableCell>
+                  <TableCell className="text-center"><Skeleton className="h-8 w-8 mx-auto rounded" /></TableCell>
+                  <TableCell className="text-center"><Skeleton className="h-8 w-8 mx-auto rounded" /></TableCell>
+                  <TableCell className="text-center"><Skeleton className="h-8 w-8 mx-auto rounded" /></TableCell>
+                </TableRow>
+              ))
+            ) : filteredStudents.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={9} className="text-center text-muted-foreground py-8">
+                  No se encontraron alumnos
+                </TableCell>
+              </TableRow>
+            ) : filteredStudents.map(student => (
               <TableRow 
                 key={student.id} 
                 className="cursor-pointer hover:bg-accent"
@@ -312,7 +319,7 @@ export default function StudentsList({ onStudentClick, refreshTrigger, onStudent
                       onClick={(e) => {
                         e.stopPropagation();
                         const phone = student.phone?.replace(/\D/g, '');
-                        window.open(`https://wa.me/54${phone}`, '_blank');
+                        window.open(`https://wa.me/54${phone}`, '_blank', 'noopener,noreferrer');
                       }}
                     >
                       <MessageCircle className="w-4 h-4" />
@@ -331,7 +338,7 @@ export default function StudentsList({ onStudentClick, refreshTrigger, onStudent
                       variant="outline"
                       onClick={(e) => {
                         e.stopPropagation();
-                        window.open(student.payment_receipt_url!, '_blank');
+                        window.open(student.payment_receipt_url!, '_blank', 'noopener,noreferrer');
                       }}
                     >
                       <FileText className="w-4 h-4" />
@@ -368,13 +375,6 @@ export default function StudentsList({ onStudentClick, refreshTrigger, onStudent
                 </TableCell>
               </TableRow>
             ))}
-            {filteredStudents.length === 0 && (
-              <TableRow>
-                <TableCell colSpan={9} className="text-center text-muted-foreground py-8">
-                  No se encontraron alumnos
-                </TableCell>
-              </TableRow>
-            )}
           </TableBody>
         </Table>
       </div>
