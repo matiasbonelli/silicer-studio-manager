@@ -281,8 +281,8 @@ export default function InventoryManager() {
         </div>
       </div>
 
-      <div className="rounded-lg border bg-card">
-        <Table>
+      <div className="rounded-lg border bg-card overflow-x-auto">
+        <Table className="min-w-[700px]">
           <TableHeader>
             <TableRow>
               <TableHead>Producto</TableHead>
@@ -311,8 +311,21 @@ export default function InventoryManager() {
               ))
             ) : filteredItems.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={8} className="text-center text-muted-foreground py-8">
-                  No hay productos en el inventario
+                <TableCell colSpan={8} className="py-16">
+                  <div className="flex flex-col items-center gap-3 text-muted-foreground">
+                    <Package className="h-10 w-10 opacity-30" />
+                    {search || categoryFilter !== 'all' ? (
+                      <>
+                        <p className="font-medium">No se encontraron productos</p>
+                        <p className="text-sm">Probá con otro nombre o cambiá el filtro de categoría.</p>
+                      </>
+                    ) : (
+                      <>
+                        <p className="font-medium">El inventario está vacío</p>
+                        <p className="text-sm">Agregá productos con el botón "Agregar Producto".</p>
+                      </>
+                    )}
+                  </div>
                 </TableCell>
               </TableRow>
             ) : filteredItems.map(item => (

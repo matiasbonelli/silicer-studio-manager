@@ -28,6 +28,54 @@
 
 ---
 
+### Punto 6 — Accesibilidad (aria-labels)
+
+**Archivos modificados:** `src/components/admin/StudentsList.tsx`, `src/components/admin/EnrollmentsManager.tsx`, `src/components/admin/SalesModule.tsx`
+
+- Agregado `aria-label` a los **17 botones de solo icono** identificados en los tres archivos.
+- **StudentsList (4):** Abrir WhatsApp, Ver comprobante de pago, Registrar pago, Eliminar alumno.
+- **EnrollmentsManager (6):** Ver detalle, Editar pre-inscripción, Enviar WhatsApp, Registrar pago, Convertir a alumno, Eliminar pre-inscripción.
+- **SalesModule (7):** Ver comprobante ×2, Subir comprobante ×2, Editar estado de pago, Eliminar venta ×2 (una por cada tabla).
+
+---
+
+### Punto 5 — Tablas responsive (mobile)
+
+**Archivos modificados:** `src/components/admin/StudentsList.tsx`, `src/components/admin/InventoryManager.tsx`, `src/components/admin/EnrollmentsManager.tsx`, `src/components/admin/SalesModule.tsx`
+
+- Todos los wrappers de tabla tienen `overflow-x-auto` para habilitar scroll horizontal en pantallas pequeñas.
+- Cada `<Table>` tiene un `min-w` acorde a su cantidad de columnas: `min-w-[800px]` (alumnos, 9 col), `min-w-[700px]` (inventario y pre-inscripciones, 7–8 col), `min-w-[750px]` (ventas, 10 col).
+- `SalesModule` tenía dos tablas separadas (historial y resumen por producto); ambas fueron actualizadas.
+- `EnrollmentsManager` ya tenía `overflow-x-auto`; solo se le agregó el `min-w`.
+
+---
+
+### Punto 4 — Ordenamiento + paginación en tablas
+
+**Archivo modificado:** `src/components/admin/StudentsList.tsx`
+
+- Headers **Nombre** y **Estado** son clickeables; un segundo click invierte el orden. Icono visual indica el campo y dirección activos (`ArrowUp`/`ArrowDown`/`ArrowUpDown`).
+- Orden de estado de pago: Pendiente → Parcial → Pagado (ascendente).
+- Paginación de 20 registros por página con controles Anterior/Siguiente y conteo "X–Y de Z alumnos".
+- Cambiar búsqueda, mes o columna de sort reinicia a la primera página.
+
+---
+
+### Punto 3 — Empty states mejorados
+
+**Archivos modificados:** `src/components/admin/StudentsList.tsx`, `src/components/admin/InventoryManager.tsx`, `src/components/admin/EnrollmentsManager.tsx`
+
+- Reemplazados los textos planos por bloques centrados con icono + mensaje principal + sugerencia de acción.
+- Los mensajes son contextuales: distinguen entre "sin datos" y "sin resultados para la búsqueda/filtro activo".
+- Iconos usados: `Users` (alumnos), `Package` (inventario), `UserPlus` (pre-inscripciones), todos con `opacity-30` para no saturar.
+
+**Casos cubiertos:**
+- **StudentsList:** sin búsqueda activa → "Todavía no hay alumnos registrados"; con búsqueda → "No se encontraron alumnos / Intentá con otro nombre".
+- **InventoryManager:** sin filtros → "El inventario está vacío / Agregá productos con el botón…"; con filtro → "No se encontraron productos / Probá con otro nombre o cambiá la categoría".
+- **EnrollmentsManager:** sin filtros → "Todavía no hay pre-inscripciones / Cuando alguien complete el formulario…"; con filtro → "No se encontraron pre-inscripciones / Intentá con otro nombre o estado".
+
+---
+
 ### Fix adicional — Modal de cumpleaños
 
 **Archivo modificado:** `src/components/admin/BirthdayModal.tsx`
@@ -39,31 +87,6 @@
 ---
 
 ## Pendiente de implementación
-
-### Punto 3 — Empty states mejorados
-
-**Archivos:** `StudentsList.tsx`, `InventoryManager.tsx`, `EnrollmentsManager.tsx`
-
-Reemplazar textos planos como "No se encontraron alumnos" por bloques con icono + mensaje descriptivo + sugerencia de acción.
-
-### Punto 4 — Ordenamiento + paginación en tablas
-
-**Archivo:** `StudentsList.tsx`
-
-- Headers clickeables para ordenar por Nombre y Estado de pago.
-- Paginación de 20 registros con controles Anterior/Siguiente.
-
-### Punto 5 — Tablas responsive (mobile)
-
-**Archivos:** `StudentsList.tsx`, `EnrollmentsManager.tsx`, `InventoryManager.tsx`, `SalesModule.tsx`
-
-Envolver tablas con `overflow-x-auto` y `min-w` para scroll horizontal en mobile.
-
-### Punto 6 — Accesibilidad (aria-labels)
-
-**Archivos:** `StudentsList.tsx`, `EnrollmentsManager.tsx`, `SalesModule.tsx`
-
-Agregar `aria-label` a los 15 botones de solo icono para lectores de pantalla.
 
 ### Punto 7 — Dashboard KPIs (solo planificación)
 

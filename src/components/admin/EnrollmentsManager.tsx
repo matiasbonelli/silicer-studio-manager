@@ -552,7 +552,7 @@ export default function EnrollmentsManager({ onStudentCreated }: EnrollmentsMana
 
       {/* Table */}
       <div className="rounded-lg border bg-card overflow-x-auto">
-        <Table>
+        <Table className="min-w-[700px]">
           <TableHeader>
             <TableRow>
               <TableHead>Fecha</TableHead>
@@ -579,8 +579,21 @@ export default function EnrollmentsManager({ onStudentCreated }: EnrollmentsMana
               ))
             ) : filteredEnrollments.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={7} className="text-center text-muted-foreground py-8">
-                  No se encontraron pre-inscripciones
+                <TableCell colSpan={7} className="py-16">
+                  <div className="flex flex-col items-center gap-3 text-muted-foreground">
+                    <UserPlus className="h-10 w-10 opacity-30" />
+                    {search || statusFilter !== 'all' ? (
+                      <>
+                        <p className="font-medium">No se encontraron pre-inscripciones</p>
+                        <p className="text-sm">Intentá con otro nombre o cambiá el filtro de estado.</p>
+                      </>
+                    ) : (
+                      <>
+                        <p className="font-medium">Todavía no hay pre-inscripciones</p>
+                        <p className="text-sm">Cuando alguien complete el formulario de inscripción, aparecerá aquí.</p>
+                      </>
+                    )}
+                  </div>
                 </TableCell>
               </TableRow>
             ) : filteredEnrollments.map(enrollment => (
@@ -637,6 +650,7 @@ export default function EnrollmentsManager({ onStudentCreated }: EnrollmentsMana
                     <Button
                       size="sm"
                       variant="ghost"
+                      aria-label="Ver detalle"
                       onClick={() => {
                         setSelectedEnrollment(enrollment);
                         setIsDetailModalOpen(true);
@@ -649,6 +663,7 @@ export default function EnrollmentsManager({ onStudentCreated }: EnrollmentsMana
                     <Button
                       size="sm"
                       variant="ghost"
+                      aria-label="Editar pre-inscripción"
                       onClick={() => openEditModal(enrollment)}
                     >
                       <Pencil className="w-4 h-4" />
@@ -660,6 +675,7 @@ export default function EnrollmentsManager({ onStudentCreated }: EnrollmentsMana
                         size="sm"
                         variant="ghost"
                         className="text-green-600 hover:text-green-700"
+                        aria-label="Enviar WhatsApp"
                         onClick={async () => {
                           const phone = enrollment.phone?.replace(/\D/g, '');
                           const day = enrollment.schedule ? DAY_NAMES[enrollment.schedule.day_of_week] : '[Completar día]';
@@ -688,6 +704,7 @@ export default function EnrollmentsManager({ onStudentCreated }: EnrollmentsMana
                     <Button
                       size="sm"
                       variant="ghost"
+                      aria-label="Registrar pago"
                       onClick={() => openPaymentModal(enrollment)}
                     >
                       <DollarSign className="w-4 h-4" />
@@ -699,6 +716,7 @@ export default function EnrollmentsManager({ onStudentCreated }: EnrollmentsMana
                         size="sm"
                         variant="ghost"
                         className="text-primary"
+                        aria-label="Convertir a alumno"
                         onClick={() => openConvertModal(enrollment)}
                       >
                         <UserPlus className="w-4 h-4" />
@@ -710,6 +728,7 @@ export default function EnrollmentsManager({ onStudentCreated }: EnrollmentsMana
                       size="sm"
                       variant="ghost"
                       className="text-destructive hover:text-destructive"
+                      aria-label="Eliminar pre-inscripción"
                       onClick={() => openDeleteModal(enrollment)}
                     >
                       <Trash2 className="w-4 h-4" />
