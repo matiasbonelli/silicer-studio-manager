@@ -90,7 +90,6 @@ export default function Auth() {
                     });
                   }
                 }}
-                required
               />
               {formErrors.email && (
                 <p className="text-sm text-destructive mt-1">{formErrors.email}</p>
@@ -113,7 +112,6 @@ export default function Auth() {
                     });
                   }
                 }}
-                required
               />
               {formErrors.password && (
                 <p className="text-sm text-destructive mt-1">{formErrors.password}</p>

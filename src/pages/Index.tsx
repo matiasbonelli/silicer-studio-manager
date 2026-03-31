@@ -410,7 +410,6 @@ useEffect(() => {
                       value={formData.first_name}
                       onChange={(e) => updateField('first_name', e.target.value)}
                       className="border-[#d4c4b0] focus:border-[#4a3f35]"
-                      required
                     />
                     {formErrors.first_name && (
                       <p className="text-sm text-destructive mt-1">{formErrors.first_name}</p>
@@ -423,7 +422,6 @@ useEffect(() => {
                       value={formData.last_name}
                       onChange={(e) => updateField('last_name', e.target.value)}
                       className="border-[#d4c4b0] focus:border-[#4a3f35]"
-                      required
                     />
                     {formErrors.last_name && (
                       <p className="text-sm text-destructive mt-1">{formErrors.last_name}</p>
@@ -454,7 +452,6 @@ useEffect(() => {
                       value={formData.phone}
                       onChange={(e) => updateField('phone', e.target.value)}
                       className="border-[#d4c4b0] focus:border-[#4a3f35]"
-                      required
                     />
                     {formErrors.phone && (
                       <p className="text-sm text-destructive mt-1">{formErrors.phone}</p>
