@@ -44,6 +44,7 @@ export default function Index() {
     schedule_id: '',
     message: '',
   });
+  const [formErrors, setFormErrors] = useState<Record<string, string>>({});
   const { toast } = useToast();
 
   const infoSectionRef = useRef<HTMLElement>(null);
@@ -97,14 +98,16 @@ export default function Index() {
 
     const validation = enrollmentSchema.safeParse(formData);
     if (!validation.success) {
-      toast({
-        title: 'Error de validación',
-        description: validation.error.errors[0].message,
-        variant: 'destructive',
-      });
+      const fieldErrors = validation.error.flatten().fieldErrors;
+      const mapped: Record<string, string> = {};
+      for (const [key, msgs] of Object.entries(fieldErrors)) {
+        if (msgs && msgs.length > 0) mapped[key] = msgs[0];
+      }
+      setFormErrors(mapped);
       setSubmitting(false);
       return;
     }
+    setFormErrors({});
 
     const { data: rpcResult, error } = await supabase.rpc('submit_enrollment', {
       p_first_name: formData.first_name,
@@ -134,6 +137,7 @@ export default function Index() {
             : s
         )
       );
+      setFormErrors({});
       setSelectedDay('');
       setFormData({
         first_name: '',
@@ -391,20 +395,32 @@ useEffect(() => {
                     <Input
                       id="first_name"
                       value={formData.first_name}
-                      onChange={(e) => setFormData(prev => ({ ...prev, first_name: e.target.value }))}
+                      onChange={(e) => {
+                        setFormData(prev => ({ ...prev, first_name: e.target.value }));
+                        setFormErrors(prev => ({ ...prev, first_name: '' }));
+                      }}
                       className="border-[#d4c4b0] focus:border-[#4a3f35]"
                       required
                     />
+                    {formErrors.first_name && (
+                      <p className="text-sm text-destructive mt-1">{formErrors.first_name}</p>
+                    )}
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="last_name" className="text-[#4a3f35]">Apellido *</Label>
                     <Input
                       id="last_name"
                       value={formData.last_name}
-                      onChange={(e) => setFormData(prev => ({ ...prev, last_name: e.target.value }))}
+                      onChange={(e) => {
+                        setFormData(prev => ({ ...prev, last_name: e.target.value }));
+                        setFormErrors(prev => ({ ...prev, last_name: '' }));
+                      }}
                       className="border-[#d4c4b0] focus:border-[#4a3f35]"
                       required
                     />
+                    {formErrors.last_name && (
+                      <p className="text-sm text-destructive mt-1">{formErrors.last_name}</p>
+                    )}
                   </div>
                 </div>
 
@@ -414,9 +430,15 @@ useEffect(() => {
                     id="email"
                     type="email"
                     value={formData.email}
-                    onChange={(e) => setFormData(prev => ({ ...prev, email: e.target.value }))}
+                    onChange={(e) => {
+                      setFormData(prev => ({ ...prev, email: e.target.value }));
+                      setFormErrors(prev => ({ ...prev, email: '' }));
+                    }}
                     className="border-[#d4c4b0] focus:border-[#4a3f35]"
                   />
+                  {formErrors.email && (
+                    <p className="text-sm text-destructive mt-1">{formErrors.email}</p>
+                  )}
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -426,10 +448,16 @@ useEffect(() => {
                       id="phone"
                       type="tel"
                       value={formData.phone}
-                      onChange={(e) => setFormData(prev => ({ ...prev, phone: e.target.value }))}
+                      onChange={(e) => {
+                        setFormData(prev => ({ ...prev, phone: e.target.value }));
+                        setFormErrors(prev => ({ ...prev, phone: '' }));
+                      }}
                       className="border-[#d4c4b0] focus:border-[#4a3f35]"
                       required
                     />
+                    {formErrors.phone && (
+                      <p className="text-sm text-destructive mt-1">{formErrors.phone}</p>
+                    )}
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="birthday" className="text-[#4a3f35]">Fecha de Nacimiento</Label>
@@ -474,7 +502,10 @@ useEffect(() => {
   <Label htmlFor="schedule" className="text-[#4a3f35]">Horario *</Label>
   <Select
     value={formData.schedule_id}
-    onValueChange={(value) => setFormData(prev => ({ ...prev, schedule_id: value }))}
+    onValueChange={(value) => {
+      setFormData(prev => ({ ...prev, schedule_id: value }));
+      setFormErrors(prev => ({ ...prev, schedule_id: '' }));
+    }}
     disabled={!selectedDay  || loading || (!validAge && selectedDay === "saturday")}
   >
     <SelectTrigger className="border-[#d4c4b0] focus:border-[#4a3f35]">
@@ -498,6 +529,9 @@ useEffect(() => {
       )}
     </SelectContent>
   </Select>
+  {formErrors.schedule_id && (
+    <p className="text-sm text-destructive mt-1">{formErrors.schedule_id}</p>
+  )}
 </div>
                 </div>
 
@@ -506,11 +540,17 @@ useEffect(() => {
                   <Textarea
                     id="message"
                     value={formData.message}
-                    onChange={(e) => setFormData(prev => ({ ...prev, message: e.target.value }))}
+                    onChange={(e) => {
+                      setFormData(prev => ({ ...prev, message: e.target.value }));
+                      setFormErrors(prev => ({ ...prev, message: '' }));
+                    }}
                     placeholder="¿Tenés alguna consulta o comentario?"
                     className="border-[#d4c4b0] focus:border-[#4a3f35]"
                     rows={3}
                   />
+                  {formErrors.message && (
+                    <p className="text-sm text-destructive mt-1">{formErrors.message}</p>
+                  )}
                 </div>
 
                 <Button

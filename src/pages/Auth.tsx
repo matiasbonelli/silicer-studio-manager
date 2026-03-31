@@ -17,6 +17,7 @@ export default function Auth() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [formErrors, setFormErrors] = useState<Record<string, string>>({});
   const { signIn, user } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
@@ -32,14 +33,16 @@ export default function Auth() {
 
     const validation = authSchema.safeParse({ email, password });
     if (!validation.success) {
-      toast({
-        title: 'Error de validación',
-        description: validation.error.errors[0].message,
-        variant: 'destructive',
-      });
+      const fieldErrors = validation.error.flatten().fieldErrors;
+      const mapped: Record<string, string> = {};
+      for (const [key, msgs] of Object.entries(fieldErrors)) {
+        if (msgs && msgs.length > 0) mapped[key] = msgs[0];
+      }
+      setFormErrors(mapped);
       setLoading(false);
       return;
     }
+    setFormErrors({});
 
     const { error } = await signIn(email, password);
 
@@ -75,9 +78,15 @@ export default function Auth() {
                 type="email"
                 placeholder="tu@email.com"
                 value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                onChange={(e) => {
+                  setEmail(e.target.value);
+                  setFormErrors(prev => ({ ...prev, email: '' }));
+                }}
                 required
               />
+              {formErrors.email && (
+                <p className="text-sm text-destructive mt-1">{formErrors.email}</p>
+              )}
             </div>
             <div className="space-y-2">
               <Label htmlFor="signin-password">Contraseña</Label>
@@ -86,9 +95,15 @@ export default function Auth() {
                 type="password"
                 placeholder="••••••••"
                 value={password}
-                onChange={(e) => setPassword(e.target.value)}
+                onChange={(e) => {
+                  setPassword(e.target.value);
+                  setFormErrors(prev => ({ ...prev, password: '' }));
+                }}
                 required
               />
+              {formErrors.password && (
+                <p className="text-sm text-destructive mt-1">{formErrors.password}</p>
+              )}
             </div>
             <Button type="submit" className="w-full" disabled={loading}>
               {loading ? 'Cargando...' : 'Iniciar Sesión'}
