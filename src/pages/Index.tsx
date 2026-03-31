@@ -44,7 +44,19 @@ export default function Index() {
     schedule_id: '',
     message: '',
   });
+  const [formErrors, setFormErrors] = useState<Record<string, string>>({});
   const { toast } = useToast();
+
+  const updateField = (field: string, value: string) => {
+    setFormData(prev => ({ ...prev, [field]: value }));
+    if (formErrors[field]) {
+      setFormErrors(prev => {
+        const next = { ...prev };
+        delete next[field];
+        return next;
+      });
+    }
+  };
 
   const infoSectionRef = useRef<HTMLElement>(null);
   const formSectionRef = useRef<HTMLElement>(null);
@@ -97,14 +109,18 @@ export default function Index() {
 
     const validation = enrollmentSchema.safeParse(formData);
     if (!validation.success) {
-      toast({
-        title: 'Error de validación',
-        description: validation.error.errors[0].message,
-        variant: 'destructive',
-      });
+      const fieldErrors = validation.error.flatten().fieldErrors;
+      const errorMap: Record<string, string> = {};
+      for (const [key, messages] of Object.entries(fieldErrors)) {
+        if (messages && messages.length > 0) {
+          errorMap[key] = messages[0];
+        }
+      }
+      setFormErrors(errorMap);
       setSubmitting(false);
       return;
     }
+    setFormErrors({});
 
     const { data: rpcResult, error } = await supabase.rpc('submit_enrollment', {
       p_first_name: formData.first_name,
@@ -126,6 +142,7 @@ export default function Index() {
       });
     } else {
       // Show success modal instead of toast
+      setFormErrors({});
       setShowSuccessModal(true);
       setSchedules(prev =>
         prev.map(s =>
@@ -391,20 +408,26 @@ useEffect(() => {
                     <Input
                       id="first_name"
                       value={formData.first_name}
-                      onChange={(e) => setFormData(prev => ({ ...prev, first_name: e.target.value }))}
+                      onChange={(e) => updateField('first_name', e.target.value)}
                       className="border-[#d4c4b0] focus:border-[#4a3f35]"
                       required
                     />
+                    {formErrors.first_name && (
+                      <p className="text-sm text-destructive mt-1">{formErrors.first_name}</p>
+                    )}
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="last_name" className="text-[#4a3f35]">Apellido *</Label>
                     <Input
                       id="last_name"
                       value={formData.last_name}
-                      onChange={(e) => setFormData(prev => ({ ...prev, last_name: e.target.value }))}
+                      onChange={(e) => updateField('last_name', e.target.value)}
                       className="border-[#d4c4b0] focus:border-[#4a3f35]"
                       required
                     />
+                    {formErrors.last_name && (
+                      <p className="text-sm text-destructive mt-1">{formErrors.last_name}</p>
+                    )}
                   </div>
                 </div>
 
@@ -414,9 +437,12 @@ useEffect(() => {
                     id="email"
                     type="email"
                     value={formData.email}
-                    onChange={(e) => setFormData(prev => ({ ...prev, email: e.target.value }))}
+                    onChange={(e) => updateField('email', e.target.value)}
                     className="border-[#d4c4b0] focus:border-[#4a3f35]"
                   />
+                  {formErrors.email && (
+                    <p className="text-sm text-destructive mt-1">{formErrors.email}</p>
+                  )}
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -426,10 +452,13 @@ useEffect(() => {
                       id="phone"
                       type="tel"
                       value={formData.phone}
-                      onChange={(e) => setFormData(prev => ({ ...prev, phone: e.target.value }))}
+                      onChange={(e) => updateField('phone', e.target.value)}
                       className="border-[#d4c4b0] focus:border-[#4a3f35]"
                       required
                     />
+                    {formErrors.phone && (
+                      <p className="text-sm text-destructive mt-1">{formErrors.phone}</p>
+                    )}
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="birthday" className="text-[#4a3f35]">Fecha de Nacimiento</Label>
@@ -437,7 +466,7 @@ useEffect(() => {
                       id="birthday"
                       type="date"
                       value={formData.birthday}
-                      onChange={(e) => setFormData(prev => ({ ...prev, birthday: e.target.value }))}
+                      onChange={(e) => updateField('birthday', e.target.value)}
                       className="border-[#d4c4b0] focus:border-[#4a3f35] max-w-[200px]"
                     />
                   </div>
@@ -450,7 +479,7 @@ useEffect(() => {
                       value={selectedDay}
                       onValueChange={(value) => {
                         setSelectedDay(value);
-                        setFormData(prev => ({ ...prev, schedule_id: '' }));
+                        updateField('schedule_id', '');
                       }}
                     >
                       <SelectTrigger className="border-[#d4c4b0] focus:border-[#4a3f35]">
@@ -474,7 +503,7 @@ useEffect(() => {
   <Label htmlFor="schedule" className="text-[#4a3f35]">Horario *</Label>
   <Select
     value={formData.schedule_id}
-    onValueChange={(value) => setFormData(prev => ({ ...prev, schedule_id: value }))}
+    onValueChange={(value) => updateField('schedule_id', value)}
     disabled={!selectedDay  || loading || (!validAge && selectedDay === "saturday")}
   >
     <SelectTrigger className="border-[#d4c4b0] focus:border-[#4a3f35]">
@@ -498,6 +527,9 @@ useEffect(() => {
       )}
     </SelectContent>
   </Select>
+  {formErrors.schedule_id && (
+    <p className="text-sm text-destructive mt-1">{formErrors.schedule_id}</p>
+  )}
 </div>
                 </div>
 
@@ -506,11 +538,14 @@ useEffect(() => {
                   <Textarea
                     id="message"
                     value={formData.message}
-                    onChange={(e) => setFormData(prev => ({ ...prev, message: e.target.value }))}
+                    onChange={(e) => updateField('message', e.target.value)}
                     placeholder="¿Tenés alguna consulta o comentario?"
                     className="border-[#d4c4b0] focus:border-[#4a3f35]"
                     rows={3}
                   />
+                  {formErrors.message && (
+                    <p className="text-sm text-destructive mt-1">{formErrors.message}</p>
+                  )}
                 </div>
 
                 <Button
