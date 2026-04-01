@@ -141,23 +141,51 @@ export default function StudentsList({ onStudentClick, refreshTrigger, onStudent
     }
   };
 
+  type ComputedStatus = PaymentStatus | 'advanced';
+
+  const getComputedStatus = (student: Student): { status: ComputedStatus; contextLabel: string | null } => {
+    if (selectedMonth === 'all') return { status: student.payment_status, contextLabel: null };
+    if (!student.payment_month) return { status: 'pending', contextLabel: null };
+    if (student.payment_month === selectedMonth) return { status: student.payment_status, contextLabel: null };
+    const contextLabel = `Pagó hasta ${formatMonth(student.payment_month)}`;
+    if (student.payment_month < selectedMonth) return { status: 'pending', contextLabel };
+    return { status: 'advanced', contextLabel };
+  };
+
   const getPaymentBadge = (student: Student) => {
-    switch (student.payment_status) {
+    const { status, contextLabel } = getComputedStatus(student);
+    let badge: React.ReactNode;
+    switch (status) {
       case 'paid':
-        return <Badge className="bg-green-500 hover:bg-green-600">Total</Badge>;
+        badge = <Badge className="bg-green-500 hover:bg-green-600">Total</Badge>;
+        break;
       case 'partial':
-        return (
+        badge = (
           <div className="text-center">
             <Badge className="bg-yellow-500 hover:bg-yellow-600">Parcial</Badge>
-            {student.paid_amount && (
+            {student.payment_month === selectedMonth && student.paid_amount && (
               <p className="text-xs text-muted-foreground mt-1">${student.paid_amount.toLocaleString()}</p>
             )}
           </div>
         );
+        break;
+      case 'advanced':
+        badge = <Badge className="bg-blue-500 hover:bg-blue-600">Adelantado</Badge>;
+        break;
       case 'pending':
       default:
-        return <Badge variant="destructive">Pendiente</Badge>;
+        badge = <Badge variant="destructive">Pendiente</Badge>;
+        break;
     }
+    if (contextLabel) {
+      return (
+        <div className="text-center">
+          {badge}
+          <p className="text-xs text-muted-foreground mt-1">{contextLabel}</p>
+        </div>
+      );
+    }
+    return badge;
   };
 
   const handleDeleteStudent = async () => {
@@ -202,12 +230,10 @@ export default function StudentsList({ onStudentClick, refreshTrigger, onStudent
 
   const filteredStudents = students.filter(student => {
     const fullName = `${student.first_name} ${student.last_name}`.toLowerCase();
-    const matchesSearch = fullName.includes(search.toLowerCase());
-    const matchesMonth = !selectedMonth || selectedMonth === 'all' || student.payment_month === selectedMonth || !student.payment_month;
-    return matchesSearch && matchesMonth;
+    return fullName.includes(search.toLowerCase());
   });
 
-  const PAYMENT_STATUS_ORDER: Record<string, number> = { pending: 0, partial: 1, paid: 2 };
+  const PAYMENT_STATUS_ORDER: Record<string, number> = { pending: 0, partial: 1, paid: 2, advanced: 3 };
 
   const sortedStudents = [...filteredStudents].sort((a, b) => {
     if (!sortField) return 0;
@@ -217,7 +243,9 @@ export default function StudentsList({ onStudentClick, refreshTrigger, onStudent
       const nameB = `${b.first_name} ${b.last_name}`.toLowerCase();
       cmp = nameA.localeCompare(nameB, 'es');
     } else if (sortField === 'payment_status') {
-      cmp = (PAYMENT_STATUS_ORDER[a.payment_status] ?? 0) - (PAYMENT_STATUS_ORDER[b.payment_status] ?? 0);
+      const statusA = getComputedStatus(a).status;
+      const statusB = getComputedStatus(b).status;
+      cmp = (PAYMENT_STATUS_ORDER[statusA] ?? 0) - (PAYMENT_STATUS_ORDER[statusB] ?? 0);
     }
     return sortDir === 'asc' ? cmp : -cmp;
   });
@@ -289,6 +317,29 @@ export default function StudentsList({ onStudentClick, refreshTrigger, onStudent
         </div>
       </div>
 
+      {selectedMonth !== 'all' && !loading && (
+        <div className="flex flex-wrap gap-3 text-sm">
+          <span className="flex items-center gap-1.5">
+            <span className="w-2 h-2 rounded-full bg-green-500 inline-block" />
+            {sortedStudents.filter(s => getComputedStatus(s).status === 'paid').length} pagados
+          </span>
+          <span className="flex items-center gap-1.5">
+            <span className="w-2 h-2 rounded-full bg-yellow-500 inline-block" />
+            {sortedStudents.filter(s => getComputedStatus(s).status === 'partial').length} parciales
+          </span>
+          <span className="flex items-center gap-1.5">
+            <span className="w-2 h-2 rounded-full bg-red-500 inline-block" />
+            {sortedStudents.filter(s => getComputedStatus(s).status === 'pending').length} pendientes
+          </span>
+          {sortedStudents.some(s => getComputedStatus(s).status === 'advanced') && (
+            <span className="flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded-full bg-blue-500 inline-block" />
+              {sortedStudents.filter(s => getComputedStatus(s).status === 'advanced').length} adelantados
+            </span>
+          )}
+        </div>
+      )}
+
       <div className="rounded-lg border bg-card overflow-x-auto">
         <Table className="min-w-[800px]">
           <TableHeader>
@@ -333,7 +384,7 @@ export default function StudentsList({ onStudentClick, refreshTrigger, onStudent
                   <TableCell className="text-center"><Skeleton className="h-8 w-8 mx-auto rounded" /></TableCell>
                 </TableRow>
               ))
-            ) : filteredStudents.length === 0 ? (
+            ) : sortedStudents.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={9} className="py-16">
                   <div className="flex flex-col items-center gap-3 text-muted-foreground">
