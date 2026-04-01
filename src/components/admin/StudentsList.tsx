@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
-import { Student, DAY_NAMES, PAYMENT_STATUS_LABELS, PaymentStatus, MONTH_NAMES } from '@/types/database';
+import { Student, Payment, DAY_NAMES, PAYMENT_STATUS_LABELS, PaymentStatus, MONTH_NAMES } from '@/types/database';
 import { formatDate } from '@/lib/format';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
@@ -34,6 +34,7 @@ const formatMonth = (monthStr: string | null) => {
 
 export default function StudentsList({ onStudentClick, refreshTrigger, onStudentDeleted }: StudentsListProps) {
   const [students, setStudents] = useState<Student[]>([]);
+  const [payments, setPayments] = useState<Record<string, Payment>>({});
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [selectedMonth, setSelectedMonth] = useState<string>(getCurrentMonth());
@@ -63,21 +64,45 @@ export default function StudentsList({ onStudentClick, refreshTrigger, onStudent
     setLoading(false);
   };
 
+  const fetchPayments = async (month: string) => {
+    if (month === 'all') {
+      setPayments({});
+      return;
+    }
+    const { data } = await supabase
+      .from('payments')
+      .select('*')
+      .eq('month', month);
+
+    const map: Record<string, Payment> = {};
+    if (data) {
+      for (const p of data as Payment[]) {
+        map[p.student_id] = p;
+      }
+    }
+    setPayments(map);
+  };
+
   useEffect(() => {
     fetchStudents();
   }, [refreshTrigger]);
 
+  useEffect(() => {
+    fetchPayments(selectedMonth);
+  }, [selectedMonth, refreshTrigger]);
+
   const openPaymentModal = (student: Student) => {
     setStudentToPayment(student);
-    // Mapear el estado actual al tipo de pago correcto
-    if (student.payment_status === 'paid') {
-      setPaymentType('total');
-    } else if (student.payment_status === 'partial') {
-      setPaymentType('partial');
+    const payment = payments[student.id];
+    if (payment) {
+      if (payment.status === 'paid') setPaymentType('total');
+      else if (payment.status === 'partial') setPaymentType('partial');
+      else setPaymentType('pending');
+      setPartialAmount(payment.amount?.toString() || '');
     } else {
-      setPaymentType('pending');
+      setPaymentType('total');
+      setPartialAmount('');
     }
-    setPartialAmount(student.paid_amount?.toString() || '');
     setIsPaymentModalOpen(true);
   };
 
@@ -106,20 +131,21 @@ export default function StudentsList({ onStudentClick, refreshTrigger, onStudent
       paidAmount = null;
     }
 
-    // Solo actualizar fecha si se está pagando (total o parcial)
     const paymentDate = (paymentType === 'total' || paymentType === 'partial')
       ? new Date().toISOString()
       : null;
 
+    const targetMonth = selectedMonth !== 'all' ? selectedMonth : getCurrentMonth();
+
     const { error } = await supabase
-      .from('students')
-      .update({
-        payment_status: newStatus,
-        paid_amount: paidAmount,
+      .from('payments')
+      .upsert({
+        student_id: studentToPayment.id,
+        month: targetMonth,
+        status: newStatus,
+        amount: paidAmount,
         payment_date: paymentDate,
-        payment_month: selectedMonth,
-      })
-      .eq('id', studentToPayment.id);
+      }, { onConflict: 'student_id,month' });
 
     if (error) {
       toast({
@@ -137,23 +163,24 @@ export default function StudentsList({ onStudentClick, refreshTrigger, onStudent
       });
       setIsPaymentModalOpen(false);
       setStudentToPayment(null);
-      fetchStudents();
+      fetchPayments(targetMonth);
     }
   };
 
-  type ComputedStatus = PaymentStatus | 'advanced';
+  type ComputedStatus = PaymentStatus;
 
   const getComputedStatus = (student: Student): { status: ComputedStatus; contextLabel: string | null } => {
-    if (selectedMonth === 'all') return { status: student.payment_status, contextLabel: null };
-    if (!student.payment_month) return { status: 'pending', contextLabel: null };
-    if (student.payment_month === selectedMonth) return { status: student.payment_status, contextLabel: null };
-    const contextLabel = `Pagó hasta ${formatMonth(student.payment_month)}`;
-    if (student.payment_month < selectedMonth) return { status: 'pending', contextLabel };
-    return { status: 'advanced', contextLabel };
+    if (selectedMonth === 'all') {
+      return { status: student.payment_status, contextLabel: null };
+    }
+    const payment = payments[student.id];
+    if (!payment) return { status: 'pending', contextLabel: null };
+    return { status: payment.status as ComputedStatus, contextLabel: null };
   };
 
   const getPaymentBadge = (student: Student) => {
     const { status, contextLabel } = getComputedStatus(student);
+    const payment = payments[student.id];
     let badge: React.ReactNode;
     switch (status) {
       case 'paid':
@@ -163,14 +190,11 @@ export default function StudentsList({ onStudentClick, refreshTrigger, onStudent
         badge = (
           <div className="text-center">
             <Badge className="bg-yellow-500 hover:bg-yellow-600">Parcial</Badge>
-            {student.payment_month === selectedMonth && student.paid_amount && (
-              <p className="text-xs text-muted-foreground mt-1">${student.paid_amount.toLocaleString()}</p>
+            {payment?.amount && (
+              <p className="text-xs text-muted-foreground mt-1">${payment.amount.toLocaleString()}</p>
             )}
           </div>
         );
-        break;
-      case 'advanced':
-        badge = <Badge className="bg-blue-500 hover:bg-blue-600">Adelantado</Badge>;
         break;
       case 'pending':
       default:
@@ -190,29 +214,29 @@ export default function StudentsList({ onStudentClick, refreshTrigger, onStudent
 
   const handleDeleteStudent = async () => {
     if (!studentToDelete) return;
-    
+
     setIsDeleting(true);
-    
+
     // First, nullify references in enrollments
     await supabase
       .from('enrollments')
       .update({ converted_to_student_id: null })
       .eq('converted_to_student_id', studentToDelete.id);
-    
+
     // Nullify references in sales
     await supabase
       .from('sales')
       .update({ student_id: null })
       .eq('student_id', studentToDelete.id);
-    
+
     // Now delete the student
     const { error } = await supabase
       .from('students')
       .delete()
       .eq('id', studentToDelete.id);
-    
+
     setIsDeleting(false);
-    
+
     if (error) {
       toast({
         title: 'Error',
@@ -233,7 +257,7 @@ export default function StudentsList({ onStudentClick, refreshTrigger, onStudent
     return fullName.includes(search.toLowerCase());
   });
 
-  const PAYMENT_STATUS_ORDER: Record<string, number> = { pending: 0, partial: 1, paid: 2, advanced: 3 };
+  const PAYMENT_STATUS_ORDER: Record<string, number> = { pending: 0, partial: 1, paid: 2 };
 
   const sortedStudents = [...filteredStudents].sort((a, b) => {
     if (!sortField) return 0;
@@ -331,12 +355,6 @@ export default function StudentsList({ onStudentClick, refreshTrigger, onStudent
             <span className="w-2 h-2 rounded-full bg-red-500 inline-block" />
             {sortedStudents.filter(s => getComputedStatus(s).status === 'pending').length} pendientes
           </span>
-          {sortedStudents.some(s => getComputedStatus(s).status === 'advanced') && (
-            <span className="flex items-center gap-1.5">
-              <span className="w-2 h-2 rounded-full bg-blue-500 inline-block" />
-              {sortedStudents.filter(s => getComputedStatus(s).status === 'advanced').length} adelantados
-            </span>
-          )}
         </div>
       )}
 
@@ -403,99 +421,105 @@ export default function StudentsList({ onStudentClick, refreshTrigger, onStudent
                   </div>
                 </TableCell>
               </TableRow>
-            ) : paginatedStudents.map(student => (
-              <TableRow 
-                key={student.id} 
-                className="cursor-pointer hover:bg-accent"
-                onClick={() => onStudentClick(student)}
-              >
-                <TableCell className="font-medium">
-                  {student.first_name} {student.last_name}
-                </TableCell>
-                <TableCell>
-                  {student.schedule ? (
-                    <span className="text-sm">
-                      {DAY_NAMES[student.schedule.day_of_week]} {student.schedule.start_time.slice(0, 5)}
-                    </span>
-                  ) : (
-                    <span className="text-muted-foreground text-sm">Sin asignar</span>
-                  )}
-                </TableCell>
-                <TableCell className="text-center text-sm">
-                  {formatMonth(student.payment_month)}
-                </TableCell>
-                <TableCell className="text-center text-sm">
-                  {formatDate(student.payment_date)}
-                </TableCell>
-                <TableCell className="text-center">
-                  {student.phone ? (
+            ) : paginatedStudents.map(student => {
+              const payment = payments[student.id];
+              const paymentMonth = selectedMonth !== 'all' ? selectedMonth : student.payment_month;
+              const paymentDate = selectedMonth !== 'all' ? payment?.payment_date ?? null : student.payment_date;
+              const receiptUrl = selectedMonth !== 'all' ? payment?.receipt_url ?? null : student.payment_receipt_url;
+              return (
+                <TableRow
+                  key={student.id}
+                  className="cursor-pointer hover:bg-accent"
+                  onClick={() => onStudentClick(student)}
+                >
+                  <TableCell className="font-medium">
+                    {student.first_name} {student.last_name}
+                  </TableCell>
+                  <TableCell>
+                    {student.schedule ? (
+                      <span className="text-sm">
+                        {DAY_NAMES[student.schedule.day_of_week]} {student.schedule.start_time.slice(0, 5)}
+                      </span>
+                    ) : (
+                      <span className="text-muted-foreground text-sm">Sin asignar</span>
+                    )}
+                  </TableCell>
+                  <TableCell className="text-center text-sm">
+                    {payment ? formatMonth(paymentMonth) : '-'}
+                  </TableCell>
+                  <TableCell className="text-center text-sm">
+                    {formatDate(paymentDate)}
+                  </TableCell>
+                  <TableCell className="text-center">
+                    {student.phone ? (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="text-green-600 hover:text-green-700"
+                        aria-label="Abrir WhatsApp"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          const phone = student.phone?.replace(/\D/g, '');
+                          window.open(`https://wa.me/54${phone}`, '_blank', 'noopener,noreferrer');
+                        }}
+                      >
+                        <MessageCircle className="w-4 h-4" />
+                      </Button>
+                    ) : (
+                      <span className="text-muted-foreground">-</span>
+                    )}
+                  </TableCell>
+                  <TableCell className="text-center">
+                    {getPaymentBadge(student)}
+                  </TableCell>
+                  <TableCell className="text-center">
+                    {receiptUrl ? (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        aria-label="Ver comprobante de pago"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          window.open(receiptUrl, '_blank', 'noopener,noreferrer');
+                        }}
+                      >
+                        <FileText className="w-4 h-4" />
+                      </Button>
+                    ) : (
+                      <span className="text-muted-foreground">-</span>
+                    )}
+                  </TableCell>
+                  <TableCell className="text-center">
                     <Button
                       size="sm"
                       variant="outline"
-                      className="text-green-600 hover:text-green-700"
-                      aria-label="Abrir WhatsApp"
+                      aria-label="Registrar pago"
                       onClick={(e) => {
                         e.stopPropagation();
-                        const phone = student.phone?.replace(/\D/g, '');
-                        window.open(`https://wa.me/54${phone}`, '_blank', 'noopener,noreferrer');
+                        openPaymentModal(student);
                       }}
                     >
-                      <MessageCircle className="w-4 h-4" />
+                      <DollarSign className="w-4 h-4" />
                     </Button>
-                  ) : (
-                    <span className="text-muted-foreground">-</span>
-                  )}
-                </TableCell>
-                <TableCell className="text-center">
-                  {getPaymentBadge(student)}
-                </TableCell>
-                <TableCell className="text-center">
-                  {student.payment_receipt_url ? (
+                  </TableCell>
+                  <TableCell className="text-center">
                     <Button
                       size="sm"
-                      variant="outline"
-                      aria-label="Ver comprobante de pago"
+                      variant="ghost"
+                      className="text-destructive hover:text-destructive"
+                      aria-label="Eliminar alumno"
                       onClick={(e) => {
                         e.stopPropagation();
-                        window.open(student.payment_receipt_url!, '_blank', 'noopener,noreferrer');
+                        setStudentToDelete(student);
+                        setIsDeleteModalOpen(true);
                       }}
                     >
-                      <FileText className="w-4 h-4" />
+                      <Trash2 className="w-4 h-4" />
                     </Button>
-                  ) : (
-                    <span className="text-muted-foreground">-</span>
-                  )}
-                </TableCell>
-                <TableCell className="text-center">
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    aria-label="Registrar pago"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      openPaymentModal(student);
-                    }}
-                  >
-                    <DollarSign className="w-4 h-4" />
-                  </Button>
-                </TableCell>
-                <TableCell className="text-center">
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    className="text-destructive hover:text-destructive"
-                    aria-label="Eliminar alumno"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setStudentToDelete(student);
-                      setIsDeleteModalOpen(true);
-                    }}
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </Button>
-                </TableCell>
-              </TableRow>
-            ))}
+                  </TableCell>
+                </TableRow>
+              );
+            })}
           </TableBody>
         </Table>
       </div>

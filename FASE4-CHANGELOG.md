@@ -14,101 +14,47 @@ La solución es introducir una tabla `payments` en Supabase que registre un pago
 
 ## Cambios realizados
 
-_(se irán completando a medida que se implementa)_
+### ✅ Punto 1 — Migración de base de datos: tabla `payments`
+- Tabla `payments` creada en Supabase con índice único `(student_id, month)` y RLS habilitado.
+- Interfaz `Payment` agregada en `src/types/database.ts` reutilizando el tipo `PaymentStatus` existente.
+
+### ✅ Punto 2 — Migración de datos existentes
+- Script SQL ejecutado para migrar registros de pago de `students` a `payments`.
+
+### ✅ Punto 3 — Actualizar `StudentsList.tsx`
+- Fetch de `payments` filtrado por `month = selectedMonth` (mapa `Record<string, Payment>` indexado por `student_id`).
+- `getComputedStatus` lee del mapa de pagos en lugar de `student.payment_status` / `student.payment_month`.
+- `handlePaymentSubmit` hace upsert en `payments` con `onConflict: 'student_id,month'` — no toca `students`.
+- Fecha de pago y comprobante provienen del registro en `payments` para el mes seleccionado.
+- Se eliminó el estado "adelantado" (no aplica al modelo por-mes).
+- Modo "todos los meses" mantiene fallback a campos legacy de `students` para compatibilidad.
 
 ---
 
-## Pendiente de implementación
+### ✅ Punto 4 — Actualizar `Dashboard.tsx`
 
-### Punto 1 — Migración de base de datos: tabla `payments`
-
-**Dónde:** Supabase (nueva tabla + RLS)
-
-Crear la tabla `payments` con la siguiente estructura:
-
-```sql
-CREATE TABLE payments (
-  id          uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  student_id  uuid NOT NULL REFERENCES students(id) ON DELETE CASCADE,
-  month       text NOT NULL,          -- formato YYYY-MM
-  status      text NOT NULL DEFAULT 'paid'
-                CHECK (status IN ('paid', 'partial', 'pending')),
-  amount      numeric,               -- monto pagado (null si status = 'pending')
-  payment_date timestamptz,
-  receipt_url text,
-  notes       text,
-  created_at  timestamptz NOT NULL DEFAULT now()
-);
-
--- Un registro por alumno por mes
-CREATE UNIQUE INDEX payments_student_month_idx ON payments(student_id, month);
-
--- RLS
-ALTER TABLE payments ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Admins can do everything" ON payments
-  USING (true) WITH CHECK (true);
-```
-
-Actualizar también `src/types/database.ts` con el nuevo tipo `Payment`.
+- Fetch paralelo de `payments` para el mes actual (`student_id, status`).
+- KPI de cuotas calculado desde el mapa de pagos: paid/partial/pending según registro en `payments`.
+- Lista de pendientes = alumnos sin registro en `payments` para el mes actual.
+- Se eliminó `getStudentMonthStatus` y el tipo `MonthStatus` (obsoletos).
 
 ---
 
-### Punto 2 — Migración de datos existentes
+### ✅ Punto 5 — Historial de pagos en `StudentModal.tsx`
 
-Antes de cambiar el frontend, migrar los datos actuales de `students` a la nueva tabla `payments`:
-
-- Por cada alumno que tenga `payment_month` y `payment_status != 'pending'`, insertar un registro en `payments` con esos datos.
-- Este paso se puede hacer desde el panel de Supabase con un script SQL.
-
-```sql
-INSERT INTO payments (student_id, month, status, amount, payment_date)
-SELECT
-  id,
-  payment_month,
-  payment_status,
-  paid_amount,
-  payment_date
-FROM students
-WHERE payment_month IS NOT NULL
-  AND payment_status != 'pending'
-ON CONFLICT (student_id, month) DO NOTHING;
-```
+- Sección "Historial de pagos" al editar un alumno existente.
+- Fetch de todos los registros en `payments` para ese alumno, ordenados por mes descendente.
+- Muestra: mes, badge de estado (verde/amarillo/rojo), monto en parciales, fecha de pago.
+- Si no hay registros: muestra "Sin registros de pago."
 
 ---
 
-### Punto 3 — Actualizar `StudentsList.tsx`
+### ✅ Punto 6 — Limpieza (aplicada en código)
 
-**Cambio principal:** en lugar de leer `student.payment_status` y `student.payment_month`, consultar la tabla `payments` para el mes seleccionado y cruzar con la lista de alumnos.
-
-- Fetch de `payments` filtrado por `month = selectedMonth` (cuando no es 'all').
-- Cruzar con `students` para obtener el estado de cada alumno:
-  - Tiene registro en `payments` para ese mes → usar ese status.
-  - No tiene registro → mostrar como `pending`.
-- El modal de pago debe **crear o actualizar** un registro en `payments` (no tocar `students`).
-- Mantener toda la UI actual (badges, sort, paginación, contador resumen).
-
----
-
-### Punto 4 — Actualizar `Dashboard.tsx`
-
-- El KPI de cuotas debe consultar `payments` del mes actual en lugar de `students.payment_status`.
-- La lista de "pendientes" = alumnos sin registro en `payments` para el mes actual.
-
----
-
-### Punto 5 — Historial de pagos en `StudentModal.tsx`
-
-- Agregar una sección "Historial de pagos" dentro del modal de alumno.
-- Listar todos sus registros en `payments` ordenados por mes descendente.
-- Mostrar: mes, estado (badge), monto, fecha de pago.
-
----
-
-### Punto 6 — Limpieza (opcional, post-migración)
-
-Una vez validado que todo funciona con la nueva tabla:
-- Evaluar si los campos `payment_status`, `payment_month`, `paid_amount`, `payment_date`, `payment_receipt_url` en `students` pueden ser deprecados o eliminados.
-- Esto es opcional y se decide al final de la fase.
+- Removidos campos de pago del form de `StudentModal`: `payment_status`, `paid_amount`, comprobante de pago.
+- El pago se gestiona exclusivamente desde la tabla `payments` (botón $ en `StudentsList`).
+- Los inserts de nuevos alumnos incluyen `payment_status: 'pending'` implícitamente para compatibilidad con el schema.
+- Los campos legacy en la tabla `students` se mantienen en el DB (no se dropean columnas).
 
 ---
 
@@ -124,4 +70,8 @@ Una vez validado que todo funciona con la nueva tabla:
 
 | Commit | Descripción |
 |--------|-------------|
-| _(pendiente)_ | |
+| feat: agregar interfaz Payment y tabla payments en Supabase (Fase 4 - Punto 1) | |
+| feat: migrar datos de pagos de students a payments (Fase 4 - Punto 2) | |
+| feat: leer y escribir pagos desde tabla payments en StudentsList (Fase 4 - Punto 3) | |
+| feat: actualizar Dashboard para usar tabla payments en KPI de cuotas (Fase 4 - Punto 4) | |
+| feat: historial de pagos en StudentModal y limpieza de campos legacy (Fase 4 - Puntos 5 y 6) | |

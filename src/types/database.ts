@@ -30,6 +30,19 @@ export interface Student {
   schedule?: Schedule;
 }
 
+export interface Payment {
+  id: string;
+  student_id: string;
+  month: string;              // formato YYYY-MM
+  status: PaymentStatus;
+  amount: number | null;
+  payment_date: string | null;
+  receipt_url: string | null;
+  notes: string | null;
+  created_at: string;
+  student?: Student;          // para queries con join
+}
+
 export type ProductCategory = 'insumos' | 'servicios' | 'moldes' | 'bizcochado' | 'final';
 
 export interface InventoryItem {

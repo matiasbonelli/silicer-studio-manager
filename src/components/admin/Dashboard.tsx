@@ -40,14 +40,6 @@ const formatMonth = (monthStr: string): string => {
   return `${MONTH_NAMES[month]} ${year}`;
 };
 
-type MonthStatus = 'paid' | 'pending' | 'partial' | 'advanced';
-
-const getStudentMonthStatus = (student: Student, currentMonth: string): MonthStatus => {
-  if (!student.payment_month) return 'pending';
-  if (student.payment_month === currentMonth) return student.payment_status as MonthStatus;
-  if (student.payment_month > currentMonth) return 'advanced';
-  return 'pending';
-};
 
 const isBirthdayThisWeek = (birthday: string | null): boolean => {
   if (!birthday) return false;
@@ -125,10 +117,11 @@ export default function Dashboard() {
       const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
       const currentMonth = getCurrentMonth();
 
-      const [salesRes, studentsRes, inventoryRes] = await Promise.all([
+      const [salesRes, studentsRes, inventoryRes, paymentsRes] = await Promise.all([
         supabase.from('sales').select('*').gte('created_at', startOfMonth),
         supabase.from('students').select('*'),
         supabase.from('inventory').select('*'),
+        supabase.from('payments').select('student_id, status').eq('month', currentMonth),
       ]);
 
       if (salesRes.error) throw salesRes.error;
@@ -139,18 +132,22 @@ export default function Dashboard() {
       const students = (studentsRes.data ?? []) as Student[];
       const inventory = (inventoryRes.data ?? []) as InventoryItem[];
 
+      // Mapa student_id → status de pago del mes actual
+      const paymentsMap: Record<string, string> = {};
+      if (paymentsRes.data) {
+        for (const p of paymentsRes.data) {
+          paymentsMap[p.student_id] = p.status;
+        }
+      }
+
       // Cuotas
-      const cuotasPaid = students.filter(
-        (s) => getStudentMonthStatus(s, currentMonth) === 'paid'
-      ).length;
-      const cuotasPartial = students.filter(
-        (s) => getStudentMonthStatus(s, currentMonth) === 'partial'
-      ).length;
+      const cuotasPaid = students.filter((s) => paymentsMap[s.id] === 'paid').length;
+      const cuotasPartial = students.filter((s) => paymentsMap[s.id] === 'partial').length;
       const cuotasPending = students.filter(
-        (s) => getStudentMonthStatus(s, currentMonth) === 'pending'
+        (s) => !paymentsMap[s.id] || paymentsMap[s.id] === 'pending'
       ).length;
       const pendingStudents = students.filter(
-        (s) => getStudentMonthStatus(s, currentMonth) === 'pending'
+        (s) => !paymentsMap[s.id] || paymentsMap[s.id] === 'pending'
       );
 
       // Ventas

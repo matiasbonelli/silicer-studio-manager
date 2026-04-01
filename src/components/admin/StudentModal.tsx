@@ -1,14 +1,16 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
-import { Student, Schedule, PaymentStatus, DAY_NAMES } from '@/types/database';
+import { Student, Payment, Schedule, DAY_NAMES, MONTH_NAMES } from '@/types/database';
+import { formatDate } from '@/lib/format';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
-import { Trash2, Upload, ExternalLink, Loader2, X } from 'lucide-react';
+import { Trash2 } from 'lucide-react';
 
 interface StudentModalProps {
   student: Student | null;
@@ -18,6 +20,12 @@ interface StudentModalProps {
   isNew?: boolean;
 }
 
+const formatMonth = (monthStr: string | null) => {
+  if (!monthStr) return '-';
+  const [year, month] = monthStr.split('-');
+  return `${MONTH_NAMES[month]} ${year}`;
+};
+
 export default function StudentModal({ student, isOpen, onClose, onSave, isNew = false }: StudentModalProps) {
   const [formData, setFormData] = useState({
     first_name: '',
@@ -26,15 +34,11 @@ export default function StudentModal({ student, isOpen, onClose, onSave, isNew =
     phone: '',
     birthday: '',
     schedule_id: '',
-    payment_status: 'pending' as PaymentStatus,
-    paid_amount: '',
-    payment_receipt_url: '',
     notes: '',
   });
   const [schedules, setSchedules] = useState<Schedule[]>([]);
+  const [paymentHistory, setPaymentHistory] = useState<Payment[]>([]);
   const [loading, setLoading] = useState(false);
-  const [uploading, setUploading] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -46,11 +50,9 @@ export default function StudentModal({ student, isOpen, onClose, onSave, isNew =
         phone: student.phone || '',
         birthday: student.birthday || '',
         schedule_id: student.schedule_id || '',
-        payment_status: student.payment_status,
-        paid_amount: student.paid_amount?.toString() || '',
-        payment_receipt_url: student.payment_receipt_url || '',
         notes: student.notes || '',
       });
+      fetchPaymentHistory(student.id);
     } else {
       setFormData({
         first_name: '',
@@ -59,11 +61,9 @@ export default function StudentModal({ student, isOpen, onClose, onSave, isNew =
         phone: '',
         birthday: '',
         schedule_id: '',
-        payment_status: 'pending',
-        paid_amount: '',
-        payment_receipt_url: '',
         notes: '',
       });
+      setPaymentHistory([]);
     }
   }, [student, isNew]);
 
@@ -79,101 +79,39 @@ export default function StudentModal({ student, isOpen, onClose, onSave, isNew =
     fetchSchedules();
   }, []);
 
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    // Validate file type
-    const allowedTypes = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'];
-    if (!allowedTypes.includes(file.type)) {
-      toast({
-        title: 'Tipo de archivo no permitido',
-        description: 'Solo se permiten imágenes (JPG, PNG, WEBP) o PDF',
-        variant: 'destructive',
-      });
-      return;
-    }
-
-    // Validate file size (max 5MB)
-    if (file.size > 5 * 1024 * 1024) {
-      toast({
-        title: 'Archivo muy grande',
-        description: 'El tamaño máximo es 5MB',
-        variant: 'destructive',
-      });
-      return;
-    }
-
-    setUploading(true);
-
-    try {
-      const fileExt = file.name.split('.').pop();
-      const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
-
-      const { error: uploadError } = await supabase.storage
-        .from('receipts')
-        .upload(fileName, file, {
-          cacheControl: '3600',
-          contentType: file.type,
-          upsert: false
-        });
-
-      if (uploadError) {
-        throw uploadError;
-      }
-
-      // Store the file path instead of public URL since bucket is private
-      // We'll use signed URLs when displaying the receipt
-      setFormData(prev => ({ ...prev, payment_receipt_url: `receipts/${fileName}` }));
-
-      toast({
-        title: 'Archivo subido',
-        description: 'El comprobante se cargó correctamente',
-      });
-    } catch (error) {
-      toast({
-        title: 'Error al subir',
-        description: 'No se pudo subir el archivo. Verificá que el bucket "receipts" exista en Supabase Storage.',
-        variant: 'destructive',
-      });
-    }
-
-    setUploading(false);
-    if (fileInputRef.current) {
-      fileInputRef.current.value = '';
-    }
-  };
-
-  const handleRemoveReceipt = () => {
-    setFormData(prev => ({ ...prev, payment_receipt_url: '' }));
+  const fetchPaymentHistory = async (studentId: string) => {
+    const { data } = await supabase
+      .from('payments')
+      .select('*')
+      .eq('student_id', studentId)
+      .order('month', { ascending: false });
+    if (data) setPaymentHistory(data as Payment[]);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
 
-    const dataToSave = {
+    const baseData = {
       first_name: formData.first_name,
       last_name: formData.last_name,
       email: formData.email || null,
       phone: formData.phone || null,
       birthday: formData.birthday || null,
       schedule_id: formData.schedule_id || null,
-      payment_status: formData.payment_status,
-      paid_amount: formData.payment_status === 'partial' && formData.paid_amount
-        ? parseFloat(formData.paid_amount)
-        : null,
-      payment_receipt_url: formData.payment_receipt_url || null,
       notes: formData.notes || null,
     };
 
     let error;
 
     if (isNew) {
-      const result = await supabase.from('students').insert(dataToSave);
+      const result = await supabase.from('students').insert({
+        ...baseData,
+        payment_status: 'pending',
+      });
       error = result.error;
     } else if (student) {
-      const result = await supabase.from('students').update(dataToSave).eq('id', student.id);
+      const result = await supabase.from('students').update(baseData).eq('id', student.id);
       error = result.error;
     }
 
@@ -202,7 +140,6 @@ export default function StudentModal({ student, isOpen, onClose, onSave, isNew =
 
     setLoading(true);
 
-    // Primero desvincular el alumno de las inscripciones (foreign key constraint)
     const { error: unlinkError } = await supabase
       .from('enrollments')
       .update({ converted_to_student_id: null })
@@ -218,7 +155,6 @@ export default function StudentModal({ student, isOpen, onClose, onSave, isNew =
       return;
     }
 
-    // Ahora sí eliminar el alumno
     const { error } = await supabase.from('students').delete().eq('id', student.id);
 
     if (error) {
@@ -228,9 +164,7 @@ export default function StudentModal({ student, isOpen, onClose, onSave, isNew =
         variant: 'destructive',
       });
     } else {
-      toast({
-        title: 'Alumno eliminado',
-      });
+      toast({ title: 'Alumno eliminado' });
       onSave();
       onClose();
     }
@@ -240,11 +174,11 @@ export default function StudentModal({ student, isOpen, onClose, onSave, isNew =
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-md">
+      <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{isNew ? 'Agregar Alumno' : 'Editar Alumno'}</DialogTitle>
         </DialogHeader>
-        
+
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-2">
@@ -319,91 +253,6 @@ export default function StudentModal({ student, isOpen, onClose, onSave, isNew =
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="payment_status">Estado de Cuota</Label>
-            <Select
-              value={formData.payment_status}
-              onValueChange={(value: PaymentStatus) => setFormData(prev => ({ ...prev, payment_status: value }))}
-            >
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="paid">Pagado</SelectItem>
-                <SelectItem value="partial">Parcial</SelectItem>
-                <SelectItem value="pending">Pendiente</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          {formData.payment_status === 'partial' && (
-            <div className="space-y-2">
-              <Label htmlFor="paid_amount">Monto Pagado</Label>
-              <Input
-                id="paid_amount"
-                type="number"
-                placeholder="Ej: 5000"
-                value={formData.paid_amount}
-                onChange={(e) => setFormData(prev => ({ ...prev, paid_amount: e.target.value }))}
-              />
-            </div>
-          )}
-
-          <div className="space-y-2">
-            <Label>Comprobante de Pago</Label>
-            {formData.payment_receipt_url ? (
-              <div className="flex items-center gap-2 p-3 bg-muted rounded-lg">
-                <div className="flex-1 truncate text-sm">
-                  Comprobante cargado
-                </div>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={async () => {
-                    // Extract filename from the stored path (receipts/filename)
-                    const filePath = formData.payment_receipt_url.startsWith('receipts/') 
-                      ? formData.payment_receipt_url.replace('receipts/', '')
-                      : formData.payment_receipt_url;
-                    
-                    const { data } = await supabase.storage
-                      .from('receipts')
-                      .createSignedUrl(filePath, 3600); // 1 hour expiry
-                    
-                    if (data?.signedUrl) {
-                      window.open(data.signedUrl, '_blank', 'noopener,noreferrer');
-                    }
-                  }}
-                >
-                  <ExternalLink className="w-4 h-4 mr-1" /> Ver
-                </Button>
-                <Button
-                  type="button"
-                  variant="destructive"
-                  size="sm"
-                  onClick={handleRemoveReceipt}
-                >
-                  <X className="w-4 h-4" />
-                </Button>
-              </div>
-            ) : (
-              <div className="flex items-center gap-2">
-                <Input
-                  ref={fileInputRef}
-                  type="file"
-                  accept="image/jpeg,image/png,image/webp,application/pdf"
-                  onChange={handleFileUpload}
-                  disabled={uploading}
-                  className="flex-1"
-                />
-                {uploading && <Loader2 className="w-4 h-4 animate-spin" />}
-              </div>
-            )}
-            <p className="text-xs text-muted-foreground">
-              Formatos: JPG, PNG, WEBP o PDF. Máximo 5MB.
-            </p>
-          </div>
-
-          <div className="space-y-2">
             <Label htmlFor="notes">Notas</Label>
             <Textarea
               id="notes"
@@ -412,6 +261,42 @@ export default function StudentModal({ student, isOpen, onClose, onSave, isNew =
               rows={2}
             />
           </div>
+
+          {/* Historial de pagos — solo al editar */}
+          {!isNew && (
+            <div className="space-y-2">
+              <Label>Historial de pagos</Label>
+              {paymentHistory.length === 0 ? (
+                <p className="text-sm text-muted-foreground py-2">Sin registros de pago.</p>
+              ) : (
+                <div className="max-h-44 overflow-y-auto rounded-lg border divide-y">
+                  {paymentHistory.map((p) => (
+                    <div key={p.id} className="flex items-center justify-between px-3 py-2 text-sm">
+                      <span className="font-medium">{formatMonth(p.month)}</span>
+                      <div className="flex items-center gap-2">
+                        {p.status === 'paid' && (
+                          <Badge className="bg-green-500 hover:bg-green-600">Pagado</Badge>
+                        )}
+                        {p.status === 'partial' && (
+                          <Badge className="bg-yellow-500 hover:bg-yellow-600">
+                            Parcial{p.amount ? ` $${p.amount.toLocaleString()}` : ''}
+                          </Badge>
+                        )}
+                        {p.status === 'pending' && (
+                          <Badge variant="destructive">Pendiente</Badge>
+                        )}
+                        {p.payment_date && (
+                          <span className="text-muted-foreground text-xs">
+                            {formatDate(p.payment_date)}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
 
           <DialogFooter className="flex gap-2">
             {!isNew && (
