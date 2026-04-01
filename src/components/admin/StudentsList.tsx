@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Student, Payment, DAY_NAMES, PAYMENT_STATUS_LABELS, PaymentStatus, MONTH_NAMES } from '@/types/database';
 import { formatDate } from '@/lib/format';
@@ -10,7 +10,7 @@ import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
-import { Check, X, Search, Loader2, MessageCircle, FileText, Trash2, DollarSign, Calendar, Users, ArrowUpDown, ArrowUp, ArrowDown, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Check, X, Search, Loader2, MessageCircle, FileText, Trash2, DollarSign, Calendar, Users, ArrowUpDown, ArrowUp, ArrowDown, ChevronLeft, ChevronRight, ExternalLink } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 
 interface StudentsListProps {
@@ -49,6 +49,9 @@ export default function StudentsList({ onStudentClick, refreshTrigger, onStudent
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
   const [paymentType, setPaymentType] = useState<'total' | 'partial' | 'pending'>('total');
   const [partialAmount, setPartialAmount] = useState<string>('');
+  const [receiptUrl, setReceiptUrl] = useState<string>('');
+  const [uploading, setUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
 
   const fetchStudents = async () => {
@@ -99,11 +102,54 @@ export default function StudentsList({ onStudentClick, refreshTrigger, onStudent
       else if (payment.status === 'partial') setPaymentType('partial');
       else setPaymentType('pending');
       setPartialAmount(payment.amount?.toString() || '');
+      setReceiptUrl(payment.receipt_url || '');
     } else {
       setPaymentType('total');
       setPartialAmount('');
+      setReceiptUrl('');
     }
     setIsPaymentModalOpen(true);
+  };
+
+  const handleReceiptUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'];
+    if (!allowedTypes.includes(file.type)) {
+      toast({ title: 'Tipo no permitido', description: 'Solo JPG, PNG, WEBP o PDF', variant: 'destructive' });
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      toast({ title: 'Archivo muy grande', description: 'Máximo 5MB', variant: 'destructive' });
+      return;
+    }
+
+    setUploading(true);
+    const fileExt = file.name.split('.').pop();
+    const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
+
+    const { error } = await supabase.storage.from('receipts').upload(fileName, file, {
+      cacheControl: '3600',
+      contentType: file.type,
+      upsert: false,
+    });
+
+    if (error) {
+      toast({ title: 'Error al subir', description: 'No se pudo subir el comprobante', variant: 'destructive' });
+    } else {
+      setReceiptUrl(`receipts/${fileName}`);
+      toast({ title: 'Comprobante cargado' });
+    }
+
+    setUploading(false);
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
+  const handleViewReceipt = async (path: string) => {
+    const filePath = path.startsWith('receipts/') ? path.replace('receipts/', '') : path;
+    const { data } = await supabase.storage.from('receipts').createSignedUrl(filePath, 3600);
+    if (data?.signedUrl) window.open(data.signedUrl, '_blank', 'noopener,noreferrer');
   };
 
   const handlePaymentSubmit = async () => {
@@ -145,6 +191,7 @@ export default function StudentsList({ onStudentClick, refreshTrigger, onStudent
         status: newStatus,
         amount: paidAmount,
         payment_date: paymentDate,
+        receipt_url: receiptUrl || null,
       }, { onConflict: 'student_id,month' });
 
     if (error) {
@@ -163,6 +210,7 @@ export default function StudentsList({ onStudentClick, refreshTrigger, onStudent
       });
       setIsPaymentModalOpen(false);
       setStudentToPayment(null);
+      setReceiptUrl('');
       fetchPayments(targetMonth);
     }
   };
@@ -480,7 +528,7 @@ export default function StudentsList({ onStudentClick, refreshTrigger, onStudent
                         aria-label="Ver comprobante de pago"
                         onClick={(e) => {
                           e.stopPropagation();
-                          window.open(receiptUrl, '_blank', 'noopener,noreferrer');
+                          handleViewReceipt(receiptUrl);
                         }}
                       >
                         <FileText className="w-4 h-4" />
@@ -580,7 +628,7 @@ export default function StudentsList({ onStudentClick, refreshTrigger, onStudent
       {/* Payment Modal */}
       <Dialog open={isPaymentModalOpen} onOpenChange={(open) => {
         setIsPaymentModalOpen(open);
-        if (!open) setStudentToPayment(null);
+        if (!open) { setStudentToPayment(null); setReceiptUrl(''); }
       }}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
@@ -634,6 +682,46 @@ export default function StudentsList({ onStudentClick, refreshTrigger, onStudent
                   </div>
                 )}
               </div>
+
+              {paymentType !== 'pending' && (
+                <div className="space-y-2">
+                  <Label>Comprobante</Label>
+                  {receiptUrl ? (
+                    <div className="flex items-center gap-2 p-3 bg-muted rounded-lg">
+                      <span className="flex-1 text-sm truncate">Comprobante cargado</span>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleViewReceipt(receiptUrl)}
+                      >
+                        <ExternalLink className="w-4 h-4 mr-1" /> Ver
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="destructive"
+                        size="sm"
+                        onClick={() => setReceiptUrl('')}
+                      >
+                        <X className="w-4 h-4" />
+                      </Button>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-2">
+                      <Input
+                        ref={fileInputRef}
+                        type="file"
+                        accept="image/jpeg,image/png,image/webp,application/pdf"
+                        onChange={handleReceiptUpload}
+                        disabled={uploading}
+                        className="flex-1"
+                      />
+                      {uploading && <Loader2 className="w-4 h-4 animate-spin shrink-0" />}
+                    </div>
+                  )}
+                  <p className="text-xs text-muted-foreground">JPG, PNG, WEBP o PDF · máx. 5MB</p>
+                </div>
+              )}
             </div>
           )}
           <DialogFooter>
