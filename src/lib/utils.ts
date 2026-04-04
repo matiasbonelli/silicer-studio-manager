@@ -16,3 +16,9 @@ const htmlEscapeMap: Record<string, string> = {
 export function escapeHtml(str: string): string {
   return str.replace(/[&<>"']/g, (char) => htmlEscapeMap[char]);
 }
+
+export function isNewStudent(student: { start_date: string | null }): boolean {
+  if (!student.start_date) return false;
+  const today = new Date().toISOString().slice(0, 10);
+  return student.start_date > today;
+}
