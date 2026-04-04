@@ -12,7 +12,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
-import { Check, X, Search, Loader2, MessageCircle, FileText, Trash2, DollarSign, Calendar, Users, ArrowUpDown, ArrowUp, ArrowDown, ChevronLeft, ChevronRight, ExternalLink } from 'lucide-react';
+import { Check, X, Search, Loader2, MessageCircle, FileText, Trash2, DollarSign, Calendar, Users, ArrowUpDown, ArrowUp, ArrowDown, ChevronLeft, ChevronRight, ExternalLink, Download } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 
 interface StudentsListProps {
@@ -300,6 +300,46 @@ export default function StudentsList({ onStudentClick, refreshTrigger, onStudent
     }
   };
 
+  const exportCSV = () => {
+    const rows: string[][] = [
+      ['Nombre', 'Teléfono', 'Horario', 'Estado cuota', 'Monto pagado', 'Fecha de pago'],
+    ];
+
+    sortedStudents.forEach((student) => {
+      const payment = payments[student.id];
+      const fullName = `${student.first_name} ${student.last_name}`;
+      const phone = student.phone ?? '';
+      const schedule = student.schedule
+        ? `${DAY_NAMES[student.schedule.day_of_week]} ${student.schedule.start_time.slice(0, 5)}`
+        : '';
+      const statusLabel = payment
+        ? PAYMENT_STATUS_LABELS[payment.status as PaymentStatus] ?? payment.status
+        : 'Pendiente';
+      const amount = payment?.amount != null ? String(payment.amount) : '';
+      const paymentDate = payment?.payment_date
+        ? new Date(payment.payment_date).toLocaleDateString('es-AR')
+        : '';
+
+      rows.push([fullName, phone, schedule, statusLabel, amount, paymentDate]);
+    });
+
+    const csv = rows
+      .map((row) =>
+        row.map((cell) => `"${cell.replace(/"/g, '""')}"`).join(',')
+      )
+      .join('\r\n');
+
+    const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    const monthLabel =
+      selectedMonth !== 'all' ? selectedMonth : 'todos';
+    a.href = url;
+    a.download = `alumnos-${monthLabel}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   const filteredStudents = students.filter(student => {
     const fullName = `${student.first_name} ${student.last_name}`.toLowerCase();
     return fullName.includes(search.toLowerCase());
@@ -387,6 +427,16 @@ export default function StudentsList({ onStudentClick, refreshTrigger, onStudent
             </SelectContent>
           </Select>
         </div>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={exportCSV}
+          disabled={loading || sortedStudents.length === 0}
+          className="shrink-0"
+        >
+          <Download className="w-4 h-4 mr-2" />
+          Exportar
+        </Button>
       </div>
 
       {selectedMonth !== 'all' && !loading && (
@@ -515,7 +565,15 @@ export default function StudentsList({ onStudentClick, refreshTrigger, onStudent
                         onClick={(e) => {
                           e.stopPropagation();
                           const phone = student.phone?.replace(/\D/g, '');
-                          window.open(`https://wa.me/54${phone}`, '_blank', 'noopener,noreferrer');
+                          const isPending = !payment || payment.status === 'pending';
+                          const monthLabel = formatMonth(selectedMonth !== 'all' ? selectedMonth : getCurrentMonth());
+                          const msg = isPending
+                            ? `Hola ${student.first_name}, te recordamos que tenés la cuota de ${monthLabel} pendiente en Silicer Studio. ¡Cualquier consulta escribinos!`
+                            : '';
+                          const url = msg
+                            ? `https://wa.me/54${phone}?text=${encodeURIComponent(msg)}`
+                            : `https://wa.me/54${phone}`;
+                          window.open(url, '_blank', 'noopener,noreferrer');
                         }}
                       >
                         <MessageCircle className="w-4 h-4" />

@@ -13,6 +13,17 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Textarea } from '@/components/ui/textarea';
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+} from 'recharts';
 import {
   Users,
   ShoppingCart,
@@ -24,6 +35,7 @@ import {
   Clock,
   CheckCircle,
   RefreshCw,
+  Bell,
 } from 'lucide-react';
 
 // ---------------------------------------------------------------------------
@@ -40,6 +52,11 @@ const formatMonth = (monthStr: string): string => {
   return `${MONTH_NAMES[month]} ${year}`;
 };
 
+const formatMonthShort = (monthStr: string): string => {
+  const [year, month] = monthStr.split('-');
+  const name = MONTH_NAMES[month] ?? month;
+  return `${name.slice(0, 3)} ${year.slice(2)}`;
+};
 
 const isBirthdayThisWeek = (birthday: string | null): boolean => {
   if (!birthday) return false;
@@ -63,9 +80,11 @@ const formatBirthday = (birthday: string): string => {
   return `${day}/${month}`;
 };
 
-const buildWhatsAppUrl = (phone: string): string => {
+const buildWhatsAppUrl = (phone: string, message?: string): string => {
   const clean = phone.replace(/\D/g, '');
-  return `https://wa.me/54${clean}`;
+  const base = `https://wa.me/54${clean}`;
+  if (!message) return base;
+  return `${base}?text=${encodeURIComponent(message)}`;
 };
 
 // ---------------------------------------------------------------------------
@@ -79,6 +98,13 @@ interface MethodBreakdown {
   count: number;
 }
 
+interface HistoricPoint {
+  month: string;
+  label: string;
+  amount: number;
+  count: number;
+}
+
 interface DashboardData {
   currentMonth: string;
   // Cuotas
@@ -87,6 +113,8 @@ interface DashboardData {
   cuotasPending: number;
   totalStudents: number;
   pendingStudents: Student[];
+  cuotasPaidAmount: number;
+  cuotasPartialAmount: number;
   // Ventas
   totalRevenue: number;
   paidRevenue: number;
@@ -98,16 +126,23 @@ interface DashboardData {
   lowStockItems: InventoryItem[];
   // Cumpleaños
   birthdayStudents: Student[];
+  // Histórico
+  historicData: HistoricPoint[];
 }
 
 // ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
 
+const DEFAULT_REMINDER_MSG =
+  'Hola [nombre], te recordamos que tenés la cuota de [mes] pendiente en Silicer Studio. ¡Cualquier consulta escribinos!';
+
 export default function Dashboard() {
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [reminderOpen, setReminderOpen] = useState(false);
+  const [reminderMsg, setReminderMsg] = useState(DEFAULT_REMINDER_MSG);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -117,11 +152,20 @@ export default function Dashboard() {
       const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
       const currentMonth = getCurrentMonth();
 
-      const [salesRes, studentsRes, inventoryRes, paymentsRes] = await Promise.all([
+      // Build last 12 months range for historic query
+      const twelveMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 11, 1).toISOString();
+
+      const [salesRes, studentsRes, inventoryRes, paymentsRes, historicRes] = await Promise.all([
         supabase.from('sales').select('*').gte('created_at', startOfMonth),
         supabase.from('students').select('*'),
         supabase.from('inventory').select('*'),
-        supabase.from('payments').select('student_id, status').eq('month', currentMonth),
+        supabase.from('payments').select('student_id, status, amount').eq('month', currentMonth),
+        supabase
+          .from('payments')
+          .select('month, status, amount')
+          .gte('month', currentMonth.slice(0, 7).replace(/-\d+$/, '') + '-01' /* fallback */)
+          .gte('payment_date', twelveMonthsAgo)
+          .in('status', ['paid', 'partial']),
       ]);
 
       if (salesRes.error) throw salesRes.error;
@@ -132,23 +176,32 @@ export default function Dashboard() {
       const students = (studentsRes.data ?? []) as Student[];
       const inventory = (inventoryRes.data ?? []) as InventoryItem[];
 
-      // Mapa student_id → status de pago del mes actual
-      const paymentsMap: Record<string, string> = {};
+      // Mapa student_id → payment del mes actual
+      const paymentsMap: Record<string, { status: string; amount: number | null }> = {};
       if (paymentsRes.data) {
         for (const p of paymentsRes.data) {
-          paymentsMap[p.student_id] = p.status;
+          paymentsMap[p.student_id] = { status: p.status, amount: p.amount };
         }
       }
 
       // Cuotas
-      const cuotasPaid = students.filter((s) => paymentsMap[s.id] === 'paid').length;
-      const cuotasPartial = students.filter((s) => paymentsMap[s.id] === 'partial').length;
+      const cuotasPaid = students.filter((s) => paymentsMap[s.id]?.status === 'paid').length;
+      const cuotasPartial = students.filter((s) => paymentsMap[s.id]?.status === 'partial').length;
       const cuotasPending = students.filter(
-        (s) => !paymentsMap[s.id] || paymentsMap[s.id] === 'pending'
+        (s) => !paymentsMap[s.id] || paymentsMap[s.id].status === 'pending'
       ).length;
       const pendingStudents = students.filter(
-        (s) => !paymentsMap[s.id] || paymentsMap[s.id] === 'pending'
+        (s) => !paymentsMap[s.id] || paymentsMap[s.id].status === 'pending'
       );
+
+      // Ingresos por cuotas del mes (paid = cuota completa estimada no disponible, usamos amount)
+      // Para 'paid' sin amount usamos 0 (el monto total no se guarda si es total), para 'partial' usamos amount
+      const cuotasPartialAmount = Object.values(paymentsMap)
+        .filter((p) => p.status === 'partial')
+        .reduce((sum, p) => sum + (p.amount ?? 0), 0);
+      const cuotasPaidAmount = Object.values(paymentsMap)
+        .filter((p) => p.status === 'paid')
+        .reduce((sum, p) => sum + (p.amount ?? 0), 0);
 
       // Ventas
       const totalRevenue = sales.reduce((sum, s) => sum + (s.total_amount ?? 0), 0);
@@ -178,6 +231,29 @@ export default function Dashboard() {
       // Cumpleaños esta semana
       const birthdayStudents = students.filter((s) => isBirthdayThisWeek(s.birthday));
 
+      // Histórico: agrupar por mes
+      const historicMap: Record<string, { amount: number; count: number }> = {};
+      // Generar los últimos 12 meses como keys base
+      for (let i = 11; i >= 0; i--) {
+        const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+        const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+        historicMap[key] = { amount: 0, count: 0 };
+      }
+      if (historicRes.data) {
+        for (const p of historicRes.data) {
+          if (historicMap[p.month] !== undefined) {
+            historicMap[p.month].amount += p.amount ?? 0;
+            historicMap[p.month].count += 1;
+          }
+        }
+      }
+      const historicData: HistoricPoint[] = Object.entries(historicMap).map(([month, v]) => ({
+        month,
+        label: formatMonthShort(month),
+        amount: v.amount,
+        count: v.count,
+      }));
+
       setData({
         currentMonth,
         cuotasPaid,
@@ -185,6 +261,8 @@ export default function Dashboard() {
         cuotasPending,
         totalStudents: students.length,
         pendingStudents,
+        cuotasPaidAmount,
+        cuotasPartialAmount,
         totalRevenue,
         paidRevenue,
         pendingRevenue,
@@ -193,6 +271,7 @@ export default function Dashboard() {
         methodBreakdown,
         lowStockItems,
         birthdayStudents,
+        historicData,
       });
     } catch (err) {
       console.error('Dashboard fetchData error:', err);
@@ -257,6 +336,8 @@ export default function Dashboard() {
     cuotasPending,
     totalStudents,
     pendingStudents,
+    cuotasPaidAmount,
+    cuotasPartialAmount,
     totalRevenue,
     paidRevenue,
     pendingRevenue,
@@ -265,10 +346,26 @@ export default function Dashboard() {
     methodBreakdown,
     lowStockItems,
     birthdayStudents,
+    historicData,
   } = data;
 
   const paidProgress =
     totalStudents > 0 ? Math.round((cuotasPaid / totalStudents) * 100) : 0;
+
+  const monthLabel = formatMonth(currentMonth);
+
+  const buildReminderUrl = (student: Student): string => {
+    const msg = reminderMsg
+      .replace(/\[nombre\]/g, student.first_name)
+      .replace(/\[mes\]/g, monthLabel);
+    return buildWhatsAppUrl(student.phone!, msg);
+  };
+
+  const handleOpenAll = () => {
+    pendingStudents.forEach((s) => {
+      if (s.phone) window.open(buildReminderUrl(s), '_blank', 'noopener,noreferrer');
+    });
+  };
 
   // ---------------------------------------------------------------------------
   // Render
@@ -279,7 +376,7 @@ export default function Dashboard() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold tracking-tight">
-          Resumen — {formatMonth(currentMonth)}
+          Resumen — {monthLabel}
         </h1>
         <Button variant="outline" size="sm" onClick={fetchData}>
           <RefreshCw className="mr-2 h-4 w-4" />
@@ -343,22 +440,33 @@ export default function Dashboard() {
           </CardContent>
         </Card>
 
-        {/* Card 3: Cobros pendientes */}
+        {/* Card 3: Ingresos por cuotas */}
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">
-              Cobros pendientes
+              Ingresos por cuotas
             </CardTitle>
-            <Clock className="h-5 w-5 text-amber-500" />
+            <Clock className="h-5 w-5 text-violet-500" />
           </CardHeader>
           <CardContent className="space-y-1">
-            <p className="text-2xl font-bold text-amber-600">
-              {formatCurrency(pendingRevenue)}
+            <p className="text-2xl font-bold text-violet-600">
+              {formatCurrency(cuotasPaidAmount + cuotasPartialAmount)}
             </p>
             <p className="text-xs text-muted-foreground">
-              {pendingTransactionCount}{' '}
-              {pendingTransactionCount === 1 ? 'venta' : 'ventas'} sin cobrar
+              recaudado en cuotas este mes
             </p>
+            <div className="flex flex-wrap gap-1 pt-1">
+              {cuotasPaidAmount > 0 && (
+                <Badge variant="secondary" className="text-xs">
+                  Total: {formatCurrency(cuotasPaidAmount)}
+                </Badge>
+              )}
+              {cuotasPartialAmount > 0 && (
+                <Badge variant="outline" className="text-xs">
+                  Parcial: {formatCurrency(cuotasPartialAmount)}
+                </Badge>
+              )}
+            </div>
           </CardContent>
         </Card>
 
@@ -384,9 +492,22 @@ export default function Dashboard() {
 
         {/* Cuotas pendientes */}
         <Card>
-          <CardHeader className="flex flex-row items-center gap-2 pb-2">
-            <Users className="h-5 w-5 text-primary" />
-            <CardTitle className="text-base">Cuotas pendientes</CardTitle>
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <div className="flex items-center gap-2">
+              <Users className="h-5 w-5 text-primary" />
+              <CardTitle className="text-base">Cuotas pendientes</CardTitle>
+            </div>
+            {pendingStudents.length > 0 && (
+              <Button
+                size="sm"
+                variant="outline"
+                className="gap-1.5 text-green-600 hover:text-green-700"
+                onClick={() => setReminderOpen(true)}
+              >
+                <Bell className="h-4 w-4" />
+                Recordar a todos
+              </Button>
+            )}
           </CardHeader>
           <CardContent>
             {pendingStudents.length === 0 ? (
@@ -555,6 +676,131 @@ export default function Dashboard() {
           </CardContent>
         </Card>
       </div>
+
+      {/* ── Row 4: Gráfico histórico de recaudación ── */}
+      <Card>
+        <CardHeader className="flex flex-row items-center gap-2 pb-2">
+          <TrendingUp className="h-5 w-5 text-violet-500" />
+          <CardTitle className="text-base">Recaudación por cuotas — últimos 12 meses</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {historicData.every((d) => d.amount === 0) ? (
+            <div className="flex flex-col items-center gap-2 py-6 text-center text-muted-foreground">
+              <TrendingUp className="h-8 w-8" />
+              <p className="text-sm">Sin datos de cuotas registrados</p>
+            </div>
+          ) : (
+            <ResponsiveContainer width="100%" height={220}>
+              <BarChart data={historicData} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+                <XAxis
+                  dataKey="label"
+                  tick={{ fontSize: 11 }}
+                  className="text-muted-foreground"
+                />
+                <YAxis
+                  tick={{ fontSize: 11 }}
+                  tickFormatter={(v) => `$${(v / 1000).toFixed(0)}k`}
+                  className="text-muted-foreground"
+                />
+                <Tooltip
+                  formatter={(value: number, name: string) => {
+                    if (name === 'amount') return [formatCurrency(value), 'Recaudado'];
+                    if (name === 'count') return [value, 'Alumnos pagaron'];
+                    return [value, name];
+                  }}
+                  labelFormatter={(label) => label}
+                  contentStyle={{ fontSize: 12 }}
+                />
+                <Bar dataKey="amount" name="amount" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* ── Modal: Recordar pendientes ── */}
+      <Dialog open={reminderOpen} onOpenChange={setReminderOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Recordar cuotas pendientes — {monthLabel}</DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <div className="space-y-1.5">
+              <p className="text-sm font-medium">Mensaje (editable)</p>
+              <p className="text-xs text-muted-foreground">
+                Usá <code className="bg-muted px-1 rounded">[nombre]</code> y{' '}
+                <code className="bg-muted px-1 rounded">[mes]</code> como variables.
+              </p>
+              <Textarea
+                value={reminderMsg}
+                onChange={(e) => setReminderMsg(e.target.value)}
+                rows={3}
+                className="resize-none text-sm"
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <p className="text-sm font-medium">
+                {pendingStudents.length} alumnos pendientes
+              </p>
+              <ul className="divide-y rounded-lg border max-h-60 overflow-y-auto">
+                {pendingStudents.map((student) => (
+                  <li
+                    key={student.id}
+                    className="flex items-center justify-between px-3 py-2"
+                  >
+                    <div>
+                      <span className="text-sm font-medium">
+                        {student.first_name} {student.last_name}
+                      </span>
+                      {student.phone && (
+                        <span className="ml-2 text-xs text-muted-foreground">
+                          {student.phone}
+                        </span>
+                      )}
+                    </div>
+                    {student.phone ? (
+                      <a
+                        href={buildReminderUrl(student)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 gap-1 text-green-600 hover:text-green-700 shrink-0"
+                        >
+                          <MessageCircle className="h-4 w-4" />
+                          <span className="text-xs">Abrir</span>
+                        </Button>
+                      </a>
+                    ) : (
+                      <span className="text-xs text-muted-foreground">Sin teléfono</span>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            </div>
+
+            <div className="flex items-center justify-between gap-3 pt-1">
+              <p className="text-xs text-muted-foreground">
+                El browser puede bloquear popups al abrir todos a la vez.
+              </p>
+              <Button
+                className="gap-2 shrink-0"
+                onClick={handleOpenAll}
+                disabled={pendingStudents.filter((s) => s.phone).length === 0}
+              >
+                <MessageCircle className="h-4 w-4" />
+                Abrir todos
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
