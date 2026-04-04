@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd';
 import { supabase } from '@/integrations/supabase/client';
 import { Schedule, Student, DAY_NAMES } from '@/types/database';
+import { isNewStudent } from '@/lib/utils';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
@@ -169,7 +170,12 @@ export default function ScheduleGrid({ onStudentClick, refreshTrigger }: Schedul
                               >
                                 <User className="w-3 h-3 flex-shrink-0" />
                                 <span className="truncate">{student.first_name} {student.last_name}</span>
-                                <Badge 
+                                {isNewStudent(student) && (
+                                  <Badge className="text-[10px] bg-orange-500 hover:bg-orange-600 text-white border-transparent flex-shrink-0">
+                                    Nuevo
+                                  </Badge>
+                                )}
+                                <Badge
                                   variant={student.payment_status === 'paid' ? 'default' : 'destructive'}
                                   className="text-[10px] ml-auto"
                                 >

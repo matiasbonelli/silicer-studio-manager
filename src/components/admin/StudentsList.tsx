@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Student, Payment, DAY_NAMES, PAYMENT_STATUS_LABELS, PaymentStatus, MONTH_NAMES } from '@/types/database';
+import { isNewStudent } from '@/lib/utils';
 import { formatDate } from '@/lib/format';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
@@ -9,6 +10,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
 import { Check, X, Search, Loader2, MessageCircle, FileText, Trash2, DollarSign, Calendar, Users, ArrowUpDown, ArrowUp, ArrowDown, ChevronLeft, ChevronRight, ExternalLink } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -50,6 +52,7 @@ export default function StudentsList({ onStudentClick, refreshTrigger, onStudent
   const [paymentType, setPaymentType] = useState<'total' | 'partial' | 'pending'>('total');
   const [partialAmount, setPartialAmount] = useState<string>('');
   const [receiptUrl, setReceiptUrl] = useState<string>('');
+  const [paymentNotes, setPaymentNotes] = useState<string>('');
   const [uploading, setUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
@@ -68,19 +71,14 @@ export default function StudentsList({ onStudentClick, refreshTrigger, onStudent
   };
 
   const fetchPayments = async (month: string) => {
-    if (month === 'all') {
-      setPayments({});
-      return;
-    }
-    const { data } = await supabase
-      .from('payments')
-      .select('*')
-      .eq('month', month);
+    const query = supabase.from('payments').select('*').order('month', { ascending: false });
+    const { data } = month === 'all' ? await query : await query.eq('month', month);
 
     const map: Record<string, Payment> = {};
     if (data) {
       for (const p of data as Payment[]) {
-        map[p.student_id] = p;
+        // En modo 'all', guardar solo el pago más reciente por alumno
+        if (!map[p.student_id]) map[p.student_id] = p;
       }
     }
     setPayments(map);
@@ -103,10 +101,12 @@ export default function StudentsList({ onStudentClick, refreshTrigger, onStudent
       else setPaymentType('pending');
       setPartialAmount(payment.amount?.toString() || '');
       setReceiptUrl(payment.receipt_url || '');
+      setPaymentNotes(payment.notes || '');
     } else {
       setPaymentType('total');
       setPartialAmount('');
       setReceiptUrl('');
+      setPaymentNotes('');
     }
     setIsPaymentModalOpen(true);
   };
@@ -192,6 +192,7 @@ export default function StudentsList({ onStudentClick, refreshTrigger, onStudent
         amount: paidAmount,
         payment_date: paymentDate,
         receipt_url: receiptUrl || null,
+        notes: paymentNotes || null,
       }, { onConflict: 'student_id,month' });
 
     if (error) {
@@ -211,6 +212,7 @@ export default function StudentsList({ onStudentClick, refreshTrigger, onStudent
       setIsPaymentModalOpen(false);
       setStudentToPayment(null);
       setReceiptUrl('');
+      setPaymentNotes('');
       fetchPayments(targetMonth);
     }
   };
@@ -218,12 +220,10 @@ export default function StudentsList({ onStudentClick, refreshTrigger, onStudent
   type ComputedStatus = PaymentStatus;
 
   const getComputedStatus = (student: Student): { status: ComputedStatus; contextLabel: string | null } => {
-    if (selectedMonth === 'all') {
-      return { status: student.payment_status, contextLabel: null };
-    }
     const payment = payments[student.id];
     if (!payment) return { status: 'pending', contextLabel: null };
-    return { status: payment.status as ComputedStatus, contextLabel: null };
+    const contextLabel = selectedMonth === 'all' ? `${formatMonth(payment.month)}` : null;
+    return { status: payment.status as ComputedStatus, contextLabel };
   };
 
   const getPaymentBadge = (student: Student) => {
@@ -471,9 +471,9 @@ export default function StudentsList({ onStudentClick, refreshTrigger, onStudent
               </TableRow>
             ) : paginatedStudents.map(student => {
               const payment = payments[student.id];
-              const paymentMonth = selectedMonth !== 'all' ? selectedMonth : student.payment_month;
-              const paymentDate = selectedMonth !== 'all' ? payment?.payment_date ?? null : student.payment_date;
-              const receiptUrl = selectedMonth !== 'all' ? payment?.receipt_url ?? null : student.payment_receipt_url;
+              const paymentMonth = payment?.month ?? null;
+              const paymentDate = payment?.payment_date ?? null;
+              const receiptUrl = payment?.receipt_url ?? null;
               return (
                 <TableRow
                   key={student.id}
@@ -481,7 +481,14 @@ export default function StudentsList({ onStudentClick, refreshTrigger, onStudent
                   onClick={() => onStudentClick(student)}
                 >
                   <TableCell className="font-medium">
-                    {student.first_name} {student.last_name}
+                    <span className="inline-flex items-center gap-2">
+                      {student.first_name} {student.last_name}
+                      {isNewStudent(student) && (
+                        <Badge className="text-[10px] bg-orange-500 hover:bg-orange-600 text-white border-transparent">
+                          Nuevo
+                        </Badge>
+                      )}
+                    </span>
                   </TableCell>
                   <TableCell>
                     {student.schedule ? (
@@ -628,7 +635,7 @@ export default function StudentsList({ onStudentClick, refreshTrigger, onStudent
       {/* Payment Modal */}
       <Dialog open={isPaymentModalOpen} onOpenChange={(open) => {
         setIsPaymentModalOpen(open);
-        if (!open) { setStudentToPayment(null); setReceiptUrl(''); }
+        if (!open) { setStudentToPayment(null); setReceiptUrl(''); setPaymentNotes(''); }
       }}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
@@ -722,6 +729,17 @@ export default function StudentsList({ onStudentClick, refreshTrigger, onStudent
                   <p className="text-xs text-muted-foreground">JPG, PNG, WEBP o PDF · máx. 5MB</p>
                 </div>
               )}
+
+              <div className="space-y-2">
+                <Label htmlFor="paymentNotes">Notas</Label>
+                <Textarea
+                  id="paymentNotes"
+                  placeholder="Ej: pagó en dos partes, acordado para el 10..."
+                  value={paymentNotes}
+                  onChange={(e) => setPaymentNotes(e.target.value)}
+                  rows={2}
+                />
+              </div>
             </div>
           )}
           <DialogFooter>

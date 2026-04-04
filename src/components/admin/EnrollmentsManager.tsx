@@ -15,6 +15,20 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 
+function getNextOccurrence(dayOfWeek: string): string {
+  const DAY_MAP: Record<string, number> = {
+    sunday: 0, monday: 1, tuesday: 2, wednesday: 3,
+    thursday: 4, friday: 5, saturday: 6,
+  };
+  const target = DAY_MAP[dayOfWeek.toLowerCase()];
+  const today = new Date();
+  let daysAhead = target - today.getDay();
+  if (daysAhead <= 0) daysAhead += 7;
+  const result = new Date(today);
+  result.setDate(today.getDate() + daysAhead);
+  return format(result, 'yyyy-MM-dd');
+}
+
 const getSignedReceiptUrl = async (filePath: string): Promise<string | null> => {
   const { data, error } = await supabase.storage
     .from('receipts')
@@ -229,6 +243,9 @@ export default function EnrollmentsManager({ onStudentCreated }: EnrollmentsMana
             payment_status: studentPaymentStatus,
             paid_amount: paymentForm.amount ? parseFloat(paymentForm.amount) : null,
             payment_date: new Date().toISOString(),
+            start_date: selectedEnrollment.schedule
+              ? getNextOccurrence(selectedEnrollment.schedule.day_of_week)
+              : null,
             notes: selectedEnrollment.message,
           })
           .select()
@@ -309,6 +326,7 @@ export default function EnrollmentsManager({ onStudentCreated }: EnrollmentsMana
         : 'pending';
 
     // Create the student
+    const convertSchedule = schedules.find(s => s.id === convertScheduleId);
     const { data: newStudent, error: studentError } = await supabase
       .from('students')
       .insert({
@@ -320,6 +338,7 @@ export default function EnrollmentsManager({ onStudentCreated }: EnrollmentsMana
         schedule_id: convertScheduleId,
         payment_status: studentPaymentStatus,
         notes: selectedEnrollment.message,
+        start_date: convertSchedule ? getNextOccurrence(convertSchedule.day_of_week) : null,
       })
       .select()
       .single();

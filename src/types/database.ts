@@ -25,6 +25,7 @@ export interface Student {
   payment_month: string | null;
   payment_receipt_url: string | null;
   notes: string | null;
+  start_date: string | null;
   created_at: string;
   updated_at: string;
   schedule?: Schedule;

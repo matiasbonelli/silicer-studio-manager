@@ -10,7 +10,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
-import { Trash2 } from 'lucide-react';
+import { Trash2, ExternalLink } from 'lucide-react';
 
 interface StudentModalProps {
   student: Student | null;
@@ -35,6 +35,7 @@ export default function StudentModal({ student, isOpen, onClose, onSave, isNew =
     birthday: '',
     schedule_id: '',
     notes: '',
+    start_date: '',
   });
   const [schedules, setSchedules] = useState<Schedule[]>([]);
   const [paymentHistory, setPaymentHistory] = useState<Payment[]>([]);
@@ -51,6 +52,7 @@ export default function StudentModal({ student, isOpen, onClose, onSave, isNew =
         birthday: student.birthday || '',
         schedule_id: student.schedule_id || '',
         notes: student.notes || '',
+        start_date: student.start_date || '',
       });
       fetchPaymentHistory(student.id);
     } else {
@@ -62,6 +64,7 @@ export default function StudentModal({ student, isOpen, onClose, onSave, isNew =
         birthday: '',
         schedule_id: '',
         notes: '',
+        start_date: '',
       });
       setPaymentHistory([]);
     }
@@ -78,6 +81,12 @@ export default function StudentModal({ student, isOpen, onClose, onSave, isNew =
     };
     fetchSchedules();
   }, []);
+
+  const handleViewReceipt = async (path: string) => {
+    const filePath = path.startsWith('receipts/') ? path.replace('receipts/', '') : path;
+    const { data } = await supabase.storage.from('receipts').createSignedUrl(filePath, 3600);
+    if (data?.signedUrl) window.open(data.signedUrl, '_blank', 'noopener,noreferrer');
+  };
 
   const fetchPaymentHistory = async (studentId: string) => {
     const { data } = await supabase
@@ -100,6 +109,7 @@ export default function StudentModal({ student, isOpen, onClose, onSave, isNew =
       birthday: formData.birthday || null,
       schedule_id: formData.schedule_id || null,
       notes: formData.notes || null,
+      start_date: formData.start_date || null,
     };
 
     let error;
@@ -224,6 +234,16 @@ export default function StudentModal({ student, isOpen, onClose, onSave, isNew =
           </div>
 
           <div className="space-y-2">
+            <Label htmlFor="start_date">Fecha de inicio</Label>
+            <Input
+              id="start_date"
+              type="date"
+              value={formData.start_date}
+              onChange={(e) => setFormData(prev => ({ ...prev, start_date: e.target.value }))}
+            />
+          </div>
+
+          <div className="space-y-2">
             <Label htmlFor="birthday">Fecha de Cumpleaños</Label>
             <Input
               id="birthday"
@@ -289,6 +309,17 @@ export default function StudentModal({ student, isOpen, onClose, onSave, isNew =
                           <span className="text-muted-foreground text-xs">
                             {formatDate(p.payment_date)}
                           </span>
+                        )}
+                        {p.receipt_url && (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="h-6 px-2"
+                            onClick={() => handleViewReceipt(p.receipt_url!)}
+                          >
+                            <ExternalLink className="w-3 h-3" />
+                          </Button>
                         )}
                       </div>
                     </div>
