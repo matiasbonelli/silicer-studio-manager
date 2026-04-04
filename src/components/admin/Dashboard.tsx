@@ -36,6 +36,7 @@ import {
   CheckCircle,
   RefreshCw,
   Bell,
+  ClipboardCheck,
 } from 'lucide-react';
 
 // ---------------------------------------------------------------------------
@@ -128,6 +129,8 @@ interface DashboardData {
   birthdayStudents: Student[];
   // Histórico
   historicData: HistoricPoint[];
+  // Pedidos
+  pendingOrdersCount: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -155,7 +158,7 @@ export default function Dashboard() {
       // Build last 12 months range for historic query
       const twelveMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 11, 1).toISOString();
 
-      const [salesRes, studentsRes, inventoryRes, paymentsRes, historicRes] = await Promise.all([
+      const [salesRes, studentsRes, inventoryRes, paymentsRes, historicRes, ordersRes] = await Promise.all([
         supabase.from('sales').select('*').gte('created_at', startOfMonth),
         supabase.from('students').select('*'),
         supabase.from('inventory').select('*'),
@@ -166,6 +169,7 @@ export default function Dashboard() {
           .gte('month', currentMonth.slice(0, 7).replace(/-\d+$/, '') + '-01' /* fallback */)
           .gte('payment_date', twelveMonthsAgo)
           .in('status', ['paid', 'partial']),
+        supabase.from('mold_orders').select('id', { count: 'exact', head: true }).eq('status', 'pending'),
       ]);
 
       if (salesRes.error) throw salesRes.error;
@@ -272,6 +276,7 @@ export default function Dashboard() {
         lowStockItems,
         birthdayStudents,
         historicData,
+        pendingOrdersCount: ordersRes.count ?? 0,
       });
     } catch (err) {
       console.error('Dashboard fetchData error:', err);
@@ -347,6 +352,7 @@ export default function Dashboard() {
     lowStockItems,
     birthdayStudents,
     historicData,
+    pendingOrdersCount,
   } = data;
 
   const paidProgress =
@@ -385,7 +391,7 @@ export default function Dashboard() {
       </div>
 
       {/* ── Row 1: KPI Cards ── */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
 
         {/* Card 1: Ingresos del mes */}
         <Card>
@@ -482,6 +488,22 @@ export default function Dashboard() {
             <p className="text-2xl font-bold text-red-600">{lowStockItems.length}</p>
             <p className="text-xs text-muted-foreground">
               {lowStockItems.length === 1 ? 'producto' : 'productos'} bajo mínimo
+            </p>
+          </CardContent>
+        </Card>
+
+        {/* Card 5: Pedidos pendientes */}
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">
+              Pedidos pendientes
+            </CardTitle>
+            <ClipboardCheck className="h-5 w-5 text-orange-500" />
+          </CardHeader>
+          <CardContent className="space-y-1">
+            <p className="text-2xl font-bold text-orange-600">{pendingOrdersCount}</p>
+            <p className="text-xs text-muted-foreground">
+              {pendingOrdersCount === 1 ? 'pedido' : 'pedidos'} por preparar
             </p>
           </CardContent>
         </Card>
