@@ -136,6 +136,35 @@ export const PRODUCT_CATEGORY_LABELS: Record<ProductCategory, string> = {
   final: 'Final',
 };
 
+export type OrderStatus = 'pending' | 'ready' | 'delivered';
+export type OrderPaymentStatus = 'pending' | 'paid';
+
+export interface MoldOrder {
+  id: string;
+  student_id: string;
+  product_name: string;
+  product_price: number;
+  quantity: number;
+  pricing_product_id: string | null;
+  status: OrderStatus;
+  payment_status: OrderPaymentStatus;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+  student?: Student;
+}
+
+export const ORDER_STATUS_LABELS: Record<OrderStatus, string> = {
+  pending: 'Pendiente',
+  ready: 'Listo',
+  delivered: 'Entregado',
+};
+
+export const ORDER_PAYMENT_STATUS_LABELS: Record<OrderPaymentStatus, string> = {
+  pending: 'No pagado',
+  paid: 'Pagado',
+};
+
 export const MONTH_NAMES: Record<string, string> = {
   '01': 'Enero',
   '02': 'Febrero',
