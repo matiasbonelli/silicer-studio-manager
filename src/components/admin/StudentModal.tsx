@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
-import { Student, Payment, Schedule, DAY_NAMES, MONTH_NAMES } from '@/types/database';
+import { Student, Payment, PaymentStatus, Schedule, DAY_NAMES, MONTH_NAMES } from '@/types/database';
 import { formatDate } from '@/lib/format';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -10,7 +10,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
-import { Trash2, ExternalLink } from 'lucide-react';
+import { Trash2, ExternalLink, Check, Loader2 } from 'lucide-react';
 
 interface StudentModalProps {
   student: Student | null;
@@ -19,6 +19,11 @@ interface StudentModalProps {
   onSave: () => void;
   isNew?: boolean;
 }
+
+const getCurrentMonth = (): string => {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+};
 
 const formatMonth = (monthStr: string | null) => {
   if (!monthStr) return '-';
@@ -40,6 +45,15 @@ export default function StudentModal({ student, isOpen, onClose, onSave, isNew =
   const [schedules, setSchedules] = useState<Schedule[]>([]);
   const [paymentHistory, setPaymentHistory] = useState<Payment[]>([]);
   const [loading, setLoading] = useState(false);
+
+  // Cuota del mes actual
+  const currentMonth = getCurrentMonth();
+  const [currentPayment, setCurrentPayment] = useState<Payment | null>(null);
+  const [editingPayment, setEditingPayment] = useState(false);
+  const [paymentType, setPaymentType] = useState<'total' | 'partial' | 'pending'>('pending');
+  const [partialAmount, setPartialAmount] = useState('');
+  const [savingPayment, setSavingPayment] = useState(false);
+
   const { toast } = useToast();
 
   useEffect(() => {
@@ -55,6 +69,7 @@ export default function StudentModal({ student, isOpen, onClose, onSave, isNew =
         start_date: student.start_date || '',
       });
       fetchPaymentHistory(student.id);
+      fetchCurrentPayment(student.id);
     } else {
       setFormData({
         first_name: '',
@@ -67,6 +82,8 @@ export default function StudentModal({ student, isOpen, onClose, onSave, isNew =
         start_date: '',
       });
       setPaymentHistory([]);
+      setCurrentPayment(null);
+      setEditingPayment(false);
     }
   }, [student, isNew]);
 
@@ -82,6 +99,31 @@ export default function StudentModal({ student, isOpen, onClose, onSave, isNew =
     fetchSchedules();
   }, []);
 
+  const fetchCurrentPayment = async (studentId: string) => {
+    const { data } = await supabase
+      .from('payments')
+      .select('*')
+      .eq('student_id', studentId)
+      .eq('month', currentMonth)
+      .maybeSingle();
+
+    if (data) {
+      setCurrentPayment(data as Payment);
+      if (data.status === 'paid') setPaymentType('total');
+      else if (data.status === 'partial') {
+        setPaymentType('partial');
+        setPartialAmount(data.amount?.toString() || '');
+      } else {
+        setPaymentType('pending');
+        setPartialAmount('');
+      }
+    } else {
+      setCurrentPayment(null);
+      setPaymentType('pending');
+      setPartialAmount('');
+    }
+  };
+
   const handleViewReceipt = async (path: string) => {
     const filePath = path.startsWith('receipts/') ? path.replace('receipts/', '') : path;
     const { data } = await supabase.storage.from('receipts').createSignedUrl(filePath, 3600);
@@ -95,6 +137,60 @@ export default function StudentModal({ student, isOpen, onClose, onSave, isNew =
       .eq('student_id', studentId)
       .order('month', { ascending: false });
     if (data) setPaymentHistory(data as Payment[]);
+  };
+
+  const handleSavePayment = async () => {
+    if (!student) return;
+
+    let newStatus: PaymentStatus;
+    let paidAmount: number | null = null;
+
+    if (paymentType === 'total') {
+      newStatus = 'paid';
+    } else if (paymentType === 'partial') {
+      newStatus = 'partial';
+      paidAmount = parseFloat(partialAmount) || 0;
+      if (paidAmount <= 0) {
+        toast({ title: 'El monto parcial debe ser mayor a 0', variant: 'destructive' });
+        return;
+      }
+    } else {
+      newStatus = 'pending';
+    }
+
+    const paymentDate = paymentType !== 'pending' ? new Date().toISOString() : null;
+
+    setSavingPayment(true);
+    const { error } = await supabase
+      .from('payments')
+      .upsert(
+        {
+          student_id: student.id,
+          month: currentMonth,
+          status: newStatus,
+          amount: paidAmount,
+          payment_date: paymentDate,
+        },
+        { onConflict: 'student_id,month' }
+      );
+
+    if (error) {
+      toast({ title: 'Error al guardar cuota', variant: 'destructive' });
+    } else {
+      toast({
+        title:
+          newStatus === 'paid'
+            ? 'Cuota marcada como pagada'
+            : newStatus === 'partial'
+            ? `Pago parcial de $${paidAmount?.toLocaleString()} registrado`
+            : 'Cuota marcada como pendiente',
+      });
+      setEditingPayment(false);
+      await fetchCurrentPayment(student.id);
+      await fetchPaymentHistory(student.id);
+      onSave(); // propaga refreshTrigger → actualiza ScheduleGrid y StudentsList
+    }
+    setSavingPayment(false);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -180,6 +276,18 @@ export default function StudentModal({ student, isOpen, onClose, onSave, isNew =
     }
 
     setLoading(false);
+  };
+
+  // Helper para mostrar badge de estado de cuota
+  const paymentStatusBadge = (p: Payment | null) => {
+    if (!p || p.status === 'pending') return <Badge variant="destructive">Pendiente</Badge>;
+    if (p.status === 'partial')
+      return (
+        <Badge className="bg-yellow-500 hover:bg-yellow-600">
+          Parcial{p.amount ? ` — $${p.amount.toLocaleString()}` : ''}
+        </Badge>
+      );
+    return <Badge className="bg-green-500 hover:bg-green-600">Pagada</Badge>;
   };
 
   return (
@@ -281,6 +389,100 @@ export default function StudentModal({ student, isOpen, onClose, onSave, isNew =
               rows={2}
             />
           </div>
+
+          {/* ── Cuota del mes actual — solo al editar ── */}
+          {!isNew && (
+            <div className="space-y-2 rounded-lg border p-3">
+              <div className="flex items-center justify-between">
+                <Label>Cuota de {formatMonth(currentMonth)}</Label>
+                {!editingPayment && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="h-7 text-xs"
+                    onClick={() => setEditingPayment(true)}
+                  >
+                    Editar
+                  </Button>
+                )}
+              </div>
+
+              {!editingPayment ? (
+                <div className="flex items-center gap-2 pt-1">
+                  {paymentStatusBadge(currentPayment)}
+                  {currentPayment?.payment_date && (
+                    <span className="text-xs text-muted-foreground">
+                      {formatDate(currentPayment.payment_date)}
+                    </span>
+                  )}
+                </div>
+              ) : (
+                <div className="space-y-3 pt-1">
+                  <div className="grid grid-cols-3 gap-2">
+                    <Button
+                      type="button"
+                      variant={paymentType === 'total' ? 'default' : 'outline'}
+                      size="sm"
+                      onClick={() => setPaymentType('total')}
+                    >
+                      Total
+                    </Button>
+                    <Button
+                      type="button"
+                      variant={paymentType === 'partial' ? 'default' : 'outline'}
+                      size="sm"
+                      onClick={() => setPaymentType('partial')}
+                    >
+                      Parcial
+                    </Button>
+                    <Button
+                      type="button"
+                      variant={paymentType === 'pending' ? 'default' : 'outline'}
+                      size="sm"
+                      onClick={() => setPaymentType('pending')}
+                    >
+                      Pendiente
+                    </Button>
+                  </div>
+
+                  {paymentType === 'partial' && (
+                    <Input
+                      type="number"
+                      placeholder="Monto parcial"
+                      value={partialAmount}
+                      onChange={(e) => setPartialAmount(e.target.value)}
+                    />
+                  )}
+
+                  <div className="flex gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="flex-1"
+                      onClick={() => setEditingPayment(false)}
+                      disabled={savingPayment}
+                    >
+                      Cancelar
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      className="flex-1"
+                      onClick={handleSavePayment}
+                      disabled={savingPayment}
+                    >
+                      {savingPayment
+                        ? <Loader2 className="w-4 h-4 animate-spin" />
+                        : <><Check className="w-4 h-4 mr-1" /> Guardar</>
+                      }
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Historial de pagos — solo al editar */}
           {!isNew && (

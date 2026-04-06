@@ -1,8 +1,10 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { supabase } from '@/integrations/supabase/client';
 import { Student } from '@/types/database';
 import ScheduleGrid from '@/components/admin/ScheduleGrid';
 import StudentsList from '@/components/admin/StudentsList';
@@ -25,6 +27,33 @@ export default function Admin() {
   const [refreshTrigger, setRefreshTrigger] = useState(0);
   const [activeTab, setActiveTab] = useState('schedule');
   const [darkMode, setDarkMode] = useState(false);
+  const [pendingEnrollments, setPendingEnrollments] = useState(0);
+
+  const fetchPendingEnrollments = useCallback(async () => {
+    if (!user) return;
+    const { count } = await supabase
+      .from('enrollments')
+      .select('id', { count: 'exact', head: true })
+      .eq('status', 'pending');
+    setPendingEnrollments(count ?? 0);
+  }, [user]);
+
+  // Polling cada 20s + refetch al volver al tab del browser
+  useEffect(() => {
+    fetchPendingEnrollments();
+    const interval = setInterval(fetchPendingEnrollments, 20_000);
+    const onVisible = () => { if (!document.hidden) fetchPendingEnrollments(); };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
+  }, [fetchPendingEnrollments]);
+
+  // Refetch inmediato al salir del tab de inscripciones (el usuario acabó de hacer cambios)
+  useEffect(() => {
+    if (user && activeTab !== 'enrollments') fetchPendingEnrollments();
+  }, [activeTab]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (darkMode) {
@@ -111,6 +140,9 @@ export default function Admin() {
               <TabsTrigger value="enrollments" className="flex items-center gap-1.5">
                 <ClipboardList className="w-4 h-4" />
                 <span className="hidden sm:inline">Inscripciones</span>
+                {pendingEnrollments > 0 && (
+                  <span className="w-2 h-2 rounded-full bg-yellow-400 shrink-0" />
+                )}
               </TabsTrigger>
               <TabsTrigger value="students" className="flex items-center gap-1.5">
                 <Users className="w-4 h-4" />

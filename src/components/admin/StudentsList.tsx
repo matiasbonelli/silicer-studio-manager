@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
-import { Student, Payment, DAY_NAMES, PAYMENT_STATUS_LABELS, PaymentStatus, MONTH_NAMES } from '@/types/database';
+import { Student, Payment, Schedule, DAY_NAMES, PAYMENT_STATUS_LABELS, PaymentStatus, MONTH_NAMES } from '@/types/database';
 import { isNewStudent } from '@/lib/utils';
 import { formatDate } from '@/lib/format';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -37,9 +37,11 @@ const formatMonth = (monthStr: string | null) => {
 export default function StudentsList({ onStudentClick, refreshTrigger, onStudentDeleted }: StudentsListProps) {
   const [students, setStudents] = useState<Student[]>([]);
   const [payments, setPayments] = useState<Record<string, Payment>>({});
+  const [schedules, setSchedules] = useState<Schedule[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [selectedMonth, setSelectedMonth] = useState<string>(getCurrentMonth());
+  const [scheduleFilter, setScheduleFilter] = useState<string>('all');
   const [sortField, setSortField] = useState<'name' | 'payment_status' | null>(null);
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
   const [page, setPage] = useState(0);
@@ -59,14 +61,12 @@ export default function StudentsList({ onStudentClick, refreshTrigger, onStudent
 
   const fetchStudents = async () => {
     setLoading(true);
-    const { data, error } = await supabase
-      .from('students')
-      .select('*, schedule:schedules(*)')
-      .order('updated_at', { ascending: false });
-
-    if (data) {
-      setStudents(data as Student[]);
-    }
+    const [studentsRes, schedulesRes] = await Promise.all([
+      supabase.from('students').select('*, schedule:schedules(*)').order('updated_at', { ascending: false }),
+      supabase.from('schedules').select('*').order('day_of_week').order('start_time'),
+    ]);
+    if (studentsRes.data) setStudents(studentsRes.data as Student[]);
+    if (schedulesRes.data) setSchedules(schedulesRes.data as Schedule[]);
     setLoading(false);
   };
 
@@ -342,7 +342,9 @@ export default function StudentsList({ onStudentClick, refreshTrigger, onStudent
 
   const filteredStudents = students.filter(student => {
     const fullName = `${student.first_name} ${student.last_name}`.toLowerCase();
-    return fullName.includes(search.toLowerCase());
+    const matchesSearch = fullName.includes(search.toLowerCase());
+    const matchesSchedule = scheduleFilter === 'all' || student.schedule_id === scheduleFilter;
+    return matchesSearch && matchesSchedule;
   });
 
   const PAYMENT_STATUS_ORDER: Record<string, number> = { pending: 0, partial: 1, paid: 2 };
@@ -411,7 +413,23 @@ export default function StudentsList({ onStudentClick, refreshTrigger, onStudent
             className="pl-10"
           />
         </div>
-        <div className="w-full sm:w-56">
+        <div className="w-full sm:w-48">
+          <Select value={scheduleFilter} onValueChange={(v) => { setScheduleFilter(v); setPage(0); }}>
+            <SelectTrigger>
+              <Calendar className="w-4 h-4 mr-2" />
+              <SelectValue placeholder="Filtrar por horario" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todos los horarios</SelectItem>
+              {schedules.map(s => (
+                <SelectItem key={s.id} value={s.id}>
+                  {DAY_NAMES[s.day_of_week]} {s.start_time.slice(0, 5)}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="w-full sm:w-48">
           <Select value={selectedMonth} onValueChange={(v) => { setSelectedMonth(v); setPage(0); }}>
             <SelectTrigger>
               <Calendar className="w-4 h-4 mr-2" />
