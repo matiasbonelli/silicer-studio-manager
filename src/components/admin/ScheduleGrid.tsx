@@ -1,13 +1,23 @@
 import { useState, useEffect } from 'react';
 import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd';
 import { supabase } from '@/integrations/supabase/client';
-import { Schedule, Student, DAY_NAMES } from '@/types/database';
+import { Schedule, Student, DAY_NAMES, MONTH_NAMES } from '@/types/database';
 import { isNewStudent } from '@/lib/utils';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2, User, Search } from 'lucide-react';
 import { Input } from '@/components/ui/input';
+
+const getCurrentMonth = (): string => {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+};
+
+const formatMonth = (monthStr: string): string => {
+  const [year, month] = monthStr.split('-');
+  return `${MONTH_NAMES[month]} ${year}`;
+};
 
 interface ScheduleGridProps {
   onStudentClick: (student: Student) => void;
@@ -17,25 +27,33 @@ interface ScheduleGridProps {
 export default function ScheduleGrid({ onStudentClick, refreshTrigger }: ScheduleGridProps) {
   const [schedules, setSchedules] = useState<Schedule[]>([]);
   const [students, setStudents] = useState<Student[]>([]);
+  const [paymentMap, setPaymentMap] = useState<Record<string, string>>({});
+  const [currentMonth, setCurrentMonth] = useState(getCurrentMonth());
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const { toast } = useToast();
 
   const fetchData = async () => {
     setLoading(true);
-    
-    const [schedulesRes, studentsRes] = await Promise.all([
+    const month = getCurrentMonth();
+    setCurrentMonth(month);
+
+    const [schedulesRes, studentsRes, paymentsRes] = await Promise.all([
       supabase.from('schedules').select('*').order('day_of_week').order('start_time'),
       supabase.from('students').select('*, schedule:schedules(*)'),
+      supabase.from('payments').select('student_id, status').eq('month', month),
     ]);
 
-    if (schedulesRes.data) {
-      setSchedules(schedulesRes.data as Schedule[]);
+    if (schedulesRes.data) setSchedules(schedulesRes.data as Schedule[]);
+    if (studentsRes.data) setStudents(studentsRes.data as Student[]);
+
+    const map: Record<string, string> = {};
+    if (paymentsRes.data) {
+      for (const p of paymentsRes.data) {
+        map[p.student_id] = p.status;
+      }
     }
-    if (studentsRes.data) {
-      setStudents(studentsRes.data as Student[]);
-    }
-    
+    setPaymentMap(map);
     setLoading(false);
   };
 
@@ -113,14 +131,19 @@ export default function ScheduleGrid({ onStudentClick, refreshTrigger }: Schedul
 
   return (
     <div className="space-y-4">
-      <div className="relative">
-        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
-        <Input
-          placeholder="Buscar alumno..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="pl-10"
-        />
+      <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
+          <Input
+            placeholder="Buscar alumno..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="pl-10"
+          />
+        </div>
+        <p className="text-sm text-muted-foreground shrink-0">
+          Cuotas de <span className="font-medium text-foreground">{formatMonth(currentMonth)}</span>
+        </p>
       </div>
 
       <DragDropContext onDragEnd={handleDragEnd}>
@@ -176,10 +199,20 @@ export default function ScheduleGrid({ onStudentClick, refreshTrigger }: Schedul
                                   </Badge>
                                 )}
                                 <Badge
-                                  variant={student.payment_status === 'paid' ? 'default' : 'destructive'}
-                                  className="text-[10px] ml-auto"
+                                  variant={
+                                    paymentMap[student.id] === 'paid'
+                                      ? 'default'
+                                      : paymentMap[student.id] === 'partial'
+                                      ? 'secondary'
+                                      : 'destructive'
+                                  }
+                                  className={`text-[10px] ml-auto ${paymentMap[student.id] === 'partial' ? 'bg-yellow-500 hover:bg-yellow-600 text-white' : ''}`}
                                 >
-                                  {student.payment_status === 'paid' ? '✓' : '$'}
+                                  {paymentMap[student.id] === 'paid'
+                                    ? '✓'
+                                    : paymentMap[student.id] === 'partial'
+                                    ? '½'
+                                    : '$'}
                                 </Badge>
                               </div>
                             )}
