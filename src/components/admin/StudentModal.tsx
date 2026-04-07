@@ -10,7 +10,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
-import { Trash2, ExternalLink, Check, Loader2 } from 'lucide-react';
+import { Trash2, ExternalLink, Check, Loader2, MessageCircle } from 'lucide-react';
 
 interface StudentModalProps {
   student: Student | null;
@@ -52,6 +52,7 @@ export default function StudentModal({ student, isOpen, onClose, onSave, isNew =
   const [editingPayment, setEditingPayment] = useState(false);
   const [paymentType, setPaymentType] = useState<'total' | 'partial' | 'pending'>('pending');
   const [partialAmount, setPartialAmount] = useState('');
+  const [paymentNotes, setPaymentNotes] = useState('');
   const [savingPayment, setSavingPayment] = useState(false);
 
   const { toast } = useToast();
@@ -109,6 +110,7 @@ export default function StudentModal({ student, isOpen, onClose, onSave, isNew =
 
     if (data) {
       setCurrentPayment(data as Payment);
+      setPaymentNotes(data.notes || '');
       if (data.status === 'paid') setPaymentType('total');
       else if (data.status === 'partial') {
         setPaymentType('partial');
@@ -121,6 +123,7 @@ export default function StudentModal({ student, isOpen, onClose, onSave, isNew =
       setCurrentPayment(null);
       setPaymentType('pending');
       setPartialAmount('');
+      setPaymentNotes('');
     }
   };
 
@@ -170,6 +173,7 @@ export default function StudentModal({ student, isOpen, onClose, onSave, isNew =
           status: newStatus,
           amount: paidAmount,
           payment_date: paymentDate,
+          notes: paymentNotes || null,
         },
         { onConflict: 'student_id,month' }
       );
@@ -294,7 +298,21 @@ export default function StudentModal({ student, isOpen, onClose, onSave, isNew =
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>{isNew ? 'Agregar Alumno' : 'Editar Alumno'}</DialogTitle>
+          <div className="flex items-center justify-between">
+            <DialogTitle>{isNew ? 'Agregar Alumno' : 'Editar Alumno'}</DialogTitle>
+            {!isNew && student?.phone && (
+              <a
+                href={`https://wa.me/54${student.phone.replace(/\D/g, '')}`}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                <Button type="button" variant="outline" size="sm" className="gap-1.5 text-green-600 hover:text-green-700">
+                  <MessageCircle className="w-4 h-4" />
+                  WhatsApp
+                </Button>
+              </a>
+            )}
+          </div>
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -409,12 +427,17 @@ export default function StudentModal({ student, isOpen, onClose, onSave, isNew =
               </div>
 
               {!editingPayment ? (
-                <div className="flex items-center gap-2 pt-1">
-                  {paymentStatusBadge(currentPayment)}
-                  {currentPayment?.payment_date && (
-                    <span className="text-xs text-muted-foreground">
-                      {formatDate(currentPayment.payment_date)}
-                    </span>
+                <div className="space-y-1.5 pt-1">
+                  <div className="flex items-center gap-2">
+                    {paymentStatusBadge(currentPayment)}
+                    {currentPayment?.payment_date && (
+                      <span className="text-xs text-muted-foreground">
+                        {formatDate(currentPayment.payment_date)}
+                      </span>
+                    )}
+                  </div>
+                  {paymentNotes && (
+                    <p className="text-xs text-muted-foreground italic">"{paymentNotes}"</p>
                   )}
                 </div>
               ) : (
@@ -454,6 +477,16 @@ export default function StudentModal({ student, isOpen, onClose, onSave, isNew =
                       onChange={(e) => setPartialAmount(e.target.value)}
                     />
                   )}
+
+                  <div className="space-y-1.5">
+                    <Label className="text-xs text-muted-foreground">Nota de pago</Label>
+                    <Textarea
+                      placeholder="Ej: paga semana próxima, acordado para el viernes..."
+                      value={paymentNotes}
+                      onChange={(e) => setPaymentNotes(e.target.value)}
+                      rows={2}
+                    />
+                  </div>
 
                   <div className="flex gap-2">
                     <Button
