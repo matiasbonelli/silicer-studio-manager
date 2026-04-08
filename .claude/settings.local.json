@@ -9,7 +9,8 @@
       "Bash(npx tsc:*)",
       "Bash(git credential-manager:*)",
       "Bash(git credential-manager-core:*)",
-      "Bash(git config:*)"
+      "Bash(git config:*)",
+      "Bash(ls C:/Users/matia/silicer-studio-manager/silicer-studio-manager/supabase/migrations/20260408*)"
     ]
   }
 }
