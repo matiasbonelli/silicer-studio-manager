@@ -92,6 +92,34 @@ export default function StudentsList({ onStudentClick, refreshTrigger, onStudent
     fetchPayments(selectedMonth);
   }, [selectedMonth, refreshTrigger]);
 
+  // Polling cada 5 min: solo recarga si hubo un cambio en students
+  useEffect(() => {
+    let lastUpdatedAt: string | null = null;
+
+    const checkForChanges = async () => {
+      const { data } = await supabase
+        .from('students')
+        .select('updated_at')
+        .order('updated_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (!data) return;
+      if (lastUpdatedAt === null) {
+        lastUpdatedAt = data.updated_at;
+        return;
+      }
+      if (data.updated_at !== lastUpdatedAt) {
+        lastUpdatedAt = data.updated_at;
+        fetchStudents();
+        fetchPayments(selectedMonth);
+      }
+    };
+
+    const interval = setInterval(checkForChanges, 5 * 60 * 1000);
+    return () => clearInterval(interval);
+  }, [selectedMonth]);
+
   const openPaymentModal = (student: Student) => {
     setStudentToPayment(student);
     const payment = payments[student.id];
