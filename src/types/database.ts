@@ -115,6 +115,17 @@ export const DAY_NAMES: Record<string, string> = {
   saturday: 'Sábado (sólo niños)',
 };
 
+/** Orden numérico de los días para ordenar selectores de horario */
+export const DAY_ORDER: Record<string, number> = {
+  monday: 1,
+  tuesday: 2,
+  wednesday: 3,
+  thursday: 4,
+  friday: 5,
+  saturday: 6,
+  sunday: 7,
+};
+
 export const PAYMENT_STATUS_LABELS: Record<PaymentStatus, string> = {
   paid: 'Pagado',
   pending: 'Pendiente',
@@ -163,6 +174,30 @@ export const ORDER_STATUS_LABELS: Record<OrderStatus, string> = {
 export const ORDER_PAYMENT_STATUS_LABELS: Record<OrderPaymentStatus, string> = {
   pending: 'No pagado',
   paid: 'Pagado',
+};
+
+export type AttendanceStatus = 'present' | 'absent' | 'recovery' | 'day_switch';
+
+export interface Attendance {
+  id: string;
+  student_id: string;
+  schedule_id: string;
+  class_date: string;        // YYYY-MM-DD
+  status: AttendanceStatus;
+  original_schedule_id: string | null;
+  recovery_source_date: string | null;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+  student?: Student;
+  schedule?: Schedule;
+}
+
+export const ATTENDANCE_STATUS_LABELS: Record<AttendanceStatus, string> = {
+  present: 'Presente',
+  absent: 'Ausente',
+  recovery: 'Recuperación',
+  day_switch: 'Cambio de día',
 };
 
 export const MONTH_NAMES: Record<string, string> = {

@@ -16,7 +16,8 @@ import EnrollmentsManager from '@/components/admin/EnrollmentsManager';
 import PricingCalculator from '@/components/admin/PricingCalculator';
 import OrdersManager from '@/components/admin/OrdersManager';
 import Dashboard from '@/components/admin/Dashboard';
-import { LogOut, Plus, Calendar, Users, Package, ShoppingCart, Loader2, ClipboardList, ClipboardCheck, Calculator, Sun, Moon, LayoutDashboard } from 'lucide-react';
+import AttendanceManager from '@/components/admin/AttendanceManager';
+import { LogOut, Plus, Calendar, Users, Package, ShoppingCart, Loader2, ClipboardList, ClipboardCheck, Calculator, Sun, Moon, LayoutDashboard, UserCheck } from 'lucide-react';
 
 export default function Admin() {
   const { user, loading, signOut } = useAuth();
@@ -132,7 +133,7 @@ export default function Admin() {
       <main className="container mx-auto px-4 py-6">
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-            <TabsList className="grid w-full sm:w-auto grid-cols-8 gap-1">
+            <TabsList className="grid w-full sm:w-auto grid-cols-9 gap-1">
               <TabsTrigger value="schedule" className="flex items-center gap-1.5">
                 <Calendar className="w-4 h-4" />
                 <span className="hidden sm:inline">Horarios</span>
@@ -147,6 +148,10 @@ export default function Admin() {
               <TabsTrigger value="students" className="flex items-center gap-1.5">
                 <Users className="w-4 h-4" />
                 <span className="hidden sm:inline">Alumnos</span>
+              </TabsTrigger>
+              <TabsTrigger value="attendance" className="flex items-center gap-1.5">
+                <UserCheck className="w-4 h-4" />
+                <span className="hidden sm:inline">Asistencia</span>
               </TabsTrigger>
               <TabsTrigger value="inventory" className="flex items-center gap-1.5">
                 <Package className="w-4 h-4" />
@@ -187,6 +192,10 @@ export default function Admin() {
 
           <TabsContent value="students" className="mt-6">
             <StudentsList onStudentClick={handleStudentClick} refreshTrigger={refreshTrigger} />
+          </TabsContent>
+
+          <TabsContent value="attendance" className="mt-6">
+            <AttendanceManager />
           </TabsContent>
 
           <TabsContent value="inventory" className="mt-6">

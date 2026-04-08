@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
-import { Student, Payment, Schedule, DAY_NAMES, PAYMENT_STATUS_LABELS, PaymentStatus, MONTH_NAMES } from '@/types/database';
+import { Student, Payment, Schedule, DAY_NAMES, DAY_ORDER, PAYMENT_STATUS_LABELS, PaymentStatus, MONTH_NAMES } from '@/types/database';
 import { isNewStudent } from '@/lib/utils';
 import { formatDate } from '@/lib/format';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -449,11 +449,16 @@ export default function StudentsList({ onStudentClick, refreshTrigger, onStudent
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">Todos los horarios</SelectItem>
-              {schedules.map(s => (
-                <SelectItem key={s.id} value={s.id}>
-                  {DAY_NAMES[s.day_of_week]} {s.start_time.slice(0, 5)}
-                </SelectItem>
-              ))}
+              {[...schedules]
+                .sort((a, b) => {
+                  const d = (DAY_ORDER[a.day_of_week] ?? 9) - (DAY_ORDER[b.day_of_week] ?? 9);
+                  return d !== 0 ? d : a.start_time.localeCompare(b.start_time);
+                })
+                .map(s => (
+                  <SelectItem key={s.id} value={s.id}>
+                    {DAY_NAMES[s.day_of_week]} {s.start_time.slice(0, 5)}
+                  </SelectItem>
+                ))}
             </SelectContent>
           </Select>
         </div>
