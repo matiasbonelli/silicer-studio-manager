@@ -133,44 +133,44 @@ export default function Admin() {
       <main className="container mx-auto px-4 py-6">
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-            <TabsList className="grid w-full sm:w-auto grid-cols-9 gap-1">
-              <TabsTrigger value="schedule" className="flex items-center gap-1.5">
-                <Calendar className="w-4 h-4" />
+            <TabsList className="flex w-full overflow-x-auto h-auto flex-wrap sm:flex-nowrap gap-1 p-1">
+              <TabsTrigger value="schedule" className="flex items-center gap-1.5 shrink-0 px-3 py-1.5">
+                <Calendar className="w-4 h-4 shrink-0" />
                 <span className="hidden sm:inline">Horarios</span>
               </TabsTrigger>
-              <TabsTrigger value="enrollments" className="flex items-center gap-1.5">
-                <ClipboardList className="w-4 h-4" />
+              <TabsTrigger value="enrollments" className="relative flex items-center gap-1.5 shrink-0 px-3 py-1.5">
+                <ClipboardList className="w-4 h-4 shrink-0" />
                 <span className="hidden sm:inline">Inscripciones</span>
                 {pendingEnrollments > 0 && (
-                  <span className="w-2 h-2 rounded-full bg-yellow-400 shrink-0" />
+                  <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-yellow-400" />
                 )}
               </TabsTrigger>
-              <TabsTrigger value="students" className="flex items-center gap-1.5">
-                <Users className="w-4 h-4" />
+              <TabsTrigger value="students" className="flex items-center gap-1.5 shrink-0 px-3 py-1.5">
+                <Users className="w-4 h-4 shrink-0" />
                 <span className="hidden sm:inline">Alumnos</span>
               </TabsTrigger>
-              <TabsTrigger value="attendance" className="flex items-center gap-1.5">
-                <UserCheck className="w-4 h-4" />
+              <TabsTrigger value="attendance" className="flex items-center gap-1.5 shrink-0 px-3 py-1.5">
+                <UserCheck className="w-4 h-4 shrink-0" />
                 <span className="hidden sm:inline">Asistencia</span>
               </TabsTrigger>
-              <TabsTrigger value="inventory" className="flex items-center gap-1.5">
-                <Package className="w-4 h-4" />
+              <TabsTrigger value="inventory" className="flex items-center gap-1.5 shrink-0 px-3 py-1.5">
+                <Package className="w-4 h-4 shrink-0" />
                 <span className="hidden sm:inline">Inventario</span>
               </TabsTrigger>
-              <TabsTrigger value="sales" className="flex items-center gap-1.5">
-                <ShoppingCart className="w-4 h-4" />
+              <TabsTrigger value="sales" className="flex items-center gap-1.5 shrink-0 px-3 py-1.5">
+                <ShoppingCart className="w-4 h-4 shrink-0" />
                 <span className="hidden sm:inline">Ventas</span>
               </TabsTrigger>
-              <TabsTrigger value="orders" className="flex items-center gap-1.5">
-                <ClipboardCheck className="w-4 h-4" />
+              <TabsTrigger value="orders" className="flex items-center gap-1.5 shrink-0 px-3 py-1.5">
+                <ClipboardCheck className="w-4 h-4 shrink-0" />
                 <span className="hidden sm:inline">Pedidos</span>
               </TabsTrigger>
-              <TabsTrigger value="pricing" className="flex items-center gap-1.5">
-                <Calculator className="w-4 h-4" />
+              <TabsTrigger value="pricing" className="flex items-center gap-1.5 shrink-0 px-3 py-1.5">
+                <Calculator className="w-4 h-4 shrink-0" />
                 <span className="hidden sm:inline">Calculadora de Costos</span>
               </TabsTrigger>
-              <TabsTrigger value="dashboard" className="flex items-center gap-1.5">
-                <LayoutDashboard className="w-4 h-4" />
+              <TabsTrigger value="dashboard" className="flex items-center gap-1.5 shrink-0 px-3 py-1.5">
+                <LayoutDashboard className="w-4 h-4 shrink-0" />
                 <span className="hidden sm:inline">Resumen</span>
               </TabsTrigger>
             </TabsList>
