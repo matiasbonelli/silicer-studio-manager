@@ -4,10 +4,13 @@ import { Student } from '@/types/database';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { MessageCircle } from 'lucide-react';
+import { sendWhatsApp } from '@/lib/whatsapp';
+import { useToast } from '@/hooks/use-toast';
 
 export default function BirthdayModal() {
   const [isOpen, setIsOpen] = useState(false);
   const [birthdayStudents, setBirthdayStudents] = useState<Student[]>([]);
+  const { toast } = useToast();
 
   useEffect(() => {
     const dismissedKey = `birthday-modal-dismissed-${new Date().toISOString().slice(0, 10)}`;
@@ -53,11 +56,10 @@ export default function BirthdayModal() {
     setIsOpen(false);
   };
 
-  const buildWhatsAppUrl = (student: Student) => {
+  const handleSendWhatsApp = (student: Student) => {
     const name = student.first_name;
     const message = `Muy feliz cumple años ${name} 🥳, esperemos que disfrutes en tu hermoso día💫. Te saluda Caro y todo el equipo de Silicer🩷`;
-    const phone = student.phone ? `54${student.phone.replace(/\D/g, '')}` : '';
-    return `https://wa.me/${phone}?text=${encodeURIComponent(message)}`;
+    sendWhatsApp(student.phone!, message, toast);
   };
 
   if (birthdayStudents.length === 0) return null;
@@ -94,7 +96,7 @@ export default function BirthdayModal() {
                     size="sm"
                     variant="outline"
                     className="mt-1"
-                    onClick={() => window.open(buildWhatsAppUrl(student), '_blank', 'noopener,noreferrer')}
+                    onClick={() => handleSendWhatsApp(student)}
                   >
                     <MessageCircle className="w-4 h-4 mr-2" /> Enviar mensaje
                   </Button>

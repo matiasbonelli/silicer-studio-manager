@@ -10,6 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
+import { sendWhatsApp } from '@/lib/whatsapp';
 import { Search, Loader2, MessageCircle, UserPlus, DollarSign, Eye, Trash2, FileText, ExternalLink, Pencil, Plus } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { format } from 'date-fns';
@@ -696,15 +697,12 @@ export default function EnrollmentsManager({ onStudentCreated }: EnrollmentsMana
                         className="text-green-600 hover:text-green-700"
                         aria-label="Enviar WhatsApp"
                         onClick={async () => {
-                          const phone = enrollment.phone?.replace(/\D/g, '');
                           const day = enrollment.schedule ? DAY_NAMES[enrollment.schedule.day_of_week] : '[Completar día]';
                           const time = enrollment.schedule
                             ? `${enrollment.schedule.start_time.slice(0, 5)} a ${enrollment.schedule.end_time.slice(0, 5)} hs`
                             : '[Completar hora]';
-                          const message = encodeURIComponent(
-                            `Hola de nuevo!\n\nTe escribimos para confirmar tu turno:\n\nDia: ${day}\nHorario: ${time}\n\nMuchas gracias, te esperamos!`
-                          );
-                          window.open(`https://wa.me/54${phone}?text=${message}`, '_blank', 'noopener,noreferrer');
+                          const message = `Hola de nuevo!\n\nTe escribimos para confirmar tu turno:\n\nDia: ${day}\nHorario: ${time}\n\nMuchas gracias, te esperamos!`;
+                          await sendWhatsApp(enrollment.phone!, message, toast);
                           // Actualizar estado a "contacted" si está pendiente y no convertido
                           if (enrollment.status === 'pending' && !enrollment.converted_to_student_id) {
                             await supabase

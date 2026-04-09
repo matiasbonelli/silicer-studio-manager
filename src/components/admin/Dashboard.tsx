@@ -9,6 +9,8 @@ import {
   MONTH_NAMES,
 } from '@/types/database';
 import { formatCurrency } from '@/lib/format';
+import { sendWhatsApp, sendWhatsAppBulk, whatsAppChatUrl } from '@/lib/whatsapp';
+import { useToast } from '@/hooks/use-toast';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -81,12 +83,7 @@ const formatBirthday = (birthday: string): string => {
   return `${day}/${month}`;
 };
 
-const buildWhatsAppUrl = (phone: string, message?: string): string => {
-  const clean = phone.replace(/\D/g, '');
-  const base = `https://wa.me/54${clean}`;
-  if (!message) return base;
-  return `${base}?text=${encodeURIComponent(message)}`;
-};
+// WhatsApp helper removed – using shared utilities from @/lib/whatsapp
 
 // ---------------------------------------------------------------------------
 // Types
@@ -146,6 +143,7 @@ export default function Dashboard() {
   const [error, setError] = useState<string | null>(null);
   const [reminderOpen, setReminderOpen] = useState(false);
   const [reminderMsg, setReminderMsg] = useState(DEFAULT_REMINDER_MSG);
+  const { toast } = useToast();
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -360,17 +358,21 @@ export default function Dashboard() {
 
   const monthLabel = formatMonth(currentMonth);
 
-  const buildReminderUrl = (student: Student): string => {
-    const msg = reminderMsg
+  const buildReminderMsg = (student: Student): string => {
+    return reminderMsg
       .replace(/\[nombre\]/g, student.first_name)
       .replace(/\[mes\]/g, monthLabel);
-    return buildWhatsAppUrl(student.phone!, msg);
+  };
+
+  const handleSendReminder = (student: Student) => {
+    sendWhatsApp(student.phone!, buildReminderMsg(student), toast);
   };
 
   const handleOpenAll = () => {
-    pendingStudents.forEach((s) => {
-      if (s.phone) window.open(buildReminderUrl(s), '_blank', 'noopener,noreferrer');
-    });
+    const targets = pendingStudents
+      .filter((s) => s.phone)
+      .map((s) => ({ phone: s.phone!, message: buildReminderMsg(s) }));
+    sendWhatsAppBulk(targets, toast);
   };
 
   // ---------------------------------------------------------------------------
@@ -549,7 +551,7 @@ export default function Dashboard() {
                     </span>
                     {student.phone && (
                       <a
-                        href={buildWhatsAppUrl(student.phone)}
+                        href={whatsAppChatUrl(student.phone)}
                         target="_blank"
                         rel="noopener noreferrer"
                       >
@@ -677,7 +679,7 @@ export default function Dashboard() {
                     </div>
                     {student.phone && (
                       <a
-                        href={buildWhatsAppUrl(student.phone)}
+                        href={whatsAppChatUrl(student.phone)}
                         target="_blank"
                         rel="noopener noreferrer"
                       >
@@ -784,21 +786,15 @@ export default function Dashboard() {
                       )}
                     </div>
                     {student.phone ? (
-                      <a
-                        href={buildReminderUrl(student)}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        onClick={(e) => e.stopPropagation()}
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 gap-1 text-green-600 hover:text-green-700 shrink-0"
+                        onClick={(e) => { e.stopPropagation(); handleSendReminder(student); }}
                       >
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-7 gap-1 text-green-600 hover:text-green-700 shrink-0"
-                        >
-                          <MessageCircle className="h-4 w-4" />
-                          <span className="text-xs">Abrir</span>
-                        </Button>
-                      </a>
+                        <MessageCircle className="h-4 w-4" />
+                        <span className="text-xs">Abrir</span>
+                      </Button>
                     ) : (
                       <span className="text-xs text-muted-foreground">Sin teléfono</span>
                     )}

@@ -10,6 +10,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
+import { sendWhatsApp } from '@/lib/whatsapp';
 import { MessageSquare, Plus, Pencil, Trash2, Send, Users, User, Loader2, Cake, CreditCard, CalendarCheck, Megaphone } from 'lucide-react';
 
 type EventType = 'birthday' | 'payment_reminder' | 'welcome' | 'custom';
@@ -140,10 +141,8 @@ export default function EventsManager() {
     return students;
   };
 
-  const buildWhatsAppUrl = (phone: string, message: string) => {
-    const cleanPhone = phone.replace(/\D/g, '');
-    const fullPhone = cleanPhone.startsWith('54') ? cleanPhone : `54${cleanPhone}`;
-    return `https://wa.me/${fullPhone}?text=${encodeURIComponent(message)}`;
+  const handleSendWhatsApp = (phone: string, message: string) => {
+    sendWhatsApp(phone, message, toast);
   };
 
   const personalizeMessage = (template: string, student: Student) => {
@@ -388,15 +387,14 @@ export default function EventsManager() {
                             {student.phone}
                           </TableCell>
                           <TableCell className="text-center">
-                            <a
-                              href={buildWhatsAppUrl(student.phone, message)}
-                              target="_blank"
-                              rel="noopener noreferrer"
+                            <Button
+                              size="sm"
+                              variant="default"
+                              className="bg-green-600 hover:bg-green-700"
+                              onClick={() => handleSendWhatsApp(student.phone, message)}
                             >
-                              <Button size="sm" variant="default" className="bg-green-600 hover:bg-green-700">
-                                <Send className="w-3 h-3" />
-                              </Button>
-                            </a>
+                              <Send className="w-3 h-3" />
+                            </Button>
                           </TableCell>
                         </TableRow>
                       );

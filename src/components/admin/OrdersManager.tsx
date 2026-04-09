@@ -20,6 +20,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Textarea } from '@/components/ui/textarea';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/hooks/use-toast';
+import { sendWhatsApp } from '@/lib/whatsapp';
 import {
   Plus,
   Search,
@@ -37,10 +38,7 @@ import {
 // Helpers
 // ---------------------------------------------------------------------------
 
-const buildWhatsAppUrl = (phone: string, message: string): string => {
-  const clean = phone.replace(/\D/g, '');
-  return `https://wa.me/54${clean}?text=${encodeURIComponent(message)}`;
-};
+// WhatsApp helper removed – using shared sendWhatsApp from @/lib/whatsapp
 
 const nextStatus: Record<OrderStatus, OrderStatus | null> = {
   pending: 'ready',
@@ -454,20 +452,15 @@ export default function OrdersManager() {
                     <TableCell className="text-center text-sm">{formatDate(order.created_at)}</TableCell>
                     <TableCell className="text-center">
                       {canWhatsApp ? (
-                        <a
-                          href={buildWhatsAppUrl(student!.phone!, whatsAppMsg)}
-                          target="_blank"
-                          rel="noopener noreferrer"
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 gap-1 text-green-600 hover:text-green-700"
+                          onClick={() => sendWhatsApp(student!.phone!, whatsAppMsg, toast)}
                         >
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="h-7 gap-1 text-green-600 hover:text-green-700"
-                          >
-                            <MessageCircle className="h-4 w-4" />
-                            <span className="text-xs">Avisar</span>
-                          </Button>
-                        </a>
+                          <MessageCircle className="h-4 w-4" />
+                          <span className="text-xs">Avisar</span>
+                        </Button>
                       ) : (
                         <span className="text-muted-foreground text-xs">-</span>
                       )}
