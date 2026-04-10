@@ -215,7 +215,7 @@ export default function Admin() {
           </TabsContent>
 
           <TabsContent value="dashboard" className="mt-6">
-            <Dashboard />
+            <Dashboard refreshTrigger={refreshTrigger} />
           </TabsContent>
         </Tabs>
       </main>

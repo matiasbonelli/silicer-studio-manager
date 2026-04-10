@@ -582,11 +582,16 @@ export default function StudentsList({ onStudentClick, refreshTrigger, onStudent
                   onClick={() => onStudentClick(student)}
                 >
                   <TableCell className="font-medium">
-                    <span className="inline-flex items-center gap-2">
+                    <span className="inline-flex items-center gap-2 flex-wrap">
                       {student.first_name} {student.last_name}
                       {isNewStudent(student) && (
                         <Badge className="text-[10px] bg-orange-500 hover:bg-orange-600 text-white border-transparent">
                           Nuevo
+                        </Badge>
+                      )}
+                      {student.categoria === 'niño' && (
+                        <Badge variant="outline" className="text-[10px] border-blue-400 text-blue-500">
+                          Niño
                         </Badge>
                       )}
                     </span>
