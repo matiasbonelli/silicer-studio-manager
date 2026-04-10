@@ -133,7 +133,7 @@ export default function Admin() {
       <main className="container mx-auto px-4 py-6">
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-            <TabsList className="flex w-full overflow-x-auto h-auto flex-wrap sm:flex-nowrap gap-1 p-1">
+            <TabsList className="flex w-full overflow-x-auto flex-nowrap h-auto gap-1 p-1 justify-start">
               <TabsTrigger value="schedule" className="flex items-center gap-1.5 shrink-0 px-3 py-1.5">
                 <Calendar className="w-4 h-4 shrink-0" />
                 <span className="hidden sm:inline">Horarios</span>
