@@ -1,3 +1,6 @@
+# Accidental home directory folder (created by misrouted skill installs)
+~/
+
 # Logs
 logs
 *.log
