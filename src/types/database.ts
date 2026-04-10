@@ -1,6 +1,12 @@
 export type PaymentStatus = 'paid' | 'pending' | 'partial';
 export type PaymentMethod = 'cash' | 'card' | 'transfer' | 'mercadopago';
 export type AppRole = 'admin' | 'user';
+export type Categoria = 'adulto' | 'niño';
+
+export const CATEGORIA_LABELS: Record<Categoria, string> = {
+  adulto: 'Adulto',
+  niño: 'Niño',
+};
 
 export interface Schedule {
   id: string;
@@ -26,6 +32,7 @@ export interface Student {
   payment_receipt_url: string | null;
   notes: string | null;
   start_date: string | null;
+  categoria: Categoria;
   created_at: string;
   updated_at: string;
   schedule?: Schedule;

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
-import { Student, Payment, PaymentStatus, Schedule, DAY_NAMES, MONTH_NAMES } from '@/types/database';
+import { Student, Payment, PaymentStatus, Schedule, Categoria, DAY_NAMES, MONTH_NAMES } from '@/types/database';
 import { formatDate } from '@/lib/format';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -41,6 +41,7 @@ export default function StudentModal({ student, isOpen, onClose, onSave, isNew =
     schedule_id: '',
     notes: '',
     start_date: '',
+    categoria: 'adulto' as Categoria,
   });
   const [schedules, setSchedules] = useState<Schedule[]>([]);
   const [paymentHistory, setPaymentHistory] = useState<Payment[]>([]);
@@ -55,6 +56,12 @@ export default function StudentModal({ student, isOpen, onClose, onSave, isNew =
   const [paymentNotes, setPaymentNotes] = useState('');
   const [savingPayment, setSavingPayment] = useState(false);
 
+  const CUOTA_KEY_ADULTO = 'silicer_cuota_adulto';
+  const CUOTA_KEY_NINO   = 'silicer_cuota_niño';
+  const getCuotaKey = (cat: Categoria) => cat === 'niño' ? CUOTA_KEY_NINO : CUOTA_KEY_ADULTO;
+  const getSuggestedAmount = (cat: Categoria): string =>
+    localStorage.getItem(getCuotaKey(cat)) ?? '';
+
   const { toast } = useToast();
 
   useEffect(() => {
@@ -68,9 +75,9 @@ export default function StudentModal({ student, isOpen, onClose, onSave, isNew =
         schedule_id: student.schedule_id || '',
         notes: student.notes || '',
         start_date: student.start_date || '',
+        categoria: student.categoria ?? 'adulto',
       });
-      fetchPaymentHistory(student.id);
-      fetchCurrentPayment(student.id);
+      loadPayments(student.id, student.categoria ?? 'adulto');
     } else {
       setFormData({
         first_name: '',
@@ -81,6 +88,7 @@ export default function StudentModal({ student, isOpen, onClose, onSave, isNew =
         schedule_id: '',
         notes: '',
         start_date: '',
+        categoria: 'adulto' as Categoria,
       });
       setPaymentHistory([]);
       setCurrentPayment(null);
@@ -100,23 +108,25 @@ export default function StudentModal({ student, isOpen, onClose, onSave, isNew =
     fetchSchedules();
   }, []);
 
-  const fetchCurrentPayment = async (studentId: string) => {
-    const { data } = await supabase
+  /** Carga el pago del mes actual y el historial en secuencia para evitar race conditions */
+  const loadPayments = async (studentId: string, categoria: Categoria = 'adulto') => {
+    // 1. Pago del mes actual
+    const { data: current } = await supabase
       .from('payments')
       .select('*')
       .eq('student_id', studentId)
       .eq('month', currentMonth)
       .maybeSingle();
 
-    if (data) {
-      setCurrentPayment(data as Payment);
-      setPaymentNotes(data.notes || '');
-      if (data.status === 'paid') {
+    if (current) {
+      setCurrentPayment(current as Payment);
+      setPaymentNotes(current.notes || '');
+      if (current.status === 'paid') {
         setPaymentType('total');
-        setPartialAmount(data.amount?.toString() || '');
-      } else if (data.status === 'partial') {
+        setPartialAmount(current.amount?.toString() || '');
+      } else if (current.status === 'partial') {
         setPaymentType('partial');
-        setPartialAmount(data.amount?.toString() || '');
+        setPartialAmount(current.amount?.toString() || '');
       } else {
         setPaymentType('pending');
         setPartialAmount('');
@@ -124,24 +134,42 @@ export default function StudentModal({ student, isOpen, onClose, onSave, isNew =
     } else {
       setCurrentPayment(null);
       setPaymentType('pending');
-      setPartialAmount('');
       setPaymentNotes('');
     }
+
+    // 2. Historial completo
+    const { data: history } = await supabase
+      .from('payments')
+      .select('*')
+      .eq('student_id', studentId)
+      .order('month', { ascending: false });
+
+    if (history) {
+      setPaymentHistory(history as Payment[]);
+
+      // Solo sugerir monto si NO hay pago registrado este mes
+      if (!current) {
+        // El precio base del Dashboard (seteado manualmente) siempre tiene prioridad
+        const cuotaBase = getSuggestedAmount(categoria);
+        const lastWithAmount = (history as Payment[]).find(
+          (p) => p.amount && p.amount > 0 && p.month !== currentMonth
+        );
+        // Prioridad: cuota base configurada > último pago del alumno
+        if (cuotaBase) {
+          setPartialAmount(cuotaBase);
+        } else if (lastWithAmount?.amount) {
+          setPartialAmount(lastWithAmount.amount.toString());
+          localStorage.setItem(getCuotaKey(categoria), lastWithAmount.amount.toString());
+        }
+      }
+    }
   };
+
 
   const handleViewReceipt = async (path: string) => {
     const filePath = path.startsWith('receipts/') ? path.replace('receipts/', '') : path;
     const { data } = await supabase.storage.from('receipts').createSignedUrl(filePath, 3600);
     if (data?.signedUrl) window.open(data.signedUrl, '_blank', 'noopener,noreferrer');
-  };
-
-  const fetchPaymentHistory = async (studentId: string) => {
-    const { data } = await supabase
-      .from('payments')
-      .select('*')
-      .eq('student_id', studentId)
-      .order('month', { ascending: false });
-    if (data) setPaymentHistory(data as Payment[]);
   };
 
   const handleSavePayment = async () => {
@@ -153,6 +181,9 @@ export default function StudentModal({ student, isOpen, onClose, onSave, isNew =
     if (paymentType === 'total') {
       newStatus = 'paid';
       paidAmount = parseFloat(partialAmount) || null;
+      if (paidAmount && paidAmount > 0) {
+        localStorage.setItem(getCuotaKey(formData.categoria), paidAmount.toString());
+      }
     } else if (paymentType === 'partial') {
       newStatus = 'partial';
       paidAmount = parseFloat(partialAmount) || 0;
@@ -193,9 +224,8 @@ export default function StudentModal({ student, isOpen, onClose, onSave, isNew =
             : 'Cuota marcada como pendiente',
       });
       setEditingPayment(false);
-      await fetchCurrentPayment(student.id);
-      await fetchPaymentHistory(student.id);
-      onSave(); // propaga refreshTrigger → actualiza ScheduleGrid y StudentsList
+      await loadPayments(student.id);
+      onSave(); // propaga refreshTrigger → actualiza ScheduleGrid, StudentsList y Dashboard
     }
     setSavingPayment(false);
   };
@@ -213,6 +243,7 @@ export default function StudentModal({ student, isOpen, onClose, onSave, isNew =
       schedule_id: formData.schedule_id || null,
       notes: formData.notes || null,
       start_date: formData.start_date || null,
+      categoria: formData.categoria,
     };
 
     let error;
@@ -370,6 +401,28 @@ export default function StudentModal({ student, isOpen, onClose, onSave, isNew =
               value={formData.start_date}
               onChange={(e) => setFormData(prev => ({ ...prev, start_date: e.target.value }))}
             />
+          </div>
+
+          <div className="space-y-2">
+            <Label>Categoría</Label>
+            <div className="flex gap-2">
+              <Button
+                type="button"
+                variant={formData.categoria === 'adulto' ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => setFormData(prev => ({ ...prev, categoria: 'adulto' }))}
+              >
+                Adulto
+              </Button>
+              <Button
+                type="button"
+                variant={formData.categoria === 'niño' ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => setFormData(prev => ({ ...prev, categoria: 'niño' }))}
+              >
+                Niño
+              </Button>
+            </div>
           </div>
 
           <div className="space-y-2">

@@ -26,6 +26,7 @@ import {
   Tooltip,
   ResponsiveContainer,
 } from 'recharts';
+import { Input } from '@/components/ui/input';
 import {
   Users,
   ShoppingCart,
@@ -39,6 +40,7 @@ import {
   RefreshCw,
   Bell,
   ClipboardCheck,
+  Pencil,
 } from 'lucide-react';
 
 // ---------------------------------------------------------------------------
@@ -137,13 +139,40 @@ interface DashboardData {
 const DEFAULT_REMINDER_MSG =
   'Hola [nombre], te recordamos que tenés la cuota de [mes] pendiente en Silicer Studio. ¡Cualquier consulta escribinos!';
 
-export default function Dashboard() {
+interface DashboardProps {
+  refreshTrigger?: number;
+}
+
+export default function Dashboard({ refreshTrigger }: DashboardProps) {
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [reminderOpen, setReminderOpen] = useState(false);
   const [reminderMsg, setReminderMsg] = useState(DEFAULT_REMINDER_MSG);
   const { toast } = useToast();
+
+  const CUOTA_KEY_ADULTO = 'silicer_cuota_adulto';
+  const CUOTA_KEY_NINO   = 'silicer_cuota_niño';
+  const [cuotaAdulto, setCuotaAdulto] = useState<string>(
+    () => localStorage.getItem(CUOTA_KEY_ADULTO) ?? ''
+  );
+  const [cuotaNino, setCuotaNino] = useState<string>(
+    () => localStorage.getItem(CUOTA_KEY_NINO) ?? ''
+  );
+  const [editingCuota, setEditingCuota] = useState<'adulto' | 'niño' | null>(null);
+
+  const handleSaveCuota = (cat: 'adulto' | 'niño') => {
+    const raw = cat === 'adulto' ? cuotaAdulto : cuotaNino;
+    const key = cat === 'adulto' ? CUOTA_KEY_ADULTO : CUOTA_KEY_NINO;
+    const val = parseFloat(raw);
+    if (!raw || isNaN(val) || val <= 0) {
+      toast({ title: 'Ingresá un precio válido', variant: 'destructive' });
+      return;
+    }
+    localStorage.setItem(key, val.toString());
+    setEditingCuota(null);
+    toast({ title: `Cuota ${cat} actualizada a ${formatCurrency(val)}` });
+  };
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -163,7 +192,7 @@ export default function Dashboard() {
         supabase.from('payments').select('student_id, status, amount').eq('month', currentMonth),
         supabase
           .from('payments')
-          .select('month, status, amount')
+          .select('month, status, amount, student_id')
           .gte('month', currentMonth.slice(0, 7).replace(/-\d+$/, '') + '-01' /* fallback */)
           .gte('payment_date', twelveMonthsAgo)
           .in('status', ['paid', 'partial']),
@@ -178,11 +207,23 @@ export default function Dashboard() {
       const students = (studentsRes.data ?? []) as Student[];
       const inventory = (inventoryRes.data ?? []) as InventoryItem[];
 
-      // Mapa student_id → payment del mes actual
-      const paymentsMap: Record<string, { status: string; amount: number | null }> = {};
+      // Precios configurados (fallback cuando amount es null)
+      const precioAdulto = parseFloat(localStorage.getItem('silicer_cuota_adulto') ?? '0') || 0;
+      const precioNino   = parseFloat(localStorage.getItem('silicer_cuota_niño')   ?? '0') || 0;
+      const getPrecio = (cat: string) => cat === 'niño' ? precioNino : precioAdulto;
+
+      // Mapa student_id → { status, amount, categoria }
+      const categoriaMap: Record<string, string> = {};
+      for (const s of students) categoriaMap[s.id] = s.categoria ?? 'adulto';
+
+      const paymentsMap: Record<string, { status: string; amount: number | null; categoria: string }> = {};
       if (paymentsRes.data) {
         for (const p of paymentsRes.data) {
-          paymentsMap[p.student_id] = { status: p.status, amount: p.amount };
+          paymentsMap[p.student_id] = {
+            status: p.status,
+            amount: p.amount,
+            categoria: categoriaMap[p.student_id] ?? 'adulto',
+          };
         }
       }
 
@@ -196,14 +237,13 @@ export default function Dashboard() {
         (s) => !paymentsMap[s.id] || paymentsMap[s.id].status === 'pending'
       );
 
-      // Ingresos por cuotas del mes (paid = cuota completa estimada no disponible, usamos amount)
-      // Para 'paid' sin amount usamos 0 (el monto total no se guarda si es total), para 'partial' usamos amount
+      // Ingresos por cuotas: si amount es null, usamos el precio configurado según categoría
       const cuotasPartialAmount = Object.values(paymentsMap)
         .filter((p) => p.status === 'partial')
         .reduce((sum, p) => sum + (p.amount ?? 0), 0);
       const cuotasPaidAmount = Object.values(paymentsMap)
         .filter((p) => p.status === 'paid')
-        .reduce((sum, p) => sum + (p.amount ?? 0), 0);
+        .reduce((sum, p) => sum + (p.amount && p.amount > 0 ? p.amount : getPrecio(p.categoria)), 0);
 
       // Ventas
       const totalRevenue = sales.reduce((sum, s) => sum + (s.total_amount ?? 0), 0);
@@ -244,7 +284,9 @@ export default function Dashboard() {
       if (historicRes.data) {
         for (const p of historicRes.data) {
           if (historicMap[p.month] !== undefined) {
-            historicMap[p.month].amount += p.amount ?? 0;
+            const cat = categoriaMap[(p as { student_id?: string }).student_id ?? ''] ?? 'adulto';
+            const fallback = p.status === 'paid' ? getPrecio(cat) : 0;
+            historicMap[p.month].amount += (p.amount && p.amount > 0 ? p.amount : fallback);
             historicMap[p.month].count += 1;
           }
         }
@@ -286,7 +328,7 @@ export default function Dashboard() {
 
   useEffect(() => {
     fetchData();
-  }, [fetchData]);
+  }, [fetchData, refreshTrigger]);
 
   // ---------------------------------------------------------------------------
   // Skeletons durante carga
@@ -473,6 +515,42 @@ export default function Dashboard() {
                 <Badge variant="outline" className="text-xs">
                   Parcial: {formatCurrency(cuotasPartialAmount)}
                 </Badge>
+              )}
+            </div>
+
+            {/* Precios de cuota configurables */}
+            <div className="pt-2 border-t mt-2 space-y-1.5">
+              {/* Adulto */}
+              {editingCuota === 'adulto' ? (
+                <div className="flex items-center gap-1.5">
+                  <Input type="number" className="h-7 text-xs" placeholder="Cuota adulto"
+                    value={cuotaAdulto} onChange={(e) => setCuotaAdulto(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === 'Enter') handleSaveCuota('adulto'); if (e.key === 'Escape') setEditingCuota(null); }}
+                    autoFocus />
+                  <Button size="sm" className="h-7 text-xs px-2" onClick={() => handleSaveCuota('adulto')}>Guardar</Button>
+                </div>
+              ) : (
+                <button className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors w-full text-left"
+                  onClick={() => setEditingCuota('adulto')}>
+                  <Pencil className="w-3 h-3 shrink-0" />
+                  {cuotaAdulto ? `Adulto: ${formatCurrency(parseFloat(cuotaAdulto))}` : 'Fijar cuota adulto'}
+                </button>
+              )}
+              {/* Niño */}
+              {editingCuota === 'niño' ? (
+                <div className="flex items-center gap-1.5">
+                  <Input type="number" className="h-7 text-xs" placeholder="Cuota niño"
+                    value={cuotaNino} onChange={(e) => setCuotaNino(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === 'Enter') handleSaveCuota('niño'); if (e.key === 'Escape') setEditingCuota(null); }}
+                    autoFocus />
+                  <Button size="sm" className="h-7 text-xs px-2" onClick={() => handleSaveCuota('niño')}>Guardar</Button>
+                </div>
+              ) : (
+                <button className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors w-full text-left"
+                  onClick={() => setEditingCuota('niño')}>
+                  <Pencil className="w-3 h-3 shrink-0" />
+                  {cuotaNino ? `Niño: ${formatCurrency(parseFloat(cuotaNino))}` : 'Fijar cuota niño'}
+                </button>
               )}
             </div>
           </CardContent>
