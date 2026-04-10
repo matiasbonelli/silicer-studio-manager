@@ -111,8 +111,10 @@ export default function StudentModal({ student, isOpen, onClose, onSave, isNew =
     if (data) {
       setCurrentPayment(data as Payment);
       setPaymentNotes(data.notes || '');
-      if (data.status === 'paid') setPaymentType('total');
-      else if (data.status === 'partial') {
+      if (data.status === 'paid') {
+        setPaymentType('total');
+        setPartialAmount(data.amount?.toString() || '');
+      } else if (data.status === 'partial') {
         setPaymentType('partial');
         setPartialAmount(data.amount?.toString() || '');
       } else {
@@ -150,6 +152,7 @@ export default function StudentModal({ student, isOpen, onClose, onSave, isNew =
 
     if (paymentType === 'total') {
       newStatus = 'paid';
+      paidAmount = parseFloat(partialAmount) || null;
     } else if (paymentType === 'partial') {
       newStatus = 'partial';
       paidAmount = parseFloat(partialAmount) || 0;
@@ -447,7 +450,7 @@ export default function StudentModal({ student, isOpen, onClose, onSave, isNew =
                       type="button"
                       variant={paymentType === 'total' ? 'default' : 'outline'}
                       size="sm"
-                      onClick={() => setPaymentType('total')}
+                      onClick={() => { setPaymentType('total'); setPartialAmount(''); }}
                     >
                       Total
                     </Button>
@@ -455,7 +458,7 @@ export default function StudentModal({ student, isOpen, onClose, onSave, isNew =
                       type="button"
                       variant={paymentType === 'partial' ? 'default' : 'outline'}
                       size="sm"
-                      onClick={() => setPaymentType('partial')}
+                      onClick={() => { setPaymentType('partial'); setPartialAmount(''); }}
                     >
                       Parcial
                     </Button>
@@ -463,16 +466,16 @@ export default function StudentModal({ student, isOpen, onClose, onSave, isNew =
                       type="button"
                       variant={paymentType === 'pending' ? 'default' : 'outline'}
                       size="sm"
-                      onClick={() => setPaymentType('pending')}
+                      onClick={() => { setPaymentType('pending'); setPartialAmount(''); }}
                     >
                       Pendiente
                     </Button>
                   </div>
 
-                  {paymentType === 'partial' && (
+                  {(paymentType === 'total' || paymentType === 'partial') && (
                     <Input
                       type="number"
-                      placeholder="Monto parcial"
+                      placeholder={paymentType === 'partial' ? 'Monto parcial' : 'Monto total (opcional)'}
                       value={partialAmount}
                       onChange={(e) => setPartialAmount(e.target.value)}
                     />
