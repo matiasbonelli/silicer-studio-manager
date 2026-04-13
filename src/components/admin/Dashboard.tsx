@@ -41,6 +41,7 @@ import {
   Bell,
   ClipboardCheck,
   Pencil,
+  Search,
 } from 'lucide-react';
 
 // ---------------------------------------------------------------------------
@@ -113,6 +114,7 @@ interface DashboardData {
   cuotasPending: number;
   totalStudents: number;
   pendingStudents: Student[];
+  partialStudents: Student[];
   cuotasPaidAmount: number;
   cuotasPartialAmount: number;
   // Ventas
@@ -149,6 +151,7 @@ export default function Dashboard({ refreshTrigger }: DashboardProps) {
   const [error, setError] = useState<string | null>(null);
   const [reminderOpen, setReminderOpen] = useState(false);
   const [reminderMsg, setReminderMsg] = useState(DEFAULT_REMINDER_MSG);
+  const [pendingSearch, setPendingSearch] = useState('');
   const { toast } = useToast();
 
   const CUOTA_KEY_ADULTO = 'silicer_cuota_adulto';
@@ -236,6 +239,9 @@ export default function Dashboard({ refreshTrigger }: DashboardProps) {
       const pendingStudents = students.filter(
         (s) => !paymentsMap[s.id] || paymentsMap[s.id].status === 'pending'
       );
+      const partialStudents = students.filter(
+        (s) => paymentsMap[s.id]?.status === 'partial'
+      );
 
       // Ingresos por cuotas: si amount es null, usamos el precio configurado según categoría
       const cuotasPartialAmount = Object.values(paymentsMap)
@@ -305,6 +311,7 @@ export default function Dashboard({ refreshTrigger }: DashboardProps) {
         cuotasPending,
         totalStudents: students.length,
         pendingStudents,
+        partialStudents,
         cuotasPaidAmount,
         cuotasPartialAmount,
         totalRevenue,
@@ -381,6 +388,7 @@ export default function Dashboard({ refreshTrigger }: DashboardProps) {
     cuotasPending,
     totalStudents,
     pendingStudents,
+    partialStudents,
     cuotasPaidAmount,
     cuotasPartialAmount,
     totalRevenue,
@@ -394,6 +402,24 @@ export default function Dashboard({ refreshTrigger }: DashboardProps) {
     historicData,
     pendingOrdersCount,
   } = data;
+
+  // Todos los alumnos a avisar: pendientes + parciales
+  const allStudentsToRemind = [
+    ...pendingStudents.map((s) => ({ student: s, status: 'pending' as const })),
+    ...partialStudents.map((s) => ({ student: s, status: 'partial' as const })),
+  ];
+
+  // Filtrado por búsqueda en el card
+  const pendingSearchLower = pendingSearch.toLowerCase();
+  const filteredStudentsToRemind = pendingSearch
+    ? allStudentsToRemind.filter(({ student }) => {
+        const fullName = `${student.first_name} ${student.last_name}`.toLowerCase();
+        return (
+          fullName.includes(pendingSearchLower) ||
+          (student.phone != null && student.phone.replace(/\D/g, '').includes(pendingSearch.replace(/\D/g, '')))
+        );
+      })
+    : allStudentsToRemind;
 
   const paidProgress =
     totalStudents > 0 ? Math.round((cuotasPaid / totalStudents) * 100) : 0;
@@ -411,9 +437,9 @@ export default function Dashboard({ refreshTrigger }: DashboardProps) {
   };
 
   const handleOpenAll = () => {
-    const targets = pendingStudents
-      .filter((s) => s.phone)
-      .map((s) => ({ phone: s.phone!, message: buildReminderMsg(s) }));
+    const targets = allStudentsToRemind
+      .filter(({ student }) => student.phone)
+      .map(({ student }) => ({ phone: student.phone!, message: buildReminderMsg(student) }));
     sendWhatsAppBulk(targets, toast);
   };
 
@@ -599,7 +625,7 @@ export default function Dashboard({ refreshTrigger }: DashboardProps) {
               <Users className="h-5 w-5 text-primary" />
               <CardTitle className="text-base">Cuotas pendientes</CardTitle>
             </div>
-            {pendingStudents.length > 0 && (
+            {allStudentsToRemind.length > 0 && (
               <Button
                 size="sm"
                 variant="outline"
@@ -607,45 +633,69 @@ export default function Dashboard({ refreshTrigger }: DashboardProps) {
                 onClick={() => setReminderOpen(true)}
               >
                 <Bell className="h-4 w-4" />
-                Recordar a todos
+                Avisar por WhatsApp
               </Button>
             )}
           </CardHeader>
           <CardContent>
-            {pendingStudents.length === 0 ? (
+            {allStudentsToRemind.length === 0 ? (
               <div className="flex flex-col items-center gap-2 py-6 text-center text-muted-foreground">
                 <CheckCircle className="h-8 w-8 text-green-500" />
                 <p className="text-sm font-medium">¡Todos al día!</p>
               </div>
             ) : (
-              <ul className="divide-y">
-                {pendingStudents.map((student) => (
-                  <li
-                    key={student.id}
-                    className="flex items-center justify-between py-2"
-                  >
-                    <span className="text-sm font-medium">
-                      {student.first_name} {student.last_name}
-                    </span>
-                    {student.phone && (
-                      <a
-                        href={whatsAppChatUrl(student.phone)}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                      >
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-7 gap-1 text-green-600 hover:text-green-700"
+              <div className="space-y-2">
+                <div className="relative">
+                  <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+                  <Input
+                    placeholder="Buscar por nombre o teléfono..."
+                    value={pendingSearch}
+                    onChange={(e) => setPendingSearch(e.target.value)}
+                    className="pl-8 h-8 text-sm"
+                  />
+                </div>
+                <ul className="divide-y max-h-64 overflow-y-auto">
+                  {filteredStudentsToRemind.map(({ student, status }) => (
+                    <li
+                      key={student.id}
+                      className="flex items-center justify-between py-2"
+                    >
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        <span className="text-sm font-medium truncate">
+                          {student.first_name} {student.last_name}
+                        </span>
+                        {status === 'partial' && (
+                          <Badge className="text-[10px] bg-yellow-500 hover:bg-yellow-600 shrink-0">Parcial</Badge>
+                        )}
+                        {student.categoria === 'niño' && (
+                          <Badge variant="outline" className="text-[10px] border-blue-400 text-blue-500 shrink-0">Niño</Badge>
+                        )}
+                      </div>
+                      {student.phone && (
+                        <a
+                          href={whatsAppChatUrl(student.phone)}
+                          target="_blank"
+                          rel="noopener noreferrer"
                         >
-                          <MessageCircle className="h-4 w-4" />
-                          <span className="text-xs">WhatsApp</span>
-                        </Button>
-                      </a>
-                    )}
-                  </li>
-                ))}
-              </ul>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 gap-1 text-green-600 hover:text-green-700 shrink-0"
+                          >
+                            <MessageCircle className="h-4 w-4" />
+                            <span className="text-xs">WhatsApp</span>
+                          </Button>
+                        </a>
+                      )}
+                    </li>
+                  ))}
+                  {filteredStudentsToRemind.length === 0 && (
+                    <li className="py-4 text-center text-sm text-muted-foreground">
+                      Sin resultados
+                    </li>
+                  )}
+                </ul>
+              </div>
             )}
           </CardContent>
         </Card>
@@ -845,22 +895,23 @@ export default function Dashboard({ refreshTrigger }: DashboardProps) {
 
             <div className="space-y-1.5">
               <p className="text-sm font-medium">
-                {pendingStudents.length} alumnos pendientes
+                {pendingStudents.length} pendientes · {partialStudents.length} parciales
               </p>
               <ul className="divide-y rounded-lg border max-h-60 overflow-y-auto">
-                {pendingStudents.map((student) => (
+                {allStudentsToRemind.map(({ student, status }) => (
                   <li
                     key={student.id}
                     className="flex items-center justify-between px-3 py-2"
                   >
-                    <div>
-                      <span className="text-sm font-medium">
+                    <div className="flex items-center gap-1.5 min-w-0">
+                      <span className="text-sm font-medium truncate">
                         {student.first_name} {student.last_name}
                       </span>
+                      {status === 'partial' && (
+                        <Badge className="text-[10px] bg-yellow-500 hover:bg-yellow-600 shrink-0">Parcial</Badge>
+                      )}
                       {student.phone && (
-                        <span className="ml-2 text-xs text-muted-foreground">
-                          {student.phone}
-                        </span>
+                        <span className="text-xs text-muted-foreground shrink-0">{student.phone}</span>
                       )}
                     </div>
                     {student.phone ? (
@@ -874,7 +925,7 @@ export default function Dashboard({ refreshTrigger }: DashboardProps) {
                         <span className="text-xs">Abrir</span>
                       </Button>
                     ) : (
-                      <span className="text-xs text-muted-foreground">Sin teléfono</span>
+                      <span className="text-xs text-muted-foreground shrink-0">Sin teléfono</span>
                     )}
                   </li>
                 ))}
@@ -888,7 +939,7 @@ export default function Dashboard({ refreshTrigger }: DashboardProps) {
               <Button
                 className="gap-2 shrink-0"
                 onClick={handleOpenAll}
-                disabled={pendingStudents.filter((s) => s.phone).length === 0}
+                disabled={allStudentsToRemind.filter(({ student }) => student.phone).length === 0}
               >
                 <MessageCircle className="h-4 w-4" />
                 Abrir todos

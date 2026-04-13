@@ -10,7 +10,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Loader2, User } from 'lucide-react';
 import { parseISO, format, getDay } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { getRecoverableAbsences, getDayInSameWeek, canRecoverAbsence } from '@/lib/attendance';
+import { getRecoverableAbsences, canRecoverAbsence } from '@/lib/attendance';
 
 type Mode = 'recovery' | 'day_switch';
 
@@ -288,23 +288,6 @@ export default function AttendanceRecoveryDialog({
       if (switchError) {
         toast({ title: 'Error al guardar', description: switchError.message, variant: 'destructive' });
         setSaving(false); return;
-      }
-      // Ausente automático en el día regular del alumno
-      const originalSchedule = allSchedules.find((sc) => sc.id === student.schedule_id);
-      if (originalSchedule) {
-        const originalClassDate = getDayInSameWeek(parseISO(recoveryDate), originalSchedule.day_of_week);
-        const originalDateStr = format(originalClassDate, 'yyyy-MM-dd');
-        const { data: existing } = await supabase
-          .from('attendance').select('id').eq('student_id', selectedStudentId).eq('class_date', originalDateStr).maybeSingle();
-        if (!existing) {
-          await supabase.from('attendance').insert({
-            student_id: selectedStudentId,
-            schedule_id: student.schedule_id,
-            class_date: originalDateStr,
-            status: 'absent',
-            notes: `Cambio de día al ${DAY_NAMES[recoveryDayOfWeek ?? ''] ?? recoveryDayOfWeek}`,
-          });
-        }
       }
     }
 
