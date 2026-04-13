@@ -107,9 +107,13 @@ export default function ScheduleGrid({ onStudentClick, refreshTrigger }: Schedul
 
   // Filter students based on search
   const filteredStudents = students.filter(student => {
+    if (!search) return true;
     const fullName = `${student.first_name} ${student.last_name}`.toLowerCase();
-    return fullName.includes(search.toLowerCase()) ||
-      (student.phone != null && student.phone.replace(/\D/g, '').includes(search.replace(/\D/g, '')));
+    const searchDigits = search.replace(/\D/g, '');
+    const matchesName = fullName.includes(search.toLowerCase());
+    const matchesPhone = searchDigits.length > 0 && student.phone != null &&
+      student.phone.replace(/\D/g, '').includes(searchDigits);
+    return matchesName || matchesPhone;
   });
 
   const groupedSchedules = schedules.reduce((acc, schedule) => {

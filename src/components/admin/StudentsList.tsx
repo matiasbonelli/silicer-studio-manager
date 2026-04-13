@@ -356,10 +356,13 @@ export default function StudentsList({ onStudentClick, refreshTrigger, onStudent
   };
 
   const filteredStudents = students.filter(student => {
+    if (!search) return scheduleFilter === 'all' || student.schedule_id === scheduleFilter;
     const fullName = `${student.first_name} ${student.last_name}`.toLowerCase();
-    const searchLower = search.toLowerCase();
-    const matchesSearch = fullName.includes(searchLower) ||
-      (student.phone != null && student.phone.replace(/\D/g, '').includes(search.replace(/\D/g, '')));
+    const searchDigits = search.replace(/\D/g, '');
+    const matchesName = fullName.includes(search.toLowerCase());
+    const matchesPhone = searchDigits.length > 0 && student.phone != null &&
+      student.phone.replace(/\D/g, '').includes(searchDigits);
+    const matchesSearch = matchesName || matchesPhone;
     const matchesSchedule = scheduleFilter === 'all' || student.schedule_id === scheduleFilter;
     return matchesSearch && matchesSchedule;
   });
