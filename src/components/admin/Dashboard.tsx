@@ -410,14 +410,14 @@ export default function Dashboard({ refreshTrigger }: DashboardProps) {
   ];
 
   // Filtrado por búsqueda en el card
-  const pendingSearchLower = pendingSearch.toLowerCase();
   const filteredStudentsToRemind = pendingSearch
     ? allStudentsToRemind.filter(({ student }) => {
         const fullName = `${student.first_name} ${student.last_name}`.toLowerCase();
-        return (
-          fullName.includes(pendingSearchLower) ||
-          (student.phone != null && student.phone.replace(/\D/g, '').includes(pendingSearch.replace(/\D/g, '')))
-        );
+        const searchDigits = pendingSearch.replace(/\D/g, '');
+        const matchesName = fullName.includes(pendingSearch.toLowerCase());
+        const matchesPhone = searchDigits.length > 0 && student.phone != null &&
+          student.phone.replace(/\D/g, '').includes(searchDigits);
+        return matchesName || matchesPhone;
       })
     : allStudentsToRemind;
 
