@@ -284,27 +284,12 @@ export default function StudentModal({ student, isOpen, onClose, onSave, isNew =
 
     setLoading(true);
 
-    const { error: unlinkError } = await supabase
-      .from('enrollments')
-      .update({ converted_to_student_id: null })
-      .eq('converted_to_student_id', student.id);
-
-    if (unlinkError) {
-      toast({
-        title: 'Error',
-        description: 'No se pudo desvincular el alumno de las inscripciones',
-        variant: 'destructive',
-      });
-      setLoading(false);
-      return;
-    }
-
-    const { error } = await supabase.from('students').delete().eq('id', student.id);
+    const { error } = await supabase.rpc('delete_student_cascade', { student_uuid: student.id });
 
     if (error) {
       toast({
-        title: 'Error',
-        description: 'No se pudo eliminar el alumno',
+        title: 'Error al eliminar',
+        description: error.message,
         variant: 'destructive',
       });
     } else {

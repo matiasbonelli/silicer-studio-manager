@@ -108,7 +108,8 @@ export default function ScheduleGrid({ onStudentClick, refreshTrigger }: Schedul
   // Filter students based on search
   const filteredStudents = students.filter(student => {
     const fullName = `${student.first_name} ${student.last_name}`.toLowerCase();
-    return fullName.includes(search.toLowerCase());
+    return fullName.includes(search.toLowerCase()) ||
+      (student.phone != null && student.phone.replace(/\D/g, '').includes(search.replace(/\D/g, '')));
   });
 
   const groupedSchedules = schedules.reduce((acc, schedule) => {
@@ -135,7 +136,7 @@ export default function ScheduleGrid({ onStudentClick, refreshTrigger }: Schedul
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
           <Input
-            placeholder="Buscar alumno..."
+            placeholder="Buscar por nombre o teléfono..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="pl-10"

@@ -293,30 +293,17 @@ export default function StudentsList({ onStudentClick, refreshTrigger, onStudent
 
     setIsDeleting(true);
 
-    // First, nullify references in enrollments
-    await supabase
-      .from('enrollments')
-      .update({ converted_to_student_id: null })
-      .eq('converted_to_student_id', studentToDelete.id);
+    const sid = studentToDelete.id;
 
-    // Nullify references in sales
-    await supabase
-      .from('sales')
-      .update({ student_id: null })
-      .eq('student_id', studentToDelete.id);
-
-    // Now delete the student
-    const { error } = await supabase
-      .from('students')
-      .delete()
-      .eq('id', studentToDelete.id);
+    // Usar RPC con SECURITY DEFINER para evitar bloqueos de RLS
+    const { error } = await supabase.rpc('delete_student_cascade', { student_uuid: sid });
 
     setIsDeleting(false);
 
     if (error) {
       toast({
-        title: 'Error',
-        description: 'No se pudo eliminar el alumno',
+        title: 'Error al eliminar',
+        description: error.message,
         variant: 'destructive',
       });
     } else {
@@ -370,7 +357,9 @@ export default function StudentsList({ onStudentClick, refreshTrigger, onStudent
 
   const filteredStudents = students.filter(student => {
     const fullName = `${student.first_name} ${student.last_name}`.toLowerCase();
-    const matchesSearch = fullName.includes(search.toLowerCase());
+    const searchLower = search.toLowerCase();
+    const matchesSearch = fullName.includes(searchLower) ||
+      (student.phone != null && student.phone.replace(/\D/g, '').includes(search.replace(/\D/g, '')));
     const matchesSchedule = scheduleFilter === 'all' || student.schedule_id === scheduleFilter;
     return matchesSearch && matchesSchedule;
   });
@@ -435,7 +424,7 @@ export default function StudentsList({ onStudentClick, refreshTrigger, onStudent
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
           <Input
-            placeholder="Buscar alumno..."
+            placeholder="Buscar por nombre o teléfono..."
             value={search}
             onChange={(e) => { setSearch(e.target.value); setPage(0); }}
             className="pl-10"

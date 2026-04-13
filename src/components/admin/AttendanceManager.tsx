@@ -124,6 +124,9 @@ export default function AttendanceManager() {
     initialAbsenceDate?: string;
   }>({ isOpen: false });
 
+  // IDs de recuperaciones/cambios de día confirmados manualmente en esta sesión
+  const [confirmedExtraIds, setConfirmedExtraIds] = useState<Set<string>>(new Set());
+
   // ---------------------------------------------------------------------------
   // Fetch base data
   // ---------------------------------------------------------------------------
@@ -467,6 +470,7 @@ export default function AttendanceManager() {
                         {/* Alumnos externos (recovery / day_switch) */}
                         {extraStudents.map(({ record, student }) => {
                           const isBusy = savingId === `extra-${record.id}`;
+                          const isConfirmed = confirmedExtraIds.has(record.id);
                           return (
                             <div
                               key={student.id}
@@ -480,34 +484,42 @@ export default function AttendanceManager() {
                                 {statusBadge(record.status)}
                               </div>
                               <div className="flex items-center gap-2">
-                                {/* ✓ — activo por defecto porque el registro existe = alumno viene */}
+                                {/* ✓ — confirmar que el alumno vino (no elimina el registro) */}
                                 <Button
                                   size="sm"
-                                  variant="default"
-                                  className="bg-green-600 hover:bg-green-700"
-                                  onClick={async () => {
-                                    setSavingId(`extra-${record.id}`);
-                                    await deleteExtraRecord(record);
-                                    setSavingId(null);
+                                  variant={isConfirmed ? 'default' : 'outline'}
+                                  className={isConfirmed ? 'bg-green-600 hover:bg-green-700' : ''}
+                                  onClick={() => {
+                                    setConfirmedExtraIds((prev) => {
+                                      const next = new Set(prev);
+                                      if (next.has(record.id)) next.delete(record.id);
+                                      else next.add(record.id);
+                                      return next;
+                                    });
                                   }}
                                   disabled={isBusy}
-                                  title="Desmarcar — eliminar registro"
+                                  title={isConfirmed ? 'Desmarcar asistencia' : 'Confirmar que vino'}
                                 >
-                                  {isBusy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+                                  <Check className="w-3.5 h-3.5" />
                                 </Button>
-                                {/* ✗ — cancela la recuperación/cambio de día */}
+                                {/* ✗ — no vino, elimina el registro de recuperación/cambio de día */}
                                 <Button
                                   size="sm"
                                   variant="outline"
                                   onClick={async () => {
                                     setSavingId(`extra-${record.id}`);
                                     await deleteExtraRecord(record);
+                                    setConfirmedExtraIds((prev) => {
+                                      const next = new Set(prev);
+                                      next.delete(record.id);
+                                      return next;
+                                    });
                                     setSavingId(null);
                                   }}
                                   disabled={isBusy}
                                   title="No vino — cancelar recuperación"
                                 >
-                                  <X className="w-3.5 h-3.5" />
+                                  {isBusy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <X className="w-3.5 h-3.5" />}
                                 </Button>
                               </div>
                             </div>
