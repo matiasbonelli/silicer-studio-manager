@@ -8,6 +8,9 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
+import { ChevronsUpDown, Check } from 'lucide-react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
@@ -57,6 +60,7 @@ export default function SalesModule() {
   const receiptFileInputRef = useRef<HTMLInputElement>(null);
   const historyFileInputRef = useRef<HTMLInputElement>(null);
   const [uploadingSaleId, setUploadingSaleId] = useState<string | null>(null);
+  const [studentComboOpen, setStudentComboOpen] = useState(false);
 
   const handleUploadReceipt = async (saleId: string, file: File) => {
     setUploadingSaleId(saleId);
@@ -677,18 +681,50 @@ export default function SalesModule() {
               <div className="border-t pt-4 space-y-3">
                 <div className="space-y-2">
                   <Label>Alumno (opcional)</Label>
-                  <Select value={selectedStudent} onValueChange={setSelectedStudent}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Seleccionar alumno" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {students.map(s => (
-                        <SelectItem key={s.id} value={s.id}>
-                          {s.first_name} {s.last_name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <Popover open={studentComboOpen} onOpenChange={setStudentComboOpen}>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant="outline"
+                        role="combobox"
+                        aria-expanded={studentComboOpen}
+                        className="w-full justify-between font-normal"
+                      >
+                        {selectedStudent
+                          ? (() => { const s = students.find(s => s.id === selectedStudent); return s ? `${s.first_name} ${s.last_name}` : 'Seleccionar alumno'; })()
+                          : 'Seleccionar alumno'}
+                        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-full p-0" align="start">
+                      <Command>
+                        <CommandInput placeholder="Buscar alumno..." />
+                        <CommandList>
+                          <CommandEmpty>No se encontró ningún alumno.</CommandEmpty>
+                          <CommandGroup>
+                            {selectedStudent && (
+                              <CommandItem
+                                value="__none__"
+                                onSelect={() => { setSelectedStudent(''); setStudentComboOpen(false); }}
+                              >
+                                <Check className="mr-2 h-4 w-4 opacity-0" />
+                                Sin alumno
+                              </CommandItem>
+                            )}
+                            {students.map(s => (
+                              <CommandItem
+                                key={s.id}
+                                value={`${s.first_name} ${s.last_name}`}
+                                onSelect={() => { setSelectedStudent(s.id); setStudentComboOpen(false); }}
+                              >
+                                <Check className={`mr-2 h-4 w-4 ${selectedStudent === s.id ? 'opacity-100' : 'opacity-0'}`} />
+                                {s.first_name} {s.last_name}
+                              </CommandItem>
+                            ))}
+                          </CommandGroup>
+                        </CommandList>
+                      </Command>
+                    </PopoverContent>
+                  </Popover>
                 </div>
 
                 <div className="space-y-2">
