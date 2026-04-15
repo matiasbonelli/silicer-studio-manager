@@ -616,7 +616,7 @@ export default function StudentsList({ onStudentClick, refreshTrigger, onStudent
                           const isPending = !payment || payment.status === 'pending';
                           const monthLabel = formatMonth(selectedMonth !== 'all' ? selectedMonth : getCurrentMonth());
                           const msg = isPending
-                            ? `Hola ${student.first_name}, te recordamos que tenés la cuota de ${monthLabel} pendiente en Silicer Studio. ¡Cualquier consulta escribinos!`
+                            ? `Hola ${student.first_name}, te recordamos que tenés la cuota del mes de ${monthLabel} pendiente en Silicer. Si ya transferiste o pagaste en efectivo, recordanos o envíanos el comprobante. ¡Cualquier consulta escribinos!\n\n_Esto es un mensaje automático._`
                             : '';
                           const url = msg
                             ? `https://wa.me/54${phone}?text=${encodeURIComponent(msg)}`
