@@ -139,7 +139,7 @@ interface DashboardData {
 // ---------------------------------------------------------------------------
 
 const DEFAULT_REMINDER_MSG =
-  'Hola [nombre], te recordamos que tenés la cuota de [mes] pendiente en Silicer Studio. ¡Cualquier consulta escribinos!';
+  'Hola [nombre], te recordamos que tenés la cuota del mes de [mes] pendiente en Silicer. Si ya transferiste o pagaste en efectivo, recordanos o envíanos el comprobante. ¡Cualquier consulta escribinos!\n\n_Esto es un mensaje automático._';
 
 interface DashboardProps {
   refreshTrigger?: number;
@@ -673,7 +673,7 @@ export default function Dashboard({ refreshTrigger }: DashboardProps) {
                       </div>
                       {student.phone && (
                         <a
-                          href={whatsAppChatUrl(student.phone)}
+                          href={`${whatsAppChatUrl(student.phone)}?text=${encodeURIComponent(buildReminderMsg(student))}`}
                           target="_blank"
                           rel="noopener noreferrer"
                         >
@@ -915,15 +915,15 @@ export default function Dashboard({ refreshTrigger }: DashboardProps) {
                       )}
                     </div>
                     {student.phone ? (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-7 gap-1 text-green-600 hover:text-green-700 shrink-0"
-                        onClick={(e) => { e.stopPropagation(); handleSendReminder(student); }}
+                      <a
+                        href={`https://wa.me/54${student.phone.replace(/\D/g, '')}?text=${encodeURIComponent(buildReminderMsg(student))}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1 text-xs text-green-600 hover:text-green-700"
                       >
                         <MessageCircle className="h-4 w-4" />
-                        <span className="text-xs">Abrir</span>
-                      </Button>
+                        Abrir
+                      </a>
                     ) : (
                       <span className="text-xs text-muted-foreground shrink-0">Sin teléfono</span>
                     )}

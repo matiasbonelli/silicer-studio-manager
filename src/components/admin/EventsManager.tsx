@@ -47,7 +47,7 @@ const DEFAULT_TEMPLATES: MessageTemplate[] = [
     id: 'tpl-payment',
     type: 'payment_reminder',
     name: 'Recordatorio de Cuota',
-    message: 'Hola {nombre}, te recordamos que tu cuota del mes está pendiente. Cualquier consulta no dudes en escribirnos. ¡Gracias!',
+    message: 'Hola {nombre}, te recordamos que tenés la cuota del mes pendiente en Silicer. Si ya transferiste o pagaste en efectivo, recordanos o envíanos el comprobante. ¡Cualquier consulta escribinos!\n\n_Esto es un mensaje automático._',
   },
   {
     id: 'tpl-welcome',
