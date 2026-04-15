@@ -159,7 +159,6 @@ export default function StudentModal({ student, isOpen, onClose, onSave, isNew =
           setPartialAmount(cuotaBase);
         } else if (lastWithAmount?.amount) {
           setPartialAmount(lastWithAmount.amount.toString());
-          localStorage.setItem(getCuotaKey(categoria), lastWithAmount.amount.toString());
         }
       }
     }
