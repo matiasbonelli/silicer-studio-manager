@@ -10,61 +10,16 @@ import { useToast } from '@/hooks/use-toast';
 import { Settings, Save, Plus, Trash2, Loader2, ImagePlus, X } from 'lucide-react';
 import { formatCurrency } from '@/lib/format';
 import { ProductCategory } from '@/types/database';
+import {
+  CATEGORIAS,
+  CAPACIDAD_HORNO,
+  PricingConfig,
+  PricingProduct,
+  calculateCosts as calculateCostsShared,
+  parseNumberSafe,
+} from '@/lib/pricing';
 
-// Capacidad del horno: cuadrícula 2x2x2 = 8 bloques
-const CAPACIDAD_HORNO = 8;
-
-// Categorías con su valor en bloques (fracción del horno que ocupa cada pieza)
-const CATEGORIAS_BLOQUES: Record<string, number | null> = {
-  'Tazas': 0.25,
-  'Platos S': 0.09,
-  'Platos M': 0.25,
-  'Platos L': 0.33,
-  'Platos XL': 0.5,
-  'Bandejas y fuentes': 0.5,
-  'Jarras': 0.33,
-  'Bowl XS': 0.09,
-  'Bowl S': 0.12,
-  'Bowl M': 0.166,
-  'Bowl L': 0.25,
-  'Bowl XL': 0.66,
-  'Compotera': 0.09,
-  'Locreras': 0.166,
-  'Pequeñeses': 0.05,
-  'Mates y vasos': 0.0625,
-  'A medida': null, // ingreso manual
-};
-
-const CATEGORIAS = Object.keys(CATEGORIAS_BLOQUES);
-
-interface PricingConfig {
-  precioBarbotina: number;
-  pesoBidon: number;
-  margenDefault: number;
-  costoManoObraDefault: number;
-  costoHorneadoDefault: number;
-  costoEsmaltadoDefault: number;
-  // Esmalte: precio por kg y % del peso del producto
-  precioEsmalteKg: number;
-  porcentajeEsmalte: number;
-}
-
-interface ProductCost {
-  id: string;
-  nombre: string;
-  categoria: string;
-  pesoGramos: number;
-  costoManoObra: number;
-  margen: number;
-  image_url: string | null;
-  // Etapa 2: Bizcochado
-  costoHorneado1: number;
-  margenBizcochado: number;
-  // Etapa 3: Final
-  costoEsmaltado: number;
-  costoHorneado2: number;
-  margenFinal: number;
-}
+type ProductCost = PricingProduct;
 
 const defaultConfig: PricingConfig = {
   precioBarbotina: 11500,
@@ -82,6 +37,7 @@ const selectOnFocus = (e: React.FocusEvent<HTMLInputElement>) => e.target.select
 
 export default function PricingCalculator() {
   const [config, setConfig] = useState<PricingConfig>(defaultConfig);
+  const [configId, setConfigId] = useState<string | null>(null);
   const [products, setProducts] = useState<ProductCost[]>([]);
   const [syncing, setSyncing] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -112,6 +68,7 @@ export default function PricingCalculator() {
         if (configError) throw configError;
 
         if (configData) {
+          setConfigId(configData.id);
           setConfig({
             precioBarbotina: Number(configData.precio_barbotina),
             pesoBidon: Number(configData.peso_bidon),
@@ -164,14 +121,13 @@ export default function PricingCalculator() {
     loadData();
   }, [toast]);
 
-  // Guardar configuraci�n en Supabase
+  // Guardar configuración en Supabase (update si ya existe, insert si no)
   const saveConfig = async () => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('No autenticado');
 
-      const configRow = {
-        user_id: user.id,
+      const configValues = {
         precio_barbotina: config.precioBarbotina,
         peso_bidon: config.pesoBidon,
         margen_default: config.margenDefault,
@@ -182,70 +138,42 @@ export default function PricingCalculator() {
         porcentaje_esmalte: config.porcentajeEsmalte,
       };
 
-      // Upsert: si ya existe una fila para este user, la actualiza
-      const { error } = await supabase
-        .from('pricing_config')
-        .upsert(configRow, { onConflict: 'user_id' });
+      if (configId) {
+        const { error } = await supabase
+          .from('pricing_config')
+          .update(configValues)
+          .eq('id', configId);
+        if (error) throw error;
+      } else {
+        const { data, error } = await supabase
+          .from('pricing_config')
+          .insert({ user_id: user.id, ...configValues })
+          .select('id')
+          .single();
+        if (error) throw error;
+        if (data) setConfigId(data.id);
+      }
 
-      if (error) throw error;
       toast({ title: 'Configuración guardada' });
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'No se pudo guardar la configuraci�n en la base de datos';
+      const supabaseError = error as { message?: string; code?: string; details?: string; hint?: string } | null;
+      console.error('[pricing_config] save error', {
+        message: supabaseError?.message,
+        code: supabaseError?.code,
+        details: supabaseError?.details,
+        hint: supabaseError?.hint,
+        raw: error,
+      });
+      const message = supabaseError?.message ?? 'No se pudo guardar la configuración en la base de datos';
       toast({
         title: 'Error',
-        description: message,
+        description: supabaseError?.details ? `${message} (${supabaseError.details})` : message,
         variant: 'destructive',
       });
     }
   };
 
-  // Calcular el costo de horneado efectivo para un producto según su categoría
-  const getHorneadoCost = (product: ProductCost): number => {
-    const bloqueValue = CATEGORIAS_BLOQUES[product.categoria];
-    if (bloqueValue === null || bloqueValue === undefined) {
-      // "A medida" o sin categoría: usar el valor manual del producto
-      return product.costoHorneado1;
-    }
-    // Costo por bloque = costoHorneadoDefault / CAPACIDAD_HORNO
-    // Costo pieza = costo por bloque * valor de bloque de la categoría
-    return (config.costoHorneadoDefault / CAPACIDAD_HORNO) * bloqueValue;
-  };
-
-  // Calcular costos de un producto en las 3 etapas
-  // Cada etapa suma su precio de venta sobre la etapa anterior
-  const calculateCosts = (product: ProductCost) => {
-    // Etapa 1: Molde (crudo)
-    const costoBarbotina = (config.precioBarbotina / config.pesoBidon) * product.pesoGramos;
-    const costoTotalMolde = costoBarbotina + product.costoManoObra;
-    const precioVentaMolde = costoTotalMolde * (1 + product.margen / 100);
-
-    // Costo de horneado según categoría
-    const horneadoCost = getHorneadoCost(product);
-
-    // Etapa 2: Bizcochado = Precio Venta Etapa 1 + costo horneado con su margen
-    const costoTotalBizcochado = costoTotalMolde + horneadoCost;
-    const precioVentaBizcochado = precioVentaMolde + horneadoCost * (1 + product.margenBizcochado / 100);
-
-    // Costo de esmalte = peso del producto * (% esmalte / 100) * (precio esmalte por kg / 1000)
-    const costoEsmalte = product.pesoGramos * (config.porcentajeEsmalte / 100) * (config.precioEsmalteKg / 1000);
-
-    // Etapa 3: Final = Precio Venta Etapa 2 + (esmalte + horneado2) con su margen
-    const costoEtapa3 = costoEsmalte + horneadoCost;
-    const costoTotalFinal = costoTotalBizcochado + costoEsmalte + horneadoCost;
-    const precioVentaFinal = precioVentaBizcochado + costoEtapa3 * (1 + product.margenFinal / 100);
-
-    return {
-      costoBarbotina,
-      costoTotalMolde,
-      precioVentaMolde,
-      horneadoCost,
-      costoTotalBizcochado,
-      precioVentaBizcochado,
-      costoEsmalte,
-      costoTotalFinal,
-      precioVentaFinal,
-    };
-  };
+  const calculateCosts = (product: ProductCost) => calculateCostsShared(product, config);
 
   // Subir imagen
   const handleImageUpload = async (productId: string, file: File) => {
@@ -409,10 +337,18 @@ export default function PricingCalculator() {
         if (deleteError) throw deleteError;
       }
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'No se pudieron guardar los productos en la base de datos';
+      const supabaseError = error as { message?: string; code?: string; details?: string; hint?: string } | null;
+      console.error('[pricing_products] save error', {
+        message: supabaseError?.message,
+        code: supabaseError?.code,
+        details: supabaseError?.details,
+        hint: supabaseError?.hint,
+        raw: error,
+      });
+      const message = supabaseError?.message ?? 'No se pudieron guardar los productos en la base de datos';
       toast({
         title: 'Error',
-        description: message,
+        description: supabaseError?.details ? `${message} (${supabaseError.details})` : message,
         variant: 'destructive',
       });
       return;
@@ -508,7 +444,7 @@ export default function PricingCalculator() {
                 type="number"
                 value={config.margenDefault}
                 onFocus={selectOnFocus}
-                onChange={(e) => setConfig(p => ({ ...p, margenDefault: parseFloat(e.target.value) || 0 }))}
+                onChange={(e) => setConfig(p => ({ ...p, margenDefault: parseNumberSafe(e.target.value, { min: 0, max: 9999 }) }))}
                 placeholder="50"
               />
             </div>
@@ -712,7 +648,7 @@ export default function PricingCalculator() {
                           type="number"
                           value={product.margen || ''}
                           onFocus={selectOnFocus}
-                          onChange={(e) => updateProduct(product.id, 'margen', parseFloat(e.target.value) || 0)}
+                          onChange={(e) => updateProduct(product.id, 'margen', parseNumberSafe(e.target.value, { min: 0, max: 9999 }))}
                           placeholder="50"
                           className="h-8 text-center w-[60px]"
                         />
@@ -743,7 +679,7 @@ export default function PricingCalculator() {
                           type="number"
                           value={product.margenBizcochado || ''}
                           onFocus={selectOnFocus}
-                          onChange={(e) => updateProduct(product.id, 'margenBizcochado', parseFloat(e.target.value) || 0)}
+                          onChange={(e) => updateProduct(product.id, 'margenBizcochado', parseNumberSafe(e.target.value, { min: 0, max: 9999 }))}
                           placeholder="50"
                           className="h-8 text-center w-[60px]"
                         />
@@ -779,7 +715,7 @@ export default function PricingCalculator() {
                           type="number"
                           value={product.margenFinal || ''}
                           onFocus={selectOnFocus}
-                          onChange={(e) => updateProduct(product.id, 'margenFinal', parseFloat(e.target.value) || 0)}
+                          onChange={(e) => updateProduct(product.id, 'margenFinal', parseNumberSafe(e.target.value, { min: 0, max: 9999 }))}
                           placeholder="50"
                           className="h-8 text-center w-[60px]"
                         />

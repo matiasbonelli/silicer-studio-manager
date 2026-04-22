@@ -88,6 +88,7 @@ export interface SaleItem {
   inventory_id: string;
   quantity: number;
   unit_price: number;
+  is_customer_piece: boolean;
   created_at: string;
   inventory?: InventoryItem;
 }
