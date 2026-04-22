@@ -14,9 +14,16 @@ import { ChevronsUpDown, Check } from 'lucide-react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
-import { Plus, Minus, Trash2, ShoppingCart, Printer, Loader2, Search, History, TrendingUp, CalendarDays, DollarSign, Pencil, Upload, FileText, ExternalLink } from 'lucide-react';
+import { Plus, Minus, Trash2, ShoppingCart, Printer, Loader2, Search, History, TrendingUp, CalendarDays, DollarSign, Pencil, Upload, FileText, ExternalLink, UserSquare } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
+import { Checkbox } from '@/components/ui/checkbox';
+import {
+  PricingConfig,
+  PricingProduct,
+  calculateCustomerPiecePrice,
+  extractPricingProductId,
+} from '@/lib/pricing';
 
 // Categorías de productos en ventas
 type ProductCategory = 'all' | 'insumos' | 'servicios' | 'moldes' | 'bizcochado' | 'final';
@@ -24,6 +31,8 @@ type ProductCategory = 'all' | 'insumos' | 'servicios' | 'moldes' | 'bizcochado'
 interface CartItem {
   inventory: InventoryItem;
   quantity: number;
+  isCustomerPiece: boolean;
+  customerPiecePrice: number | null;
 }
 
 interface SaleWithItems extends Sale {
@@ -61,6 +70,10 @@ export default function SalesModule() {
   const historyFileInputRef = useRef<HTMLInputElement>(null);
   const [uploadingSaleId, setUploadingSaleId] = useState<string | null>(null);
   const [studentComboOpen, setStudentComboOpen] = useState(false);
+
+  // Datos de pricing para recalcular precio cuando "pieza del cliente" está activo
+  const [pricingConfig, setPricingConfig] = useState<PricingConfig | null>(null);
+  const [pricingProducts, setPricingProducts] = useState<Map<string, PricingProduct>>(new Map());
 
   const handleUploadReceipt = async (saleId: string, file: File) => {
     setUploadingSaleId(saleId);
@@ -147,19 +160,103 @@ export default function SalesModule() {
 
   useEffect(() => {
     const fetchData = async () => {
-      const [invRes, studRes] = await Promise.all([
+      const { data: { user } } = await supabase.auth.getUser();
+
+      const [invRes, studRes, pricingProductsRes, pricingConfigRes] = await Promise.all([
         supabase.from('inventory').select('*').order('name'),
         supabase.from('students').select('*').order('last_name'),
+        user
+          ? supabase.from('pricing_products').select('*').eq('user_id', user.id)
+          : Promise.resolve({ data: null }),
+        user
+          ? supabase.from('pricing_config').select('*').eq('user_id', user.id).maybeSingle()
+          : Promise.resolve({ data: null }),
       ]);
 
       if (invRes.data) setInventory(invRes.data as InventoryItem[]);
       if (studRes.data) setStudents(studRes.data as Student[]);
+
+      if (pricingProductsRes.data) {
+        const map = new Map<string, PricingProduct>();
+        for (const p of pricingProductsRes.data) {
+          map.set(p.id, {
+            id: p.id,
+            nombre: p.nombre,
+            categoria: p.categoria,
+            pesoGramos: Number(p.peso_gramos),
+            costoManoObra: Number(p.costo_mano_obra),
+            margen: Number(p.margen),
+            image_url: p.image_url,
+            costoHorneado1: Number(p.costo_horneado1),
+            margenBizcochado: Number(p.margen_bizcochado),
+            costoEsmaltado: Number(p.costo_esmaltado),
+            costoHorneado2: Number(p.costo_horneado2),
+            margenFinal: Number(p.margen_final),
+          });
+        }
+        setPricingProducts(map);
+      }
+
+      if (pricingConfigRes.data) {
+        const cfg = pricingConfigRes.data;
+        setPricingConfig({
+          precioBarbotina: Number(cfg.precio_barbotina),
+          pesoBidon: Number(cfg.peso_bidon),
+          margenDefault: Number(cfg.margen_default),
+          costoManoObraDefault: Number(cfg.costo_mano_obra_default),
+          costoHorneadoDefault: Number(cfg.costo_horneado_default),
+          costoEsmaltadoDefault: Number(cfg.costo_esmaltado_default),
+          precioEsmalteKg: Number(cfg.precio_esmalte_kg),
+          porcentajeEsmalte: Number(cfg.porcentaje_esmalte),
+        });
+      }
 
       await fetchSalesHistory();
       setLoading(false);
     };
     fetchData();
   }, []);
+
+  // Categorías donde aplica el toggle "pieza del cliente"
+  const CUSTOMER_PIECE_CATEGORIES = new Set(['bizcochado', 'final']);
+
+  // Dado un item del carrito, calcula su precio unitario efectivo
+  const getEffectivePrice = (item: CartItem): number =>
+    item.isCustomerPiece && item.customerPiecePrice !== null
+      ? item.customerPiecePrice
+      : item.inventory.price;
+
+  // Recalcula el precio "pieza del cliente" para un item de inventario.
+  // Retorna null si no puede resolverse (falta producto de pricing o config).
+  const computeCustomerPiecePrice = (inv: InventoryItem): number | null => {
+    if (!pricingConfig) return null;
+    if (!CUSTOMER_PIECE_CATEGORIES.has(inv.category ?? '')) return null;
+    const productId = extractPricingProductId(inv.description);
+    if (!productId) return null;
+    const product = pricingProducts.get(productId);
+    if (!product) return null;
+    const targetStage = inv.category === 'final' ? 'final' : 'bizcochado';
+    return calculateCustomerPiecePrice({ product, config: pricingConfig, targetStage });
+  };
+
+  const toggleCustomerPiece = (itemId: string) => {
+    setCart(prev => prev.map(c => {
+      if (c.inventory.id !== itemId) return c;
+      if (c.isCustomerPiece) {
+        return { ...c, isCustomerPiece: false };
+      }
+      const price = c.customerPiecePrice ?? computeCustomerPiecePrice(c.inventory);
+      if (price === null) {
+        toast({
+          title: 'No se puede calcular',
+          description: 'Falta información del producto o de la configuración de costos.',
+          variant: 'destructive',
+        });
+        return c;
+      }
+      return { ...c, isCustomerPiece: true, customerPiecePrice: price };
+    }));
+  };
 
   const addToCart = (item: InventoryItem) => {
     const existing = cart.find(c => c.inventory.id === item.id);
@@ -176,7 +273,7 @@ export default function SalesModule() {
         c.inventory.id === item.id ? { ...c, quantity: c.quantity + 1 } : c
       ));
     } else {
-      setCart([...cart, { inventory: item, quantity: 1 }]);
+      setCart([...cart, { inventory: item, quantity: 1, isCustomerPiece: false, customerPiecePrice: null }]);
     }
   };
 
@@ -204,7 +301,7 @@ export default function SalesModule() {
     setCart(prev => prev.filter(c => c.inventory.id !== itemId));
   };
 
-  const total = cart.reduce((sum, c) => sum + c.inventory.price * c.quantity, 0);
+  const total = cart.reduce((sum, c) => sum + getEffectivePrice(c) * c.quantity, 0);
 
   const handleSale = async () => {
     if (cart.length === 0) {
@@ -246,7 +343,8 @@ export default function SalesModule() {
       sale_id: saleData.id,
       inventory_id: c.inventory.id,
       quantity: c.quantity,
-      unit_price: c.inventory.price,
+      unit_price: getEffectivePrice(c),
+      is_customer_piece: c.isCustomerPiece,
     }));
 
     let itemsError = null;
@@ -653,28 +751,64 @@ export default function SalesModule() {
                 <p className="text-center text-muted-foreground py-4">Carrito vacío</p>
               ) : (
                 <div className="space-y-2">
-                  {cart.map(item => (
-                    <div key={item.inventory.id} className="flex items-center gap-2 p-2 bg-muted rounded-lg">
-                      <div className="flex-1 min-w-0">
-                        <p className="font-medium truncate text-sm">{item.inventory.name}</p>
-                        <p className="text-sm text-muted-foreground">
-                          {formatCurrency(item.inventory.price)} x {item.quantity}
-                        </p>
+                  {cart.map(item => {
+                    const supportsCustomerPiece = CUSTOMER_PIECE_CATEGORIES.has(item.inventory.category ?? '');
+                    const customerPiecePreview = supportsCustomerPiece && !item.isCustomerPiece
+                      ? (item.customerPiecePrice ?? computeCustomerPiecePrice(item.inventory))
+                      : null;
+                    const effectivePrice = getEffectivePrice(item);
+                    return (
+                      <div key={item.inventory.id} className="flex flex-col gap-2 p-2 bg-muted rounded-lg">
+                        <div className="flex items-center gap-2">
+                          <div className="flex-1 min-w-0">
+                            <p className="font-medium truncate text-sm">{item.inventory.name}</p>
+                            <p className="text-sm text-muted-foreground">
+                              {item.isCustomerPiece ? (
+                                <>
+                                  <span className="line-through mr-1 opacity-70">{formatCurrency(item.inventory.price)}</span>
+                                  <span className="font-medium text-foreground">{formatCurrency(effectivePrice)}</span>
+                                  {' '}x {item.quantity}
+                                </>
+                              ) : (
+                                <>{formatCurrency(effectivePrice)} x {item.quantity}</>
+                              )}
+                            </p>
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <Button size="icon" variant="outline" className="h-7 w-7" onClick={() => updateQuantity(item.inventory.id, -1)}>
+                              <Minus className="w-3 h-3" />
+                            </Button>
+                            <span className="w-6 text-center text-sm">{item.quantity}</span>
+                            <Button size="icon" variant="outline" className="h-7 w-7" onClick={() => updateQuantity(item.inventory.id, 1)}>
+                              <Plus className="w-3 h-3" />
+                            </Button>
+                            <Button size="icon" variant="destructive" className="h-7 w-7 ml-1" onClick={() => removeFromCart(item.inventory.id)}>
+                              <Trash2 className="w-3 h-3" />
+                            </Button>
+                          </div>
+                        </div>
+                        {supportsCustomerPiece && (
+                          <label
+                            className={`flex items-center gap-2 text-xs ${customerPiecePreview === null && !item.isCustomerPiece ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
+                            title={customerPiecePreview === null && !item.isCustomerPiece ? 'Falta información de pricing para este producto' : ''}
+                          >
+                            <Checkbox
+                              checked={item.isCustomerPiece}
+                              disabled={customerPiecePreview === null && !item.isCustomerPiece}
+                              onCheckedChange={() => toggleCustomerPiece(item.inventory.id)}
+                            />
+                            <UserSquare className="w-3 h-3" />
+                            <span>Pieza del cliente</span>
+                            {customerPiecePreview !== null && !item.isCustomerPiece && (
+                              <span className="ml-auto text-muted-foreground">
+                                → {formatCurrency(customerPiecePreview)}
+                              </span>
+                            )}
+                          </label>
+                        )}
                       </div>
-                      <div className="flex items-center gap-1">
-                        <Button size="icon" variant="outline" className="h-7 w-7" onClick={() => updateQuantity(item.inventory.id, -1)}>
-                          <Minus className="w-3 h-3" />
-                        </Button>
-                        <span className="w-6 text-center text-sm">{item.quantity}</span>
-                        <Button size="icon" variant="outline" className="h-7 w-7" onClick={() => updateQuantity(item.inventory.id, 1)}>
-                          <Plus className="w-3 h-3" />
-                        </Button>
-                        <Button size="icon" variant="destructive" className="h-7 w-7 ml-1" onClick={() => removeFromCart(item.inventory.id)}>
-                          <Trash2 className="w-3 h-3" />
-                        </Button>
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
 
@@ -831,8 +965,13 @@ export default function SalesModule() {
                     <TableCell>
                       <div className="space-y-1">
                         {sale.sale_items?.map(item => (
-                          <div key={item.id} className="text-sm font-medium">
-                            {item.inventory?.name || 'Producto eliminado'}
+                          <div key={item.id} className="text-sm font-medium flex items-center gap-1">
+                            <span>{item.inventory?.name || 'Producto eliminado'}</span>
+                            {item.is_customer_piece && (
+                              <Badge variant="secondary" className="text-[10px] px-1 py-0 h-4">
+                                pieza cliente
+                              </Badge>
+                            )}
                           </div>
                         ))}
                       </div>
