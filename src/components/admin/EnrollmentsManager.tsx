@@ -230,23 +230,36 @@ export default function EnrollmentsManager({ onStudentCreated }: EnrollmentsMana
 
     // Sin pago (pending) → Revertir: eliminar alumno creado y resetear estado
     if (paymentForm.status === 'pending' && selectedEnrollment.converted_to_student_id) {
-      // Nullify references in sales before deleting
-      await supabase
-        .from('sales')
-        .update({ student_id: null })
-        .eq('student_id', selectedEnrollment.converted_to_student_id);
+      const studentIdToDelete = selectedEnrollment.converted_to_student_id;
 
-      // Remove payment records for the student
-      await supabase
-        .from('payments')
-        .delete()
-        .eq('student_id', selectedEnrollment.converted_to_student_id);
+      // 1. Desvincular la inscripción del alumno ANTES de borrarlo (sino la FK bloquea el delete)
+      const { error: unlinkError } = await supabase
+        .from('enrollments')
+        .update({ converted_to_student_id: null, status: 'pending' })
+        .eq('id', selectedEnrollment.id);
 
-      // Delete the auto-created student
-      await supabase
-        .from('students')
-        .delete()
-        .eq('id', selectedEnrollment.converted_to_student_id);
+      if (unlinkError) {
+        toast({ title: 'Error', description: 'No se pudo desvincular la inscripción', variant: 'destructive' });
+        return;
+      }
+
+      // 2. Nullify references in sales
+      await supabase.from('sales').update({ student_id: null }).eq('student_id', studentIdToDelete);
+
+      // 3. Remove payment records
+      await supabase.from('payments').delete().eq('student_id', studentIdToDelete);
+
+      // 4. Delete the auto-created student
+      const { error: deleteError } = await supabase.from('students').delete().eq('id', studentIdToDelete);
+
+      if (deleteError) {
+        toast({
+          title: 'Error al eliminar alumno',
+          description: deleteError.message,
+          variant: 'destructive',
+        });
+        return;
+      }
 
       updateData.converted_to_student_id = null;
       updateData.status = 'pending';
