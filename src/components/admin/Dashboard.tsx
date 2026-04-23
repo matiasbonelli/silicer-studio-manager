@@ -9,6 +9,7 @@ import {
   MONTH_NAMES,
 } from '@/types/database';
 import { formatCurrency } from '@/lib/format';
+import { isStudentActiveThisMonth } from '@/lib/utils';
 import { sendWhatsApp, sendWhatsAppBulk, whatsAppChatUrl } from '@/lib/whatsapp';
 import { useToast } from '@/hooks/use-toast';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -207,7 +208,8 @@ export default function Dashboard({ refreshTrigger }: DashboardProps) {
       if (inventoryRes.error) throw inventoryRes.error;
 
       const sales = (salesRes.data ?? []) as Sale[];
-      const students = (studentsRes.data ?? []) as Student[];
+      // Ocultar alumnos cuya inscripción señada/pagada aún no llegó al mes de inicio
+      const students = ((studentsRes.data ?? []) as Student[]).filter(isStudentActiveThisMonth);
       const inventory = (inventoryRes.data ?? []) as InventoryItem[];
 
       // Precios configurados (fallback cuando amount es null)

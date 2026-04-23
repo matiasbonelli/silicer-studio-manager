@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import { isStudentActiveThisMonth } from '@/lib/utils';
 import {
   Student,
   Schedule,
@@ -136,7 +137,10 @@ export default function AttendanceManager() {
       supabase.from('students').select('*, schedule:schedules(*)').order('first_name'),
     ]);
     if (schRes.data) setSchedules(schRes.data as Schedule[]);
-    if (stuRes.data) setAllStudents(stuRes.data as Student[]);
+    if (stuRes.data) {
+      const activeStudents = (stuRes.data as Student[]).filter(isStudentActiveThisMonth);
+      setAllStudents(activeStudents);
+    }
   }, []);
 
   const fetchDayAttendance = useCallback(async (date: string) => {

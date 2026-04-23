@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd';
 import { supabase } from '@/integrations/supabase/client';
 import { Schedule, Student, DAY_NAMES, MONTH_NAMES } from '@/types/database';
-import { isNewStudent } from '@/lib/utils';
+import { isNewStudent, isStudentActiveThisMonth } from '@/lib/utils';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
@@ -45,7 +45,11 @@ export default function ScheduleGrid({ onStudentClick, refreshTrigger }: Schedul
     ]);
 
     if (schedulesRes.data) setSchedules(schedulesRes.data as Schedule[]);
-    if (studentsRes.data) setStudents(studentsRes.data as Student[]);
+    if (studentsRes.data) {
+      // Ocultar alumnos cuya inscripción señada/pagada aún no llegó al mes de inicio
+      const activeStudents = (studentsRes.data as Student[]).filter(isStudentActiveThisMonth);
+      setStudents(activeStudents);
+    }
 
     const map: Record<string, string> = {};
     if (paymentsRes.data) {

@@ -180,9 +180,6 @@ export default function StudentModal({ student, isOpen, onClose, onSave, isNew =
     if (paymentType === 'total') {
       newStatus = 'paid';
       paidAmount = parseFloat(partialAmount) || null;
-      if (paidAmount && paidAmount > 0) {
-        localStorage.setItem(getCuotaKey(formData.categoria), paidAmount.toString());
-      }
     } else if (paymentType === 'partial') {
       newStatus = 'partial';
       paidAmount = parseFloat(partialAmount) || 0;

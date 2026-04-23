@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Student, Payment, Schedule, DAY_NAMES, DAY_ORDER, PAYMENT_STATUS_LABELS, PaymentStatus, MONTH_NAMES } from '@/types/database';
-import { isNewStudent } from '@/lib/utils';
+import { isNewStudent, isStudentActiveThisMonth } from '@/lib/utils';
 import { formatDate } from '@/lib/format';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
@@ -65,7 +65,11 @@ export default function StudentsList({ onStudentClick, refreshTrigger, onStudent
       supabase.from('students').select('*, schedule:schedules(*)').order('updated_at', { ascending: false }),
       supabase.from('schedules').select('*').order('day_of_week').order('start_time'),
     ]);
-    if (studentsRes.data) setStudents(studentsRes.data as Student[]);
+    if (studentsRes.data) {
+      // Ocultar alumnos cuya inscripción señada/pagada aún no llegó al mes de inicio
+      const activeStudents = (studentsRes.data as Student[]).filter(isStudentActiveThisMonth);
+      setStudents(activeStudents);
+    }
     if (schedulesRes.data) setSchedules(schedulesRes.data as Schedule[]);
     setLoading(false);
   };
