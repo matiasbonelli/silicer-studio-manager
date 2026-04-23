@@ -14,7 +14,8 @@ import { ChevronsUpDown, Check } from 'lucide-react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
-import { Plus, Minus, Trash2, ShoppingCart, Printer, Loader2, Search, History, TrendingUp, CalendarDays, DollarSign, Pencil, Upload, FileText, ExternalLink, UserSquare } from 'lucide-react';
+import { Plus, Minus, Trash2, ShoppingCart, Printer, Loader2, Search, History, TrendingUp, CalendarDays, DollarSign, Pencil, Upload, FileText, ExternalLink, UserSquare, MessageCircle } from 'lucide-react';
+import { whatsAppChatUrl } from '@/lib/whatsapp';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -924,12 +925,13 @@ export default function SalesModule() {
                   ))}
                 </SelectContent>
               </Select>
-              <Select value={filterPaymentStatus} onValueChange={setFilterPaymentStatus}>
+              <Select value={filterPaymentStatus || 'all'} onValueChange={(v) => setFilterPaymentStatus(v === 'all' ? '' : v)}>
                 <SelectTrigger className="w-[130px]">
                   <DollarSign className="w-4 h-4 mr-2" />
                   <SelectValue placeholder="Pagos" />
                 </SelectTrigger>
                 <SelectContent>
+                  <SelectItem value="all">Todos</SelectItem>
                   <SelectItem value="pending">Pendiente</SelectItem>
                   <SelectItem value="partial">Parcial</SelectItem>
                   <SelectItem value="paid">Pagado</SelectItem>
@@ -1001,7 +1003,22 @@ export default function SalesModule() {
                       </div>
                     </TableCell>
                     <TableCell className="text-sm">
-                      {sale.student ? `${sale.student.first_name} ${sale.student.last_name}` : '-'}
+                      {sale.student ? (
+                        sale.student.phone ? (
+                          <a
+                            href={whatsAppChatUrl(sale.student.phone)}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1 text-green-600 hover:text-green-700 hover:underline"
+                            title="Abrir chat de WhatsApp"
+                          >
+                            <MessageCircle className="w-3.5 h-3.5" />
+                            {sale.student.first_name} {sale.student.last_name}
+                          </a>
+                        ) : (
+                          `${sale.student.first_name} ${sale.student.last_name}`
+                        )
+                      ) : '-'}
                     </TableCell>
                     <TableCell>
                       <Badge variant="secondary">{PAYMENT_METHOD_LABELS[sale.payment_method]}</Badge>
@@ -1237,7 +1254,22 @@ export default function SalesModule() {
                           </div>
                         </TableCell>
                         <TableCell className="text-sm">
-                          {sale.student ? `${sale.student.first_name} ${sale.student.last_name}` : '-'}
+                          {sale.student ? (
+                            sale.student.phone ? (
+                              <a
+                                href={whatsAppChatUrl(sale.student.phone)}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center gap-1 text-green-600 hover:text-green-700 hover:underline"
+                                title="Abrir chat de WhatsApp"
+                              >
+                                <MessageCircle className="w-3.5 h-3.5" />
+                                {sale.student.first_name} {sale.student.last_name}
+                              </a>
+                            ) : (
+                              `${sale.student.first_name} ${sale.student.last_name}`
+                            )
+                          ) : '-'}
                         </TableCell>
                         <TableCell>
                           <Badge variant="secondary">{PAYMENT_METHOD_LABELS[sale.payment_method]}</Badge>
