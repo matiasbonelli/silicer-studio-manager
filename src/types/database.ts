@@ -1,6 +1,12 @@
 export type PaymentStatus = 'paid' | 'pending' | 'partial';
 export type PaymentMethod = 'cash' | 'card' | 'transfer' | 'mercadopago';
 export type AppRole = 'admin' | 'user';
+export type Categoria = 'adulto' | 'niño';
+
+export const CATEGORIA_LABELS: Record<Categoria, string> = {
+  adulto: 'Adulto',
+  niño: 'Niño',
+};
 
 export interface Schedule {
   id: string;
@@ -25,9 +31,24 @@ export interface Student {
   payment_month: string | null;
   payment_receipt_url: string | null;
   notes: string | null;
+  start_date: string | null;
+  categoria: Categoria;
   created_at: string;
   updated_at: string;
   schedule?: Schedule;
+}
+
+export interface Payment {
+  id: string;
+  student_id: string;
+  month: string;              // formato YYYY-MM
+  status: PaymentStatus;
+  amount: number | null;
+  payment_date: string | null;
+  receipt_url: string | null;
+  notes: string | null;
+  created_at: string;
+  student?: Student;          // para queries con join
 }
 
 export type ProductCategory = 'insumos' | 'servicios' | 'moldes' | 'bizcochado' | 'final';
@@ -67,6 +88,7 @@ export interface SaleItem {
   inventory_id: string;
   quantity: number;
   unit_price: number;
+  is_customer_piece: boolean;
   created_at: string;
   inventory?: InventoryItem;
 }
@@ -101,6 +123,17 @@ export const DAY_NAMES: Record<string, string> = {
   saturday: 'Sábado (sólo niños)',
 };
 
+/** Orden numérico de los días para ordenar selectores de horario */
+export const DAY_ORDER: Record<string, number> = {
+  monday: 1,
+  tuesday: 2,
+  wednesday: 3,
+  thursday: 4,
+  friday: 5,
+  saturday: 6,
+  sunday: 7,
+};
+
 export const PAYMENT_STATUS_LABELS: Record<PaymentStatus, string> = {
   paid: 'Pagado',
   pending: 'Pendiente',
@@ -120,6 +153,59 @@ export const PRODUCT_CATEGORY_LABELS: Record<ProductCategory, string> = {
   moldes: 'Moldes',
   bizcochado: 'Bizcochado',
   final: 'Final',
+};
+
+export type OrderStatus = 'pending' | 'ready' | 'delivered';
+export type OrderPaymentStatus = 'pending' | 'paid';
+
+export interface MoldOrder {
+  id: string;
+  student_id: string;
+  product_name: string;
+  product_price: number;
+  quantity: number;
+  pricing_product_id: string | null;
+  status: OrderStatus;
+  payment_status: OrderPaymentStatus;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+  student?: Student;
+}
+
+export const ORDER_STATUS_LABELS: Record<OrderStatus, string> = {
+  pending: 'Pendiente',
+  ready: 'Listo',
+  delivered: 'Entregado',
+};
+
+export const ORDER_PAYMENT_STATUS_LABELS: Record<OrderPaymentStatus, string> = {
+  pending: 'No pagado',
+  paid: 'Pagado',
+};
+
+export type AttendanceStatus = 'present' | 'absent' | 'recovery' | 'day_switch';
+
+export interface Attendance {
+  id: string;
+  student_id: string;
+  schedule_id: string;
+  class_date: string;        // YYYY-MM-DD
+  status: AttendanceStatus;
+  original_schedule_id: string | null;
+  recovery_source_date: string | null;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+  student?: Student;
+  schedule?: Schedule;
+}
+
+export const ATTENDANCE_STATUS_LABELS: Record<AttendanceStatus, string> = {
+  present: 'Presente',
+  absent: 'Ausente',
+  recovery: 'Recuperación',
+  day_switch: 'Cambio de día',
 };
 
 export const MONTH_NAMES: Record<string, string> = {

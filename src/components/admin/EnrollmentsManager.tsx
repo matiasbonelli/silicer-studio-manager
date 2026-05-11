@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
-import { DAY_NAMES } from '@/types/database';
+import { DAY_NAMES, MONTH_NAMES } from '@/types/database';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -10,10 +10,31 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
+import { sendWhatsApp } from '@/lib/whatsapp';
+import { firstOccurrenceInMonth } from '@/lib/utils';
 import { Search, Loader2, MessageCircle, UserPlus, DollarSign, Eye, Trash2, FileText, ExternalLink, Pencil, Plus } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
+
+function getCurrentMonth(): string {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+}
+
+function getNextOccurrence(dayOfWeek: string): string {
+  const DAY_MAP: Record<string, number> = {
+    sunday: 0, monday: 1, tuesday: 2, wednesday: 3,
+    thursday: 4, friday: 5, saturday: 6,
+  };
+  const target = DAY_MAP[dayOfWeek.toLowerCase()];
+  const today = new Date();
+  let daysAhead = target - today.getDay();
+  if (daysAhead <= 0) daysAhead += 7;
+  const result = new Date(today);
+  result.setDate(today.getDate() + daysAhead);
+  return format(result, 'yyyy-MM-dd');
+}
 
 const getSignedReceiptUrl = async (filePath: string): Promise<string | null> => {
   const { data, error } = await supabase.storage
@@ -49,6 +70,7 @@ interface Enrollment {
   converted_to_student_id: string | null;
   created_at: string;
   schedule?: Schedule;
+  converted_student?: { start_date: string | null } | null;
 }
 
 const ENROLLMENT_STATUS_LABELS: Record<string, string> = {
@@ -118,6 +140,7 @@ export default function EnrollmentsManager({ onStudentCreated }: EnrollmentsMana
     status: 'deposit',
     amount: '',
     notes: '',
+    startMonth: getCurrentMonth(),
   });
 
   // Convert form
@@ -127,7 +150,7 @@ export default function EnrollmentsManager({ onStudentCreated }: EnrollmentsMana
     setLoading(true);
     const { data, error } = await supabase
       .from('enrollments')
-      .select('*, schedule:schedules(*)')
+      .select('*, schedule:schedules(*), converted_student:students!converted_to_student_id(start_date)')
       .order('created_at', { ascending: false });
 
     if (data) {
@@ -172,12 +195,25 @@ export default function EnrollmentsManager({ onStudentCreated }: EnrollmentsMana
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const openPaymentModal = (enrollment: Enrollment) => {
+  const openPaymentModal = async (enrollment: Enrollment) => {
     setSelectedEnrollment(enrollment);
+
+    // Si ya hay alumno convertido, leer su start_date para prefijar el mes
+    let startMonth = getCurrentMonth();
+    if (enrollment.converted_to_student_id) {
+      const { data } = await supabase
+        .from('students')
+        .select('start_date')
+        .eq('id', enrollment.converted_to_student_id)
+        .maybeSingle();
+      if (data?.start_date) startMonth = data.start_date.slice(0, 7);
+    }
+
     setPaymentForm({
       status: enrollment.payment_status || 'deposit',
       amount: enrollment.payment_amount?.toString() || '',
       notes: enrollment.payment_notes || '',
+      startMonth,
     });
     setIsPaymentModalOpen(true);
   };
@@ -194,17 +230,36 @@ export default function EnrollmentsManager({ onStudentCreated }: EnrollmentsMana
 
     // Sin pago (pending) → Revertir: eliminar alumno creado y resetear estado
     if (paymentForm.status === 'pending' && selectedEnrollment.converted_to_student_id) {
-      // Nullify references in sales before deleting
-      await supabase
-        .from('sales')
-        .update({ student_id: null })
-        .eq('student_id', selectedEnrollment.converted_to_student_id);
+      const studentIdToDelete = selectedEnrollment.converted_to_student_id;
 
-      // Delete the auto-created student
-      await supabase
-        .from('students')
-        .delete()
-        .eq('id', selectedEnrollment.converted_to_student_id);
+      // 1. Desvincular la inscripción del alumno ANTES de borrarlo (sino la FK bloquea el delete)
+      const { error: unlinkError } = await supabase
+        .from('enrollments')
+        .update({ converted_to_student_id: null, status: 'pending' })
+        .eq('id', selectedEnrollment.id);
+
+      if (unlinkError) {
+        toast({ title: 'Error', description: 'No se pudo desvincular la inscripción', variant: 'destructive' });
+        return;
+      }
+
+      // 2. Nullify references in sales
+      await supabase.from('sales').update({ student_id: null }).eq('student_id', studentIdToDelete);
+
+      // 3. Remove payment records
+      await supabase.from('payments').delete().eq('student_id', studentIdToDelete);
+
+      // 4. Delete the auto-created student
+      const { error: deleteError } = await supabase.from('students').delete().eq('id', studentIdToDelete);
+
+      if (deleteError) {
+        toast({
+          title: 'Error al eliminar alumno',
+          description: deleteError.message,
+          variant: 'destructive',
+        });
+        return;
+      }
 
       updateData.converted_to_student_id = null;
       updateData.status = 'pending';
@@ -212,6 +267,16 @@ export default function EnrollmentsManager({ onStudentCreated }: EnrollmentsMana
 
     // Señado o Pagado → Confirmar y crear alumno
     if (paymentForm.status === 'deposit' || paymentForm.status === 'paid') {
+      const startMonth = paymentForm.startMonth || getCurrentMonth();
+      // Calcular start_date: si el mes es el actual, usar próxima clase; si no, primera ocurrencia del mes
+      const computeStartDate = (): string | null => {
+        if (!selectedEnrollment.schedule) return null;
+        const day = selectedEnrollment.schedule.day_of_week;
+        return startMonth === getCurrentMonth()
+          ? getNextOccurrence(day)
+          : firstOccurrenceInMonth(startMonth, day);
+      };
+
       if (!selectedEnrollment.converted_to_student_id) {
         // Crear el alumno con el estado de pago correspondiente
         // deposit → partial, paid → paid
@@ -229,6 +294,7 @@ export default function EnrollmentsManager({ onStudentCreated }: EnrollmentsMana
             payment_status: studentPaymentStatus,
             paid_amount: paymentForm.amount ? parseFloat(paymentForm.amount) : null,
             payment_date: new Date().toISOString(),
+            start_date: computeStartDate(),
             notes: selectedEnrollment.message,
           })
           .select()
@@ -246,23 +312,50 @@ export default function EnrollmentsManager({ onStudentCreated }: EnrollmentsMana
         updateData.status = 'confirmed';
         updateData.converted_to_student_id = newStudent.id;
 
+        // Registrar pago en el mes de inicio (no en el mes actual)
+        const paymentAmount = paymentForm.amount ? parseFloat(paymentForm.amount) : null;
+        await supabase.from('payments').upsert(
+          {
+            student_id: newStudent.id,
+            month: startMonth,
+            status: studentPaymentStatus,
+            amount: paymentAmount,
+            payment_date: new Date().toISOString(),
+            notes: paymentForm.notes || null,
+          },
+          { onConflict: 'student_id,month' }
+        );
+
         toast({
           title: 'Inscripción confirmada',
-          description: `Alumno creado con pago ${paymentForm.status === 'paid' ? 'completo' : 'parcial'}`
+          description: `Alumno creado. Comienza ${MONTH_NAMES[startMonth.split('-')[1]]} ${startMonth.split('-')[0]}`,
         });
       } else {
-        // Ya tiene alumno, solo actualizar estado
+        // Ya tiene alumno: actualizar estado, start_date y sincronizar pago
         updateData.status = 'confirmed';
 
-        // Actualizar también el payment_status del alumno existente
         const studentPaymentStatus = paymentForm.status === 'paid' ? 'paid' : 'partial';
+        const paymentAmount = paymentForm.amount ? parseFloat(paymentForm.amount) : null;
         await supabase
           .from('students')
           .update({
             payment_status: studentPaymentStatus,
-            paid_amount: paymentForm.amount ? parseFloat(paymentForm.amount) : null,
+            paid_amount: paymentAmount,
+            start_date: computeStartDate(),
           })
           .eq('id', selectedEnrollment.converted_to_student_id);
+
+        await supabase.from('payments').upsert(
+          {
+            student_id: selectedEnrollment.converted_to_student_id,
+            month: startMonth,
+            status: studentPaymentStatus,
+            amount: paymentAmount,
+            payment_date: new Date().toISOString(),
+            notes: paymentForm.notes || null,
+          },
+          { onConflict: 'student_id,month' }
+        );
       }
     }
 
@@ -309,6 +402,7 @@ export default function EnrollmentsManager({ onStudentCreated }: EnrollmentsMana
         : 'pending';
 
     // Create the student
+    const convertSchedule = schedules.find(s => s.id === convertScheduleId);
     const { data: newStudent, error: studentError } = await supabase
       .from('students')
       .insert({
@@ -320,6 +414,7 @@ export default function EnrollmentsManager({ onStudentCreated }: EnrollmentsMana
         schedule_id: convertScheduleId,
         payment_status: studentPaymentStatus,
         notes: selectedEnrollment.message,
+        start_date: convertSchedule ? getNextOccurrence(convertSchedule.day_of_week) : null,
       })
       .select()
       .single();
@@ -331,6 +426,21 @@ export default function EnrollmentsManager({ onStudentCreated }: EnrollmentsMana
         variant: 'destructive',
       });
       return;
+    }
+
+    // Registrar pago del mes actual si ya hay señado o total
+    if (selectedEnrollment.payment_status === 'deposit' || selectedEnrollment.payment_status === 'paid') {
+      await supabase.from('payments').upsert(
+        {
+          student_id: newStudent.id,
+          month: getCurrentMonth(),
+          status: studentPaymentStatus,
+          amount: selectedEnrollment.payment_amount,
+          payment_date: new Date().toISOString(),
+          notes: selectedEnrollment.payment_notes || null,
+        },
+        { onConflict: 'student_id,month' }
+      );
     }
 
     // Update enrollment to mark as converted
@@ -552,7 +662,7 @@ export default function EnrollmentsManager({ onStudentCreated }: EnrollmentsMana
 
       {/* Table */}
       <div className="rounded-lg border bg-card overflow-x-auto">
-        <Table>
+        <Table className="min-w-[700px]">
           <TableHeader>
             <TableRow>
               <TableHead>Fecha</TableHead>
@@ -579,8 +689,21 @@ export default function EnrollmentsManager({ onStudentCreated }: EnrollmentsMana
               ))
             ) : filteredEnrollments.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={7} className="text-center text-muted-foreground py-8">
-                  No se encontraron pre-inscripciones
+                <TableCell colSpan={7} className="py-16">
+                  <div className="flex flex-col items-center gap-3 text-muted-foreground">
+                    <UserPlus className="h-10 w-10 opacity-30" />
+                    {search || statusFilter !== 'all' ? (
+                      <>
+                        <p className="font-medium">No se encontraron pre-inscripciones</p>
+                        <p className="text-sm">Intentá con otro nombre o cambiá el filtro de estado.</p>
+                      </>
+                    ) : (
+                      <>
+                        <p className="font-medium">Todavía no hay pre-inscripciones</p>
+                        <p className="text-sm">Cuando alguien complete el formulario de inscripción, aparecerá aquí.</p>
+                      </>
+                    )}
+                  </div>
                 </TableCell>
               </TableRow>
             ) : filteredEnrollments.map(enrollment => (
@@ -630,6 +753,12 @@ export default function EnrollmentsManager({ onStudentCreated }: EnrollmentsMana
                   <Badge variant={PAYMENT_STATUS_COLORS[enrollment.payment_status] || 'destructive'}>
                     {PAYMENT_STATUS_LABELS[enrollment.payment_status] || 'Sin pago'}
                   </Badge>
+                  {enrollment.converted_student?.start_date && (
+                    <div className="text-[11px] text-muted-foreground mt-1">
+                      comienza {MONTH_NAMES[enrollment.converted_student.start_date.slice(5, 7)]}{' '}
+                      {enrollment.converted_student.start_date.slice(0, 4)}
+                    </div>
+                  )}
                 </TableCell>
                 <TableCell>
                   <div className="flex items-center justify-center gap-1">
@@ -637,6 +766,7 @@ export default function EnrollmentsManager({ onStudentCreated }: EnrollmentsMana
                     <Button
                       size="sm"
                       variant="ghost"
+                      aria-label="Ver detalle"
                       onClick={() => {
                         setSelectedEnrollment(enrollment);
                         setIsDetailModalOpen(true);
@@ -649,6 +779,7 @@ export default function EnrollmentsManager({ onStudentCreated }: EnrollmentsMana
                     <Button
                       size="sm"
                       variant="ghost"
+                      aria-label="Editar pre-inscripción"
                       onClick={() => openEditModal(enrollment)}
                     >
                       <Pencil className="w-4 h-4" />
@@ -660,16 +791,14 @@ export default function EnrollmentsManager({ onStudentCreated }: EnrollmentsMana
                         size="sm"
                         variant="ghost"
                         className="text-green-600 hover:text-green-700"
+                        aria-label="Enviar WhatsApp"
                         onClick={async () => {
-                          const phone = enrollment.phone?.replace(/\D/g, '');
                           const day = enrollment.schedule ? DAY_NAMES[enrollment.schedule.day_of_week] : '[Completar día]';
                           const time = enrollment.schedule
                             ? `${enrollment.schedule.start_time.slice(0, 5)} a ${enrollment.schedule.end_time.slice(0, 5)} hs`
                             : '[Completar hora]';
-                          const message = encodeURIComponent(
-                            `Hola de nuevo!\n\nTe escribimos para confirmar tu turno:\n\nDia: ${day}\nHorario: ${time}\n\nMuchas gracias, te esperamos!`
-                          );
-                          window.open(`https://wa.me/54${phone}?text=${message}`, '_blank', 'noopener,noreferrer');
+                          const message = `Hola de nuevo!\n\nTe escribimos para confirmar tu turno:\n\nDia: ${day}\nHorario: ${time}\n\nMuchas gracias, te esperamos!`;
+                          await sendWhatsApp(enrollment.phone!, message, toast);
                           // Actualizar estado a "contacted" si está pendiente y no convertido
                           if (enrollment.status === 'pending' && !enrollment.converted_to_student_id) {
                             await supabase
@@ -688,17 +817,20 @@ export default function EnrollmentsManager({ onStudentCreated }: EnrollmentsMana
                     <Button
                       size="sm"
                       variant="ghost"
+                      aria-label="Registrar pago"
                       onClick={() => openPaymentModal(enrollment)}
                     >
                       <DollarSign className="w-4 h-4" />
                     </Button>
 
-                    {/* Convert to student */}
-                    {!enrollment.converted_to_student_id && (
+                    {/* Convert to student - solo si ya tiene pago señado o total */}
+                    {!enrollment.converted_to_student_id &&
+                      (enrollment.payment_status === 'deposit' || enrollment.payment_status === 'paid') && (
                       <Button
                         size="sm"
                         variant="ghost"
                         className="text-primary"
+                        aria-label="Convertir a alumno"
                         onClick={() => openConvertModal(enrollment)}
                       >
                         <UserPlus className="w-4 h-4" />
@@ -710,6 +842,7 @@ export default function EnrollmentsManager({ onStudentCreated }: EnrollmentsMana
                       size="sm"
                       variant="ghost"
                       className="text-destructive hover:text-destructive"
+                      aria-label="Eliminar pre-inscripción"
                       onClick={() => openDeleteModal(enrollment)}
                     >
                       <Trash2 className="w-4 h-4" />
@@ -830,6 +963,19 @@ export default function EnrollmentsManager({ onStudentCreated }: EnrollmentsMana
                 </SelectContent>
               </Select>
             </div>
+            {(paymentForm.status === 'deposit' || paymentForm.status === 'paid') && (
+              <div>
+                <Label>Mes de inicio</Label>
+                <Input
+                  type="month"
+                  value={paymentForm.startMonth}
+                  onChange={(e) => setPaymentForm(p => ({ ...p, startMonth: e.target.value }))}
+                />
+                <p className="text-xs text-muted-foreground mt-1">
+                  El alumno aparecerá en Horarios, Alumnos y Resumen cuando comience este mes.
+                </p>
+              </div>
+            )}
             <div>
               <Label>Monto</Label>
               <Input

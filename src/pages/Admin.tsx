@@ -1,8 +1,10 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { supabase } from '@/integrations/supabase/client';
 import { Student } from '@/types/database';
 import ScheduleGrid from '@/components/admin/ScheduleGrid';
 import StudentsList from '@/components/admin/StudentsList';
@@ -12,7 +14,10 @@ import SalesModule from '@/components/admin/SalesModule';
 import BirthdayModal from '@/components/admin/BirthdayModal';
 import EnrollmentsManager from '@/components/admin/EnrollmentsManager';
 import PricingCalculator from '@/components/admin/PricingCalculator';
-import { LogOut, Plus, Calendar, Users, Package, ShoppingCart, Loader2, ClipboardList, Calculator, Sun, Moon } from 'lucide-react';
+import OrdersManager from '@/components/admin/OrdersManager';
+import Dashboard from '@/components/admin/Dashboard';
+import AttendanceManager from '@/components/admin/AttendanceManager';
+import { LogOut, Plus, Calendar, Users, Package, ShoppingCart, Loader2, ClipboardList, ClipboardCheck, Calculator, Sun, Moon, LayoutDashboard, UserCheck } from 'lucide-react';
 
 export default function Admin() {
   const { user, loading, signOut } = useAuth();
@@ -23,6 +28,33 @@ export default function Admin() {
   const [refreshTrigger, setRefreshTrigger] = useState(0);
   const [activeTab, setActiveTab] = useState('schedule');
   const [darkMode, setDarkMode] = useState(false);
+  const [pendingEnrollments, setPendingEnrollments] = useState(0);
+
+  const fetchPendingEnrollments = useCallback(async () => {
+    if (!user) return;
+    const { count } = await supabase
+      .from('enrollments')
+      .select('id', { count: 'exact', head: true })
+      .eq('status', 'pending');
+    setPendingEnrollments(count ?? 0);
+  }, [user]);
+
+  // Polling cada 20s + refetch al volver al tab del browser
+  useEffect(() => {
+    fetchPendingEnrollments();
+    const interval = setInterval(fetchPendingEnrollments, 20_000);
+    const onVisible = () => { if (!document.hidden) fetchPendingEnrollments(); };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
+  }, [fetchPendingEnrollments]);
+
+  // Refetch inmediato al salir del tab de inscripciones (el usuario acabó de hacer cambios)
+  useEffect(() => {
+    if (user && activeTab !== 'enrollments') fetchPendingEnrollments();
+  }, [activeTab]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (darkMode) {
@@ -101,30 +133,45 @@ export default function Admin() {
       <main className="container mx-auto px-4 py-6">
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-            <TabsList className="grid w-full sm:w-auto grid-cols-6 gap-1">
-              <TabsTrigger value="schedule" className="flex items-center gap-1.5">
-                <Calendar className="w-4 h-4" />
+            <TabsList className="flex w-full overflow-x-auto flex-nowrap h-auto gap-1 p-1 justify-start">
+              <TabsTrigger value="schedule" className="flex items-center gap-1.5 shrink-0 px-3 py-1.5">
+                <Calendar className="w-4 h-4 shrink-0" />
                 <span className="hidden sm:inline">Horarios</span>
               </TabsTrigger>
-              <TabsTrigger value="enrollments" className="flex items-center gap-1.5">
-                <ClipboardList className="w-4 h-4" />
+              <TabsTrigger value="enrollments" className="relative flex items-center gap-1.5 shrink-0 px-3 py-1.5">
+                <ClipboardList className="w-4 h-4 shrink-0" />
                 <span className="hidden sm:inline">Inscripciones</span>
+                {pendingEnrollments > 0 && (
+                  <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-yellow-400" />
+                )}
               </TabsTrigger>
-              <TabsTrigger value="students" className="flex items-center gap-1.5">
-                <Users className="w-4 h-4" />
+              <TabsTrigger value="students" className="flex items-center gap-1.5 shrink-0 px-3 py-1.5">
+                <Users className="w-4 h-4 shrink-0" />
                 <span className="hidden sm:inline">Alumnos</span>
               </TabsTrigger>
-              <TabsTrigger value="inventory" className="flex items-center gap-1.5">
-                <Package className="w-4 h-4" />
+              <TabsTrigger value="attendance" className="flex items-center gap-1.5 shrink-0 px-3 py-1.5">
+                <UserCheck className="w-4 h-4 shrink-0" />
+                <span className="hidden sm:inline">Asistencia</span>
+              </TabsTrigger>
+              <TabsTrigger value="inventory" className="flex items-center gap-1.5 shrink-0 px-3 py-1.5">
+                <Package className="w-4 h-4 shrink-0" />
                 <span className="hidden sm:inline">Inventario</span>
               </TabsTrigger>
-              <TabsTrigger value="sales" className="flex items-center gap-1.5">
-                <ShoppingCart className="w-4 h-4" />
+              <TabsTrigger value="sales" className="flex items-center gap-1.5 shrink-0 px-3 py-1.5">
+                <ShoppingCart className="w-4 h-4 shrink-0" />
                 <span className="hidden sm:inline">Ventas</span>
               </TabsTrigger>
-              <TabsTrigger value="pricing" className="flex items-center gap-1.5">
-                <Calculator className="w-4 h-4" />
+              <TabsTrigger value="orders" className="flex items-center gap-1.5 shrink-0 px-3 py-1.5">
+                <ClipboardCheck className="w-4 h-4 shrink-0" />
+                <span className="hidden sm:inline">Pedidos</span>
+              </TabsTrigger>
+              <TabsTrigger value="pricing" className="flex items-center gap-1.5 shrink-0 px-3 py-1.5">
+                <Calculator className="w-4 h-4 shrink-0" />
                 <span className="hidden sm:inline">Calculadora de Costos</span>
+              </TabsTrigger>
+              <TabsTrigger value="dashboard" className="flex items-center gap-1.5 shrink-0 px-3 py-1.5">
+                <LayoutDashboard className="w-4 h-4 shrink-0" />
+                <span className="hidden sm:inline">Resumen</span>
               </TabsTrigger>
             </TabsList>
 
@@ -147,6 +194,10 @@ export default function Admin() {
             <StudentsList onStudentClick={handleStudentClick} refreshTrigger={refreshTrigger} />
           </TabsContent>
 
+          <TabsContent value="attendance" className="mt-6">
+            <AttendanceManager />
+          </TabsContent>
+
           <TabsContent value="inventory" className="mt-6">
             <InventoryManager />
           </TabsContent>
@@ -155,8 +206,16 @@ export default function Admin() {
             <SalesModule />
           </TabsContent>
 
+          <TabsContent value="orders" className="mt-6">
+            <OrdersManager />
+          </TabsContent>
+
           <TabsContent value="pricing" className="mt-6">
             <PricingCalculator />
+          </TabsContent>
+
+          <TabsContent value="dashboard" className="mt-6">
+            <Dashboard refreshTrigger={refreshTrigger} />
           </TabsContent>
         </Tabs>
       </main>
