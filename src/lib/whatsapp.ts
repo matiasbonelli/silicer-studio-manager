@@ -10,8 +10,8 @@ export function whatsAppChatUrl(phone: string): string {
 }
 
 export function sendWhatsApp(phone: string, message: string, toast: ToastFn): void {
-  // Open with message prefilled in URL — must be synchronous to avoid popup blocker
-  const url = `${whatsAppChatUrl(phone)}?text=${encodeURIComponent(message)}`;
+  // api.whatsapp.com/send avoids the wa.me redirect that mangles multi-byte emoji encoding
+  const url = `https://api.whatsapp.com/send?phone=${cleanPhone(phone)}&text=${encodeURIComponent(message)}`;
   window.open(url, '_blank', 'noopener,noreferrer');
   toast({ title: 'WhatsApp abierto', description: 'El mensaje está prellenado en el chat.' });
 }
@@ -23,7 +23,7 @@ export function sendWhatsAppBulk(
   if (students.length === 0) return;
 
   students.forEach(({ phone, message }) => {
-    const url = `${whatsAppChatUrl(phone)}?text=${encodeURIComponent(message)}`;
+    const url = `https://api.whatsapp.com/send?phone=${cleanPhone(phone)}&text=${encodeURIComponent(message)}`;
     window.open(url, '_blank', 'noopener,noreferrer');
   });
 

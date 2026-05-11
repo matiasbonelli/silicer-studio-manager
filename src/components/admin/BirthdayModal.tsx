@@ -58,7 +58,7 @@ export default function BirthdayModal() {
 
   const handleSendWhatsApp = (student: Student) => {
     const name = student.first_name;
-    const message = `Muy feliz cumple años ${name} 🥳, esperemos que disfrutes en tu hermoso día💫. Te saluda Caro y todo el equipo de Silicer🩷`;
+    const message = `Muy feliz cumple años ${name} 🥳, esperemos que disfrutes en tu hermoso día 💫. Te saluda Caro y todo el equipo de Silicer 💖`;
     sendWhatsApp(student.phone!, message, toast);
   };
 
