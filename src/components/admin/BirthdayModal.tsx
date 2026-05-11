@@ -55,9 +55,9 @@ export default function BirthdayModal() {
 
   const buildWhatsAppUrl = (student: Student) => {
     const name = student.first_name;
-    const message = `Muy feliz cumple años ${name} 🥳, esperemos que disfrutes en tu hermoso día💫. Te saluda Caro y todo el equipo de Silicer🩷`;
+    const message = `Muy feliz cumple años ${name} 🥳, esperemos que disfrutes en tu hermoso día 💫. Te saluda Caro y todo el equipo de Silicer 💖`;
     const phone = student.phone ? `54${student.phone.replace(/\D/g, '')}` : '';
-    return `https://wa.me/${phone}?text=${encodeURIComponent(message)}`;
+    return `https://api.whatsapp.com/send?phone=${phone}&text=${encodeURIComponent(message)}`;
   };
 
   if (birthdayStudents.length === 0) return null;
