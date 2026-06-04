@@ -674,11 +674,7 @@ export default function Dashboard({ refreshTrigger }: DashboardProps) {
                         )}
                       </div>
                       {student.phone && (
-                        <a
-                          href={`${whatsAppChatUrl(student.phone)}?text=${encodeURIComponent(buildReminderMsg(student))}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                        >
+                        <span onClick={() => sendWhatsApp(student.phone!, buildReminderMsg(student), toast)}>
                           <Button
                             variant="ghost"
                             size="sm"
@@ -687,7 +683,7 @@ export default function Dashboard({ refreshTrigger }: DashboardProps) {
                             <MessageCircle className="h-4 w-4" />
                             <span className="text-xs">WhatsApp</span>
                           </Button>
-                        </a>
+                        </span>
                       )}
                     </li>
                   ))}
@@ -917,15 +913,13 @@ export default function Dashboard({ refreshTrigger }: DashboardProps) {
                       )}
                     </div>
                     {student.phone ? (
-                      <a
-                        href={`https://wa.me/54${student.phone.replace(/\D/g, '')}?text=${encodeURIComponent(buildReminderMsg(student))}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
+                      <button
+                        onClick={() => sendWhatsApp(student.phone!, buildReminderMsg(student), toast)}
                         className="inline-flex items-center gap-1 text-xs text-green-600 hover:text-green-700"
                       >
                         <MessageCircle className="h-4 w-4" />
                         Abrir
-                      </a>
+                      </button>
                     ) : (
                       <span className="text-xs text-muted-foreground shrink-0">Sin teléfono</span>
                     )}
