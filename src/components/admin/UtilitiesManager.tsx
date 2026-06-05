@@ -12,19 +12,22 @@ import { useToast } from '@/hooks/use-toast';
 // Helpers de normalización de teléfonos
 // ---------------------------------------------------------------------------
 
-/** Devuelve sólo los dígitos, sin el prefijo internacional 54 ni el 0/15 */
+/** Devuelve sólo los dígitos, normalizados al formato local sin prefijos */
 function normalizePhone(raw: string): string {
-  // Quitar todo lo que no sea dígito
   let digits = raw.replace(/\D/g, '');
 
-  // Quitar prefijo internacional +54 / 54
+  // Quitar prefijo internacional 54 (ej: 5493584026442 → 93584026442)
   if (digits.startsWith('54')) digits = digits.slice(2);
 
-  // Quitar 0 inicial (discado nacional)
+  // Quitar el 9 de prefijo móvil que usa WhatsApp internacionalmente
+  // (ej: 93584026442 → 3584026442). Solo si quedan más de 10 dígitos.
+  if (digits.startsWith('9') && digits.length > 10) digits = digits.slice(1);
+
+  // Quitar 0 inicial (discado nacional, ej: 03584... → 3584...)
   if (digits.startsWith('0')) digits = digits.slice(1);
 
-  // Quitar 15 inicial (celular viejo estilo)
-  if (digits.startsWith('15')) digits = digits.slice(2);
+  // Quitar 15 inicial (celular estilo viejo, ej: 1526... → 26...)
+  if (digits.startsWith('15') && digits.length > 10) digits = digits.slice(2);
 
   return digits;
 }
