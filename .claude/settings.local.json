@@ -15,7 +15,8 @@
       "Bash(node -e ':*)",
       "Bash(xargs grep:*)",
       "Bash(npm test *)",
-      "Bash(git log *)"
+      "Bash(git log *)",
+      "Bash(gh pr *)"
     ]
   }
 }

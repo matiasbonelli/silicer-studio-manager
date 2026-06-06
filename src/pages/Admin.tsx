@@ -17,7 +17,8 @@ import PricingCalculator from '@/components/admin/PricingCalculator';
 import OrdersManager from '@/components/admin/OrdersManager';
 import Dashboard from '@/components/admin/Dashboard';
 import AttendanceManager from '@/components/admin/AttendanceManager';
-import { LogOut, Plus, Calendar, Users, Package, ShoppingCart, Loader2, ClipboardList, ClipboardCheck, Calculator, Sun, Moon, LayoutDashboard, UserCheck } from 'lucide-react';
+import UtilitiesManager from '@/components/admin/UtilitiesManager';
+import { LogOut, Plus, Calendar, Users, Package, ShoppingCart, Loader2, ClipboardList, ClipboardCheck, Calculator, Sun, Moon, LayoutDashboard, UserCheck, Wrench } from 'lucide-react';
 
 export default function Admin() {
   const { user, loading, signOut } = useAuth();
@@ -173,6 +174,9 @@ export default function Admin() {
                 <LayoutDashboard className="w-4 h-4 shrink-0" />
                 <span className="hidden sm:inline">Resumen</span>
               </TabsTrigger>
+              <TabsTrigger value="utilities" className="flex items-center gap-1.5 shrink-0 px-3 py-1.5" title="Utilidades">
+                <Wrench className="w-4 h-4 shrink-0" />
+              </TabsTrigger>
             </TabsList>
 
             {(activeTab === 'schedule' || activeTab === 'students') && (
@@ -216,6 +220,10 @@ export default function Admin() {
 
           <TabsContent value="dashboard" className="mt-6">
             <Dashboard refreshTrigger={refreshTrigger} />
+          </TabsContent>
+
+          <TabsContent value="utilities" className="mt-6">
+            <UtilitiesManager />
           </TabsContent>
         </Tabs>
       </main>
