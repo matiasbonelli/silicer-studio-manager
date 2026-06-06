@@ -5,8 +5,38 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
-import { Loader2, MessageCircle, CheckCircle2, AlertCircle, HelpCircle, Copy, RefreshCw } from 'lucide-react';
+import { Loader2, MessageCircle, CheckCircle2, AlertCircle, HelpCircle, Copy, RefreshCw, Check } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+
+// ---------------------------------------------------------------------------
+// Componente: número copiable con un click
+// ---------------------------------------------------------------------------
+
+function CopyablePhone({ phone, className = '' }: { phone: string; className?: string }) {
+  const [copied, setCopied] = useState(false);
+
+  function handleCopy() {
+    navigator.clipboard.writeText(phone).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    });
+  }
+
+  return (
+    <button
+      onClick={handleCopy}
+      title="Click para copiar"
+      className={`inline-flex items-center gap-1 font-mono rounded px-1 transition-colors
+        hover:bg-black/10 dark:hover:bg-white/10 cursor-pointer select-all
+        ${copied ? 'text-emerald-600 dark:text-emerald-400' : ''} ${className}`}
+    >
+      {phone}
+      {copied
+        ? <Check className="w-3 h-3 shrink-0" />
+        : <Copy className="w-3 h-3 shrink-0 opacity-0 group-hover:opacity-100" />}
+    </button>
+  );
+}
 
 // ---------------------------------------------------------------------------
 // Helpers de normalización de teléfonos
@@ -217,9 +247,9 @@ export default function UtilitiesManager() {
                 <p className="text-xs text-green-700 dark:text-green-400">Estos alumnos ya están en el grupo.</p>
                 <ul className="space-y-1 max-h-48 overflow-y-auto">
                   {result.inBoth.map(s => (
-                    <li key={s.id} className="text-sm text-green-900 dark:text-green-200">
-                      {s.first_name} {s.last_name}
-                      <span className="ml-1 text-xs text-green-600 dark:text-green-400">{s.phone}</span>
+                    <li key={s.id} className="flex items-center justify-between gap-2 text-sm text-green-900 dark:text-green-200">
+                      <span>{s.first_name} {s.last_name}</span>
+                      <CopyablePhone phone={s.phone!} className="text-xs text-green-600 dark:text-green-400" />
                     </li>
                   ))}
                   {result.inBoth.length === 0 && <li className="text-xs text-green-600">Ninguno</li>}
@@ -238,9 +268,9 @@ export default function UtilitiesManager() {
                 <p className="text-xs text-yellow-700 dark:text-yellow-400">Están en el sistema pero no en el grupo de WhatsApp.</p>
                 <ul className="space-y-1 max-h-48 overflow-y-auto">
                   {result.onlyInSystem.map(s => (
-                    <li key={s.id} className="text-sm text-yellow-900 dark:text-yellow-200">
-                      {s.first_name} {s.last_name}
-                      <span className="ml-1 text-xs text-yellow-600 dark:text-yellow-400">{s.phone}</span>
+                    <li key={s.id} className="flex items-center justify-between gap-2 text-sm text-yellow-900 dark:text-yellow-200">
+                      <span>{s.first_name} {s.last_name}</span>
+                      <CopyablePhone phone={s.phone!} className="text-xs text-yellow-600 dark:text-yellow-400" />
                     </li>
                   ))}
                   {result.onlyInSystem.length === 0 && <li className="text-xs text-yellow-600">Ninguno — ¡todos están!</li>}
@@ -269,7 +299,9 @@ export default function UtilitiesManager() {
                 <p className="text-xs text-slate-500 dark:text-slate-400">Están en el grupo pero no figuran en el sistema.</p>
                 <ul className="space-y-1 max-h-48 overflow-y-auto">
                   {result.onlyInGroup.map(n => (
-                    <li key={n} className="text-sm font-mono text-slate-700 dark:text-slate-300">{n}</li>
+                    <li key={n}>
+                      <CopyablePhone phone={n} className="text-sm text-slate-700 dark:text-slate-300" />
+                    </li>
                   ))}
                   {result.onlyInGroup.length === 0 && <li className="text-xs text-slate-500">Ninguno</li>}
                 </ul>
