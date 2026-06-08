@@ -62,6 +62,29 @@ function normalizePhone(raw: string): string {
   return digits;
 }
 
+/**
+ * Convierte un número (en cualquier formato en que esté cargado en el sistema)
+ * al formato internacional que WhatsApp necesita para BUSCAR/AGREGAR un contacto
+ * al grupo: +54 9 <código de área><número local>.
+ *
+ * Ej: "3584026442"        → "+54 9 3584026442"
+ *     "0358 15 402-6442"  → "+54 9 3584026442"
+ *     "+54 9 3586014698"  → "+54 9 3586014698"
+ *
+ * Pegar el número "pelado" (sin +54 9) en "Agregar participante" de WhatsApp falla:
+ * WhatsApp necesita el código de país (54) y el prefijo de celular (9) para
+ * encontrar el contacto correctamente.
+ */
+function toWhatsAppFormat(raw: string): string {
+  let digits = normalizePhone(raw);
+
+  // Si quedaron sólo 7 dígitos (cargaron el número local sin código de área),
+  // anteponemos el código de área del estudio (358).
+  if (digits.length === 7) digits = `358${digits}`;
+
+  return `+54 9 ${digits}`;
+}
+
 /** Extrae todos los números de un bloque de texto (un número por línea o separados por comas/espacios) */
 function extractNumbers(text: string): string[] {
   // Separar por saltos de línea, comas o punto y coma
@@ -265,12 +288,15 @@ export default function UtilitiesManager() {
                   </div>
                   <Badge variant="secondary">{result.onlyInSystem.length}</Badge>
                 </div>
-                <p className="text-xs text-yellow-700 dark:text-yellow-400">Están en el sistema pero no en el grupo de WhatsApp.</p>
+                <p className="text-xs text-yellow-700 dark:text-yellow-400">
+                  Están en el sistema pero no en el grupo de WhatsApp. El número ya está normalizado al formato
+                  internacional — copialo con un click y pegalo directo en "Agregar participante" del grupo.
+                </p>
                 <ul className="space-y-1 max-h-48 overflow-y-auto">
                   {result.onlyInSystem.map(s => (
                     <li key={s.id} className="flex items-center justify-between gap-2 text-sm text-yellow-900 dark:text-yellow-200">
                       <span>{s.first_name} {s.last_name}</span>
-                      <CopyablePhone phone={s.phone!} className="text-xs text-yellow-600 dark:text-yellow-400" />
+                      <CopyablePhone phone={toWhatsAppFormat(s.phone!)} className="text-xs text-yellow-600 dark:text-yellow-400" />
                     </li>
                   ))}
                   {result.onlyInSystem.length === 0 && <li className="text-xs text-yellow-600">Ninguno — ¡todos están!</li>}
@@ -280,7 +306,7 @@ export default function UtilitiesManager() {
                     variant="outline"
                     size="sm"
                     className="w-full border-yellow-300 text-yellow-800 hover:bg-yellow-100 dark:text-yellow-300"
-                    onClick={() => copyList(result.onlyInSystem.map(s => `${s.first_name} ${s.last_name}: ${s.phone}`))}
+                    onClick={() => copyList(result.onlyInSystem.map(s => `${s.first_name} ${s.last_name}: ${toWhatsAppFormat(s.phone!)}`))}
                   >
                     <Copy className="w-3 h-3 mr-1" /> Copiar lista
                   </Button>
