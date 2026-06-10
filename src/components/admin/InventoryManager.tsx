@@ -9,7 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
-import { Plus, Pencil, Trash2, Search, Loader2, AlertTriangle, ShoppingCart, Package, Tag, ImagePlus, X, Percent, Save } from 'lucide-react';
+import { Plus, Pencil, Trash2, Search, Loader2, AlertTriangle, ShoppingCart, Package, Tag, ImagePlus, X, Percent, Save, ArrowRightLeft } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Switch } from '@/components/ui/switch';
@@ -68,6 +68,9 @@ export default function InventoryManager() {
   const [recargoInput, setRecargoInput] = useState<string>('1');
   const [savingRecargo, setSavingRecargo] = useState(false);
 
+  const [aliasInput, setAliasInput] = useState<string>('');
+  const [savingAlias, setSavingAlias] = useState(false);
+
   const fetchItems = async () => {
     setLoading(true);
     const { data } = await supabase
@@ -91,6 +94,14 @@ export default function InventoryManager() {
       .then(({ data }) => {
         if (data) setRecargoInput(data.value);
       });
+    supabase
+      .from('app_settings')
+      .select('value')
+      .eq('key', 'mp_alias')
+      .single()
+      .then(({ data }) => {
+        if (data) setAliasInput(data.value);
+      });
   }, []);
 
   const handleSaveRecargo = async () => {
@@ -109,6 +120,19 @@ export default function InventoryManager() {
       toast({ title: `Recargo actualizado a ${value}%` });
     }
     setSavingRecargo(false);
+  };
+
+  const handleSaveAlias = async () => {
+    setSavingAlias(true);
+    const { error } = await supabase
+      .from('app_settings')
+      .upsert({ key: 'mp_alias', value: aliasInput.trim(), updated_at: new Date().toISOString() });
+    if (error) {
+      toast({ title: 'Error al guardar alias', variant: 'destructive' });
+    } else {
+      toast({ title: 'Alias actualizado' });
+    }
+    setSavingAlias(false);
   };
 
   const openModal = (item?: InventoryItem) => {
@@ -283,6 +307,27 @@ export default function InventoryManager() {
           <span className="text-sm font-medium text-muted-foreground">%</span>
           <Button size="sm" onClick={handleSaveRecargo} disabled={savingRecargo}>
             {savingRecargo ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+          </Button>
+        </div>
+      </div>
+
+      {/* Alias para transferencias */}
+      <div className="flex items-center gap-3 p-3 rounded-lg border bg-card">
+        <ArrowRightLeft className="w-4 h-4 text-muted-foreground shrink-0" />
+        <div className="flex-1">
+          <p className="text-sm font-medium">Alias para transferencias</p>
+          <p className="text-xs text-muted-foreground">Se muestra al cliente al cobrar por transferencia</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <Input
+            type="text"
+            value={aliasInput}
+            onChange={(e) => setAliasInput(e.target.value)}
+            placeholder="silicer.studio"
+            className="w-44"
+          />
+          <Button size="sm" onClick={handleSaveAlias} disabled={savingAlias}>
+            {savingAlias ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
           </Button>
         </div>
       </div>

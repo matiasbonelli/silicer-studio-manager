@@ -94,6 +94,15 @@ export default function SalesModule() {
   const qrTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const qrPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
+  // Estado del flujo "Cobrar con Transferencia"
+  const [transferWaiting, setTransferWaiting] = useState(false);
+  const [transferSaleId, setTransferSaleId] = useState<string | null>(null);
+  const [transferError, setTransferError] = useState<string | null>(null);
+  const [mpAlias, setMpAlias] = useState<string>('');
+  const transferChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
+  const transferTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const transferPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
   // Facturación diaria
   const [uninvoicedSales, setUninvoicedSales] = useState<SaleWithItems[]>([]);
   const [loadingUninvoiced, setLoadingUninvoiced] = useState(false);
@@ -190,7 +199,7 @@ export default function SalesModule() {
     const fetchData = async () => {
       const { data: { user } } = await supabase.auth.getUser();
 
-      const [invRes, studRes, pricingProductsRes, pricingConfigRes, recargoRes] = await Promise.all([
+      const [invRes, studRes, pricingProductsRes, pricingConfigRes, recargoRes, aliasRes] = await Promise.all([
         supabase.from('inventory').select('*').order('name'),
         supabase.from('students').select('*').order('last_name'),
         user
@@ -200,11 +209,13 @@ export default function SalesModule() {
           ? supabase.from('pricing_config').select('*').eq('user_id', user.id).maybeSingle()
           : Promise.resolve({ data: null }),
         supabase.from('app_settings').select('value').eq('key', 'recargo_percent').single(),
+        supabase.from('app_settings').select('value').eq('key', 'mp_alias').single(),
       ]);
 
       if (invRes.data) setInventory(invRes.data as InventoryItem[]);
       if (studRes.data) setStudents(studRes.data as Student[]);
       if (recargoRes.data) setRecargo(parseFloat(recargoRes.data.value) || 0);
+      if (aliasRes.data) setMpAlias(aliasRes.data.value);
 
       if (pricingProductsRes.data) {
         const map = new Map<string, PricingProduct>();
@@ -907,6 +918,116 @@ export default function SalesModule() {
     }, 4000);
   };
 
+  // Flujo "Cobrar con Transferencia" — detecta la transferencia entrante en la cuenta de MP
+  const cancelTransferSale = async () => {
+    if (transferChannelRef.current) {
+      transferChannelRef.current.unsubscribe();
+      transferChannelRef.current = null;
+    }
+    if (transferTimeoutRef.current) {
+      clearTimeout(transferTimeoutRef.current);
+      transferTimeoutRef.current = null;
+    }
+    if (transferPollRef.current) {
+      clearInterval(transferPollRef.current);
+      transferPollRef.current = null;
+    }
+    if (transferSaleId) {
+      await supabase.from('sale_items').delete().eq('sale_id', transferSaleId);
+      await supabase.from('sales').delete().eq('id', transferSaleId);
+    }
+    setTransferWaiting(false);
+    setTransferSaleId(null);
+    setTransferError(null);
+    const { data: newInv } = await supabase.from('inventory').select('*').order('name');
+    if (newInv) setInventory(newInv as InventoryItem[]);
+  };
+
+  const handleTransferSale = async () => {
+    if (cart.length === 0) {
+      toast({ title: 'Carrito vacío', description: 'Agregá productos al carrito', variant: 'destructive' });
+      return;
+    }
+
+    setLoading(true);
+
+    const { data: saleData, error: saleError } = await supabase
+      .from('sales')
+      .insert({
+        student_id: selectedStudent || null,
+        total_amount: total,
+        payment_method: 'transfer',
+        payment_status: 'pending',
+        paid_amount: 0,
+      })
+      .select()
+      .single();
+
+    if (saleError || !saleData) {
+      toast({ title: 'Error al registrar la venta', variant: 'destructive' });
+      setLoading(false);
+      return;
+    }
+
+    const saleItems = cart.map(c => ({
+      sale_id: saleData.id,
+      inventory_id: c.inventory.id,
+      quantity: c.quantity,
+      unit_price: getEffectivePrice(c),
+      is_customer_piece: c.isCustomerPiece,
+    }));
+
+    if (saleItems.length > 0) {
+      await supabase.from('sale_items').insert(saleItems);
+    }
+
+    const { data: newInv } = await supabase.from('inventory').select('*').order('name');
+    if (newInv) setInventory(newInv as InventoryItem[]);
+
+    setLoading(false);
+    setTransferSaleId(saleData.id);
+    setTransferError(null);
+    setTransferWaiting(true);
+
+    // Suscripción Realtime: escucha cuando se confirme el pago
+    const channel = supabase
+      .channel(`sale-transfer-${saleData.id}`)
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'sales', filter: `id=eq.${saleData.id}` },
+        async (payload) => {
+          const updated = payload.new as Sale;
+          if (updated.payment_status === 'paid') {
+            if (transferTimeoutRef.current) clearTimeout(transferTimeoutRef.current);
+            if (transferPollRef.current) clearInterval(transferPollRef.current);
+            transferPollRef.current = null;
+            channel.unsubscribe();
+            transferChannelRef.current = null;
+            setTransferWaiting(false);
+            setTransferSaleId(null);
+            toast({ title: '¡Pago confirmado!', description: `Total cobrado: ${formatCurrency(total)}` });
+            await fetchSalesHistory();
+            setCart([]);
+            setSelectedStudent('');
+          }
+        },
+      )
+      .subscribe();
+
+    transferChannelRef.current = channel;
+
+    // Timeout de 5 minutos
+    transferTimeoutRef.current = setTimeout(() => {
+      setTransferError('La transferencia no fue detectada en 5 minutos. Podés cancelar o seguir esperando.');
+    }, 5 * 60 * 1000);
+
+    // Polling: busca una transferencia entrante con el mismo monto
+    const since = saleData.created_at;
+    transferPollRef.current = setInterval(() => {
+      supabase.functions.invoke('mp-check-transfer-status', { body: { sale_id: saleData.id, amount: total, since } });
+    }, 4000);
+  };
+
   // Cargar ventas sin facturar al cambiar a la tab de facturación
   useEffect(() => {
     if (salesTab === 'invoicing') {
@@ -1289,6 +1410,19 @@ export default function SalesModule() {
                       <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Procesando...</>
                     ) : (
                       <><Smartphone className="w-4 h-4 mr-2" /> Cobrar con Point</>
+                    )}
+                  </Button>
+                ) : paymentMethod === 'transfer' ? (
+                  <Button
+                    className="w-full bg-[#009ee3] hover:bg-[#0082bd] border-[#009ee3] text-white"
+                    size="lg"
+                    onClick={handleTransferSale}
+                    disabled={loading || cart.length === 0}
+                  >
+                    {loading ? (
+                      <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Procesando...</>
+                    ) : (
+                      <><ArrowRightLeft className="w-4 h-4 mr-2" /> Cobrar con Transferencia</>
                     )}
                   </Button>
                 ) : (
@@ -1978,6 +2112,52 @@ export default function SalesModule() {
               variant="outline"
               className="w-full"
               onClick={cancelQrSale}
+            >
+              Cancelar y anular venta
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Overlay: Cobrar con Transferencia */}
+      <Dialog open={transferWaiting} onOpenChange={() => {}}>
+        <DialogContent className="max-w-sm" onInteractOutside={(e) => e.preventDefault()}>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <ArrowRightLeft className="w-5 h-5 text-[#009ee3]" />
+              Cobrar con Transferencia
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-5 py-2">
+            <div className="text-center">
+              <p className="text-4xl font-bold text-primary">{formatCurrency(total)}</p>
+              {mpAlias ? (
+                <p className="text-sm text-muted-foreground mt-1">
+                  Transferí a: <span className="font-semibold text-foreground">{mpAlias}</span>
+                </p>
+              ) : (
+                <p className="text-sm text-muted-foreground mt-1">
+                  Pasale tu alias de Mercado Pago al cliente
+                </p>
+              )}
+            </div>
+            {!transferError ? (
+              <div className="flex flex-col items-center gap-3 py-4">
+                <Loader2 className="w-8 h-8 animate-spin text-[#009ee3]" />
+                <p className="text-sm text-center text-muted-foreground">
+                  Esperando que ingrese la transferencia...
+                </p>
+              </div>
+            ) : (
+              <div className="flex flex-col items-center gap-3 py-2">
+                <XCircle className="w-8 h-8 text-destructive" />
+                <p className="text-sm text-center text-destructive">{transferError}</p>
+              </div>
+            )}
+            <Button
+              variant="outline"
+              className="w-full"
+              onClick={cancelTransferSale}
             >
               Cancelar y anular venta
             </Button>
