@@ -1,5 +1,5 @@
 export type PaymentStatus = 'paid' | 'pending' | 'partial';
-export type PaymentMethod = 'cash' | 'card' | 'transfer' | 'mercadopago';
+export type PaymentMethod = 'cash' | 'card' | 'transfer' | 'mercadopago' | 'debit_card' | 'credit_card';
 export type AppRole = 'admin' | 'user';
 export type Categoria = 'adulto' | 'niño';
 
@@ -78,8 +78,16 @@ export interface Sale {
   payment_status: PaymentStatus;
   receipt_url: string | null;
   notes: string | null;
+  mp_payment_id: string | null;
+  invoiced_at: string | null;
   created_at: string;
   student?: Student;
+}
+
+export interface AppSetting {
+  key: string;
+  value: string;
+  updated_at: string;
 }
 
 export interface SaleItem {
@@ -144,7 +152,9 @@ export const PAYMENT_METHOD_LABELS: Record<PaymentMethod, string> = {
   cash: 'Efectivo',
   card: 'Tarjeta',
   transfer: 'Transferencia',
-  mercadopago: 'MercadoPago',
+  mercadopago: 'MercadoPago (Point)',
+  debit_card: 'Tarjeta de Débito',
+  credit_card: 'Tarjeta de Crédito',
 };
 
 export const PRODUCT_CATEGORY_LABELS: Record<ProductCategory, string> = {

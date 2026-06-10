@@ -9,7 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
-import { Plus, Pencil, Trash2, Search, Loader2, AlertTriangle, ShoppingCart, Package, Tag, ImagePlus, X } from 'lucide-react';
+import { Plus, Pencil, Trash2, Search, Loader2, AlertTriangle, ShoppingCart, Package, Tag, ImagePlus, X, Percent, Save } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Switch } from '@/components/ui/switch';
@@ -65,6 +65,9 @@ export default function InventoryManager() {
   const imageInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
 
+  const [recargoInput, setRecargoInput] = useState<string>('1');
+  const [savingRecargo, setSavingRecargo] = useState(false);
+
   const fetchItems = async () => {
     setLoading(true);
     const { data } = await supabase
@@ -80,7 +83,33 @@ export default function InventoryManager() {
 
   useEffect(() => {
     fetchItems();
+    supabase
+      .from('app_settings')
+      .select('value')
+      .eq('key', 'recargo_percent')
+      .single()
+      .then(({ data }) => {
+        if (data) setRecargoInput(data.value);
+      });
   }, []);
+
+  const handleSaveRecargo = async () => {
+    const value = parseFloat(recargoInput);
+    if (isNaN(value) || value < 0 || value > 100) {
+      toast({ title: 'Ingresá un porcentaje válido (0–100)', variant: 'destructive' });
+      return;
+    }
+    setSavingRecargo(true);
+    const { error } = await supabase
+      .from('app_settings')
+      .upsert({ key: 'recargo_percent', value: String(value), updated_at: new Date().toISOString() });
+    if (error) {
+      toast({ title: 'Error al guardar recargo', variant: 'destructive' });
+    } else {
+      toast({ title: `Recargo actualizado a ${value}%` });
+    }
+    setSavingRecargo(false);
+  };
 
   const openModal = (item?: InventoryItem) => {
     if (item) {
@@ -234,6 +263,30 @@ export default function InventoryManager() {
 
   return (
     <div className="space-y-4">
+      {/* Panel de configuración global */}
+      <div className="flex items-center gap-3 p-3 rounded-lg border bg-card">
+        <Percent className="w-4 h-4 text-muted-foreground shrink-0" />
+        <div className="flex-1">
+          <p className="text-sm font-medium">Recargo por método de pago</p>
+          <p className="text-xs text-muted-foreground">Aplica a todas las ventas del sistema</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <Input
+            type="number"
+            min="0"
+            max="100"
+            step="0.1"
+            value={recargoInput}
+            onChange={(e) => setRecargoInput(e.target.value)}
+            className="w-20 text-right"
+          />
+          <span className="text-sm font-medium text-muted-foreground">%</span>
+          <Button size="sm" onClick={handleSaveRecargo} disabled={savingRecargo}>
+            {savingRecargo ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+          </Button>
+        </div>
+      </div>
+
       <Tabs value={inventoryTab} onValueChange={setInventoryTab}>
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <TabsList>

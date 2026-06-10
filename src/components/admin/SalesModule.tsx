@@ -14,7 +14,7 @@ import { ChevronsUpDown, Check } from 'lucide-react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
-import { Plus, Minus, Trash2, ShoppingCart, Printer, Loader2, Search, History, TrendingUp, CalendarDays, DollarSign, Pencil, Upload, FileText, ExternalLink, UserSquare, MessageCircle } from 'lucide-react';
+import { Plus, Minus, Trash2, ShoppingCart, Printer, Loader2, Search, History, TrendingUp, CalendarDays, DollarSign, Pencil, Upload, FileText, ExternalLink, UserSquare, MessageCircle, Banknote, ArrowRightLeft, CreditCard, Smartphone, Receipt, CheckCircle2, XCircle, Clock } from 'lucide-react';
 import { whatsAppChatUrl } from '@/lib/whatsapp';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
@@ -71,6 +71,22 @@ export default function SalesModule() {
   const historyFileInputRef = useRef<HTMLInputElement>(null);
   const [uploadingSaleId, setUploadingSaleId] = useState<string | null>(null);
   const [studentComboOpen, setStudentComboOpen] = useState(false);
+
+  // Recargo global (cargado desde app_settings)
+  const [recargo, setRecargo] = useState<number>(1);
+
+  // Estado del flujo "Cobrar con Point"
+  const [pointWaiting, setPointWaiting] = useState(false);
+  const [pointSaleId, setPointSaleId] = useState<string | null>(null);
+  const [pointError, setPointError] = useState<string | null>(null);
+  const pointChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
+  const pointTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pointPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // Facturación diaria
+  const [uninvoicedSales, setUninvoicedSales] = useState<SaleWithItems[]>([]);
+  const [loadingUninvoiced, setLoadingUninvoiced] = useState(false);
+  const [markingInvoiced, setMarkingInvoiced] = useState(false);
 
   // Datos de pricing para recalcular precio cuando "pieza del cliente" está activo
   const [pricingConfig, setPricingConfig] = useState<PricingConfig | null>(null);
@@ -163,7 +179,7 @@ export default function SalesModule() {
     const fetchData = async () => {
       const { data: { user } } = await supabase.auth.getUser();
 
-      const [invRes, studRes, pricingProductsRes, pricingConfigRes] = await Promise.all([
+      const [invRes, studRes, pricingProductsRes, pricingConfigRes, recargoRes] = await Promise.all([
         supabase.from('inventory').select('*').order('name'),
         supabase.from('students').select('*').order('last_name'),
         user
@@ -172,10 +188,12 @@ export default function SalesModule() {
         user
           ? supabase.from('pricing_config').select('*').eq('user_id', user.id).maybeSingle()
           : Promise.resolve({ data: null }),
+        supabase.from('app_settings').select('value').eq('key', 'recargo_percent').single(),
       ]);
 
       if (invRes.data) setInventory(invRes.data as InventoryItem[]);
       if (studRes.data) setStudents(studRes.data as Student[]);
+      if (recargoRes.data) setRecargo(parseFloat(recargoRes.data.value) || 0);
 
       if (pricingProductsRes.data) {
         const map = new Map<string, PricingProduct>();
@@ -302,7 +320,9 @@ export default function SalesModule() {
     setCart(prev => prev.filter(c => c.inventory.id !== itemId));
   };
 
-  const total = cart.reduce((sum, c) => sum + getEffectivePrice(c) * c.quantity, 0);
+  const subtotal = cart.reduce((sum, c) => sum + getEffectivePrice(c) * c.quantity, 0);
+  const recargoAmount = Math.round(subtotal * recargo / 100);
+  const total = subtotal + recargoAmount;
 
   const handleSale = async () => {
     if (cart.length === 0) {
@@ -568,6 +588,188 @@ export default function SalesModule() {
     }
   };
 
+  // Facturación diaria
+  const fetchUninvoicedSales = async () => {
+    setLoadingUninvoiced(true);
+    const today = new Date();
+    const startOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate()).toISOString();
+    const endOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1).toISOString();
+
+    const { data } = await supabase
+      .from('sales')
+      .select('*, student:students(*), sale_items(*, inventory:inventory(*))')
+      .is('invoiced_at', null)
+      .eq('payment_status', 'paid')
+      .gte('created_at', startOfDay)
+      .lt('created_at', endOfDay)
+      .order('created_at', { ascending: false });
+
+    if (data) setUninvoicedSales(data as SaleWithItems[]);
+    setLoadingUninvoiced(false);
+  };
+
+  const handleMarkLoteInvoiced = async () => {
+    if (uninvoicedSales.length === 0) return;
+    setMarkingInvoiced(true);
+    const ids = uninvoicedSales.map(s => s.id);
+    const { error } = await supabase
+      .from('sales')
+      .update({ invoiced_at: new Date().toISOString() })
+      .in('id', ids);
+    if (error) {
+      toast({ title: 'Error al marcar el lote', variant: 'destructive' });
+    } else {
+      toast({ title: `${ids.length} venta${ids.length !== 1 ? 's' : ''} marcada${ids.length !== 1 ? 's' : ''} como facturada${ids.length !== 1 ? 's' : ''}` });
+      await fetchUninvoicedSales();
+      await fetchSalesHistory();
+    }
+    setMarkingInvoiced(false);
+  };
+
+  const handleMarkOneInvoiced = async (saleId: string) => {
+    const { error } = await supabase
+      .from('sales')
+      .update({ invoiced_at: new Date().toISOString() })
+      .eq('id', saleId);
+    if (error) {
+      toast({ title: 'Error al facturar', variant: 'destructive' });
+    } else {
+      toast({ title: 'Venta marcada como facturada' });
+      await fetchSalesHistory();
+      if (salesTab === 'invoicing') await fetchUninvoicedSales();
+    }
+  };
+
+  // Flujo "Cobrar con Point" — Mercado Pago
+  const cancelPointPayment = async () => {
+    if (pointChannelRef.current) {
+      pointChannelRef.current.unsubscribe();
+      pointChannelRef.current = null;
+    }
+    if (pointTimeoutRef.current) {
+      clearTimeout(pointTimeoutRef.current);
+      pointTimeoutRef.current = null;
+    }
+    if (pointPollRef.current) {
+      clearInterval(pointPollRef.current);
+      pointPollRef.current = null;
+    }
+    if (pointSaleId) {
+      await supabase.from('sale_items').delete().eq('sale_id', pointSaleId);
+      await supabase.from('sales').delete().eq('id', pointSaleId);
+    }
+    setPointWaiting(false);
+    setPointSaleId(null);
+    setPointError(null);
+    const { data: newInv } = await supabase.from('inventory').select('*').order('name');
+    if (newInv) setInventory(newInv as InventoryItem[]);
+  };
+
+  const handlePointSale = async () => {
+    if (cart.length === 0) {
+      toast({ title: 'Carrito vacío', description: 'Agregá productos al carrito', variant: 'destructive' });
+      return;
+    }
+
+    setLoading(true);
+
+    const { data: saleData, error: saleError } = await supabase
+      .from('sales')
+      .insert({
+        student_id: selectedStudent || null,
+        total_amount: total,
+        payment_method: 'mercadopago',
+        payment_status: 'pending',
+        paid_amount: 0,
+      })
+      .select()
+      .single();
+
+    if (saleError || !saleData) {
+      toast({ title: 'Error al registrar la venta', variant: 'destructive' });
+      setLoading(false);
+      return;
+    }
+
+    const saleItems = cart.map(c => ({
+      sale_id: saleData.id,
+      inventory_id: c.inventory.id,
+      quantity: c.quantity,
+      unit_price: getEffectivePrice(c),
+      is_customer_piece: c.isCustomerPiece,
+    }));
+
+    if (saleItems.length > 0) {
+      await supabase.from('sale_items').insert(saleItems);
+    }
+
+    const { data: newInv } = await supabase.from('inventory').select('*').order('name');
+    if (newInv) setInventory(newInv as InventoryItem[]);
+
+    setLoading(false);
+    setPointSaleId(saleData.id);
+    setPointError(null);
+    setPointWaiting(true);
+
+    // Suscripción Realtime: escucha cuando el webhook confirme el pago
+    const channel = supabase
+      .channel(`sale-point-${saleData.id}`)
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'sales', filter: `id=eq.${saleData.id}` },
+        async (payload) => {
+          const updated = payload.new as Sale;
+          if (updated.payment_status === 'paid') {
+            if (pointTimeoutRef.current) clearTimeout(pointTimeoutRef.current);
+            if (pointPollRef.current) clearInterval(pointPollRef.current);
+            pointPollRef.current = null;
+            channel.unsubscribe();
+            pointChannelRef.current = null;
+            setPointWaiting(false);
+            setPointSaleId(null);
+            toast({ title: '¡Pago confirmado!', description: `Total cobrado: ${formatCurrency(total)}` });
+            await fetchSalesHistory();
+            setCart([]);
+            setSelectedStudent('');
+          }
+        },
+      )
+      .subscribe();
+
+    pointChannelRef.current = channel;
+
+    // Timeout de 5 minutos
+    pointTimeoutRef.current = setTimeout(() => {
+      setPointError('El pago no fue confirmado en 5 minutos. Podés cancelar o seguir esperando.');
+    }, 5 * 60 * 1000);
+
+    // Enviar la orden al Point Smart vía Edge Function
+    try {
+      const { error: fnError } = await supabase.functions.invoke('mp-create-payment-intent', {
+        body: { sale_id: saleData.id, amount: total },
+      });
+      if (fnError) {
+        setPointError('No se pudo enviar la orden al Point. Verificá la configuración de Mercado Pago.');
+      }
+    } catch {
+      setPointError('Error de conexión con Mercado Pago.');
+    }
+
+    // Mercado Pago no entrega webhooks de forma confiable para Point en esta cuenta,
+    // así que se consulta el estado del pago periódicamente como respaldo.
+    pointPollRef.current = setInterval(() => {
+      supabase.functions.invoke('mp-check-payment-status', { body: { sale_id: saleData.id } });
+    }, 4000);
+  };
+
+  // Cargar ventas sin facturar al cambiar a la tab de facturación
+  useEffect(() => {
+    if (salesTab === 'invoicing') {
+      fetchUninvoicedSales();
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [salesTab]);
+
   // Productos disponibles para venta
   const allProducts = inventory.filter(item => item.quantity > 0 && item.for_sale);
 
@@ -658,6 +860,10 @@ export default function SalesModule() {
         <TabsTrigger value="stats" className="flex items-center gap-1.5">
           <TrendingUp className="w-4 h-4" />
           Resumen
+        </TabsTrigger>
+        <TabsTrigger value="invoicing" className="flex items-center gap-1.5">
+          <Receipt className="w-4 h-4" />
+          Facturación
         </TabsTrigger>
       </TabsList>
 
@@ -864,25 +1070,74 @@ export default function SalesModule() {
 
                 <div className="space-y-2">
                   <Label>Método de Pago</Label>
-                  <Select value={paymentMethod} onValueChange={(v: PaymentMethod) => setPaymentMethod(v)}>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {Object.entries(PAYMENT_METHOD_LABELS).map(([key, label]) => (
-                        <SelectItem key={key} value={key}>{label}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <div className="grid grid-cols-2 gap-2">
+                    {(
+                      [
+                        { value: 'cash', label: 'Efectivo', Icon: Banknote },
+                        { value: 'transfer', label: 'Transferencia', Icon: ArrowRightLeft },
+                        { value: 'debit_card', label: 'T. Débito', Icon: CreditCard },
+                        { value: 'credit_card', label: 'T. Crédito', Icon: CreditCard },
+                      ] as const
+                    ).map(({ value, label, Icon }) => (
+                      <Button
+                        key={value}
+                        type="button"
+                        variant={paymentMethod === value ? 'default' : 'outline'}
+                        size="sm"
+                        className="flex flex-col h-auto py-2 gap-1"
+                        onClick={() => setPaymentMethod(value)}
+                      >
+                        <Icon className="w-4 h-4" />
+                        <span className="text-xs leading-none">{label}</span>
+                      </Button>
+                    ))}
+                  </div>
+                  <Button
+                    type="button"
+                    variant={paymentMethod === 'mercadopago' ? 'default' : 'outline'}
+                    size="sm"
+                    className={`w-full flex items-center gap-2 transition-colors ${paymentMethod === 'mercadopago' ? 'bg-[#009ee3] hover:bg-[#0082bd] border-[#009ee3] text-white' : 'hover:border-[#009ee3] hover:text-[#009ee3]'}`}
+                    onClick={() => setPaymentMethod('mercadopago')}
+                  >
+                    <Smartphone className="w-4 h-4" />
+                    <span>Mercado Pago — Point</span>
+                  </Button>
                 </div>
 
-                <div className="text-right text-2xl font-bold text-primary">
-                  Total: {formatCurrency(total)}
+                {/* Desglose de recargo y total */}
+                <div className="rounded-md bg-muted/50 p-3 space-y-1.5 text-sm">
+                  <div className="flex justify-between text-muted-foreground">
+                    <span>Subtotal</span>
+                    <span>{formatCurrency(subtotal)}</span>
+                  </div>
+                  <div className="flex justify-between text-muted-foreground">
+                    <span>Recargo ({recargo}%)</span>
+                    <span>{formatCurrency(recargoAmount)}</span>
+                  </div>
+                  <div className="flex justify-between font-bold text-primary text-lg border-t pt-1.5">
+                    <span>Total</span>
+                    <span>{formatCurrency(total)}</span>
+                  </div>
                 </div>
 
-                <Button className="w-full" size="lg" onClick={handleSale} disabled={loading || cart.length === 0}>
-                  {loading ? 'Procesando...' : 'Registrar Venta'}
-                </Button>
+                {paymentMethod !== 'cash' && paymentMethod !== 'transfer' ? (
+                  <Button
+                    className="w-full bg-[#009ee3] hover:bg-[#0082bd] border-[#009ee3] text-white"
+                    size="lg"
+                    onClick={handlePointSale}
+                    disabled={loading || cart.length === 0}
+                  >
+                    {loading ? (
+                      <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Procesando...</>
+                    ) : (
+                      <><Smartphone className="w-4 h-4 mr-2" /> Cobrar con Point</>
+                    )}
+                  </Button>
+                ) : (
+                  <Button className="w-full" size="lg" onClick={handleSale} disabled={loading || cart.length === 0}>
+                    {loading ? 'Procesando...' : 'Registrar Venta'}
+                  </Button>
+                )}
               </div>
             </CardContent>
           </Card>
@@ -956,6 +1211,7 @@ export default function SalesModule() {
                   <TableHead>Método</TableHead>
                   <TableHead className="text-center">Estado Pago</TableHead>
                   <TableHead className="text-center">Comprobante</TableHead>
+                  <TableHead className="text-center">Factura</TableHead>
                   <TableHead className="text-right">Total</TableHead>
                   <TableHead></TableHead>
                 </TableRow>
@@ -1079,6 +1335,21 @@ export default function SalesModule() {
                         </label>
                       )}
                     </TableCell>
+                    <TableCell className="text-center">
+                      {sale.invoiced_at ? (
+                        <CheckCircle2 className="w-4 h-4 text-green-500 mx-auto" title={`Facturada el ${formatDate(sale.invoiced_at)}`} />
+                      ) : (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="text-muted-foreground hover:text-primary h-auto p-1"
+                          title="Marcar como facturada"
+                          onClick={() => handleMarkOneInvoiced(sale.id)}
+                        >
+                          <Clock className="w-4 h-4" />
+                        </Button>
+                      )}
+                    </TableCell>
                     <TableCell className="text-right font-bold">{formatCurrency(sale.total_amount)}</TableCell>
                     <TableCell>
                       <div className="flex gap-1">
@@ -1111,7 +1382,7 @@ export default function SalesModule() {
                 ))}
                 {filteredSalesHistory.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={10} className="text-center text-muted-foreground py-8">
+                    <TableCell colSpan={11} className="text-center text-muted-foreground py-8">
                       No hay ventas registradas
                     </TableCell>
                   </TableRow>
@@ -1358,6 +1629,157 @@ export default function SalesModule() {
           </Card>
         </div>
       </TabsContent>
+
+      {/* Facturación Tab */}
+      <TabsContent value="invoicing">
+        <div className="space-y-4">
+          <div className="rounded-lg border bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800 p-4 text-sm text-amber-800 dark:text-amber-300 flex gap-3 items-start">
+            <Receipt className="w-5 h-5 shrink-0 mt-0.5" />
+            <div>
+              <p className="font-medium">Facturación manual en AFIP</p>
+              <p className="mt-1">Este resumen agrupa las ventas de hoy sin factura emitida. Una vez cargada en AFIP, marcá el lote como facturado.</p>
+              <p className="mt-1 font-medium">Tipo de comprobante: Factura C — Consumidor Final</p>
+            </div>
+          </div>
+
+          {loadingUninvoiced ? (
+            <div className="flex justify-center py-12">
+              <Loader2 className="w-6 h-6 animate-spin text-primary" />
+            </div>
+          ) : (
+            <>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div className="rounded-lg border bg-card p-4 text-center">
+                  <p className="text-3xl font-bold text-primary">{uninvoicedSales.length}</p>
+                  <p className="text-sm text-muted-foreground mt-1">Ventas sin facturar hoy</p>
+                </div>
+                <div className="rounded-lg border bg-card p-4 text-center sm:col-span-2">
+                  <p className="text-3xl font-bold text-primary">
+                    {formatCurrency(uninvoicedSales.reduce((s, v) => s + v.total_amount, 0))}
+                  </p>
+                  <p className="text-sm text-muted-foreground mt-1">Total a consignar en Factura C</p>
+                </div>
+              </div>
+
+              {uninvoicedSales.length > 0 && (
+                <>
+                  <div className="space-y-1.5">
+                    <Button
+                      variant="outline"
+                      className="w-full gap-2"
+                      onClick={() => {
+                        const amount = uninvoicedSales.reduce((s, v) => s + v.total_amount, 0);
+                        navigator.clipboard.writeText(String(Math.round(amount)));
+                        window.open('https://auth.afip.gob.ar/contribuyente_/login.xhtml?action=SYSTEM&system=rcel', '_blank', 'noopener,noreferrer');
+                        toast({ title: `Monto copiado: ${formatCurrency(amount)}`, description: 'Pegalo en el campo "Importe" dentro de AFIP' });
+                      }}
+                    >
+                      <ExternalLink className="w-4 h-4" />
+                      Ir a Comprobantes en línea (AFIP) y copiar monto
+                    </Button>
+                    <p className="text-xs text-muted-foreground text-center">
+                      Se abre Comprobantes en línea (AFIP). Ingresá con CUIT y clave fiscal — el monto ya está copiado en el portapapeles.
+                    </p>
+                  </div>
+
+                  <div className="rounded-lg border bg-card overflow-x-auto">
+                    <Table className="min-w-[500px]">
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Hora</TableHead>
+                          <TableHead>Productos</TableHead>
+                          <TableHead>Cliente</TableHead>
+                          <TableHead>Método</TableHead>
+                          <TableHead className="text-right">Total</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {uninvoicedSales.map(sale => (
+                          <TableRow key={sale.id}>
+                            <TableCell className="text-sm text-muted-foreground">
+                              {new Date(sale.created_at).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })}
+                            </TableCell>
+                            <TableCell className="text-sm">
+                              {sale.sale_items?.map(i => i.inventory?.name).filter(Boolean).join(', ') || '-'}
+                            </TableCell>
+                            <TableCell className="text-sm">
+                              {sale.student ? `${sale.student.first_name} ${sale.student.last_name}` : '-'}
+                            </TableCell>
+                            <TableCell>
+                              <Badge variant="secondary">{PAYMENT_METHOD_LABELS[sale.payment_method]}</Badge>
+                            </TableCell>
+                            <TableCell className="text-right font-medium">{formatCurrency(sale.total_amount)}</TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+
+                  <Button
+                    className="w-full"
+                    size="lg"
+                    onClick={handleMarkLoteInvoiced}
+                    disabled={markingInvoiced}
+                  >
+                    {markingInvoiced ? (
+                      <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Procesando...</>
+                    ) : (
+                      <><CheckCircle2 className="w-4 h-4 mr-2" /> Marcar lote como facturado ({uninvoicedSales.length} ventas)</>
+                    )}
+                  </Button>
+                </>
+              )}
+
+              {uninvoicedSales.length === 0 && (
+                <div className="flex flex-col items-center gap-3 py-16 text-muted-foreground">
+                  <CheckCircle2 className="w-10 h-10 text-green-500 opacity-60" />
+                  <p className="font-medium">Todo facturado</p>
+                  <p className="text-sm">No hay ventas de hoy sin factura emitida.</p>
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      </TabsContent>
+
+      {/* Overlay: Esperando confirmación del Point */}
+      <Dialog open={pointWaiting} onOpenChange={() => {}}>
+        <DialogContent className="max-w-sm" onInteractOutside={(e) => e.preventDefault()}>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Smartphone className="w-5 h-5 text-[#009ee3]" />
+              Cobrar con Point — {PAYMENT_METHOD_LABELS[paymentMethod]}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-5 py-2">
+            <div className="text-center">
+              <p className="text-4xl font-bold text-primary">{formatCurrency(total)}</p>
+              <p className="text-sm text-muted-foreground mt-1">Monto enviado al dispositivo</p>
+            </div>
+            {!pointError ? (
+              <div className="flex flex-col items-center gap-3 py-4">
+                <Loader2 className="w-8 h-8 animate-spin text-[#009ee3]" />
+                <p className="text-sm text-center text-muted-foreground">
+                  El Point está listo para cobrar.<br />
+                  Esperando que el cliente pague...
+                </p>
+              </div>
+            ) : (
+              <div className="flex flex-col items-center gap-3 py-2">
+                <XCircle className="w-8 h-8 text-destructive" />
+                <p className="text-sm text-center text-destructive">{pointError}</p>
+              </div>
+            )}
+            <Button
+              variant="outline"
+              className="w-full"
+              onClick={cancelPointPayment}
+            >
+              Cancelar y anular venta
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Payment Modal (shows after sale) */}
       <Dialog open={showPaymentModal} onOpenChange={(open) => {
