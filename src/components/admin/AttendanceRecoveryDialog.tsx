@@ -71,9 +71,9 @@ export default function AttendanceRecoveryDialog({
   const [recoverableAbsences, setRecoverableAbsences] = useState<Attendance[]>([]);
   const [loadingAbsences, setLoadingAbsences] = useState(false);
 
-  // Alumnos ya en el slot/fecha (excluye solo los no-ausentes, porque ausente puede recuperar)
-  const [takenStudentIds, setTakenStudentIds] = useState<Set<string>>(new Set());
-  const [loadingTaken, setLoadingTaken] = useState(false);
+  // Asistencia del día elegido (todos los horarios), para calcular cupos reales y alumnos ya tomados
+  const [dayAttendance, setDayAttendance] = useState<{ student_id: string; schedule_id: string; status: string }[]>([]);
+  const [loadingDayAttendance, setLoadingDayAttendance] = useState(false);
 
   // -------------------------------------------------------------------------
   // Reset al abrir
@@ -87,7 +87,7 @@ export default function AttendanceRecoveryDialog({
     setSelectedAbsenceDate(initialAbsenceDate ?? '');
     setNotes('');
     setRecoverableAbsences([]);
-    setTakenStudentIds(new Set());
+    setDayAttendance([]);
   }, [isOpen]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Al cambiar de modo, limpiar alumno/ausencia (solo si no hay pre-selección)
@@ -137,34 +137,63 @@ export default function AttendanceRecoveryDialog({
   }, [recoveryDate]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // -------------------------------------------------------------------------
-  // Alumnos ya presentes (no-ausentes) en el slot/fecha elegidos
+  // Asistencia del día elegido (todos los horarios), para cupos reales y alumnos tomados
   // -------------------------------------------------------------------------
   useEffect(() => {
-    if (!selectedScheduleId || !recoveryDate) {
-      setTakenStudentIds(new Set());
+    if (!recoveryDate) {
+      setDayAttendance([]);
       return;
     }
     const fetch = async () => {
-      setLoadingTaken(true);
+      setLoadingDayAttendance(true);
       const { data } = await supabase
         .from('attendance')
-        .select('student_id, status')
-        .eq('class_date', recoveryDate)
-        .eq('schedule_id', selectedScheduleId);
+        .select('student_id, schedule_id, status')
+        .eq('class_date', recoveryDate);
       if (data) {
-        // Solo excluir a quienes ya están efectivamente presentes (no ausentes)
-        setTakenStudentIds(
-          new Set(
-            (data as { student_id: string; status: string }[])
-              .filter((r) => r.status !== 'absent')
-              .map((r) => r.student_id)
-          )
-        );
+        setDayAttendance(data as { student_id: string; schedule_id: string; status: string }[]);
       }
-      setLoadingTaken(false);
+      setLoadingDayAttendance(false);
     };
     fetch();
-  }, [selectedScheduleId, recoveryDate]);
+  }, [recoveryDate]);
+
+  // Alumnos ya presentes (no-ausentes) en el horario seleccionado para esa fecha
+  const takenStudentIds = new Set(
+    dayAttendance
+      .filter((a) => a.schedule_id === selectedScheduleId && a.status !== 'absent')
+      .map((a) => a.student_id)
+  );
+
+  // -------------------------------------------------------------------------
+  // Cupos reales ocupados de un horario para recoveryDate:
+  // alumnos habituales que asisten ese día (sin contar ausentes/movidos a otro horario)
+  // + alumnos externos con recuperación/cambio de día hacia ese horario
+  // -------------------------------------------------------------------------
+  const getOccupiedCount = (scheduleId: string) => {
+    const baseRoster = allStudents.filter((s) => s.schedule_id === scheduleId);
+    const baseRosterIds = new Set(baseRoster.map((s) => s.id));
+
+    let occupied = 0;
+    for (const s of baseRoster) {
+      const record = dayAttendance.find((a) => a.student_id === s.id);
+      if (!record) {
+        occupied += 1; // sin novedades, asiste normalmente
+      } else if (record.schedule_id === scheduleId && record.status !== 'absent') {
+        occupied += 1; // sigue asistiendo a este horario
+      }
+      // si está ausente o se movió a otro horario, libera el cupo acá
+    }
+
+    for (const a of dayAttendance) {
+      if (a.schedule_id === scheduleId && !baseRosterIds.has(a.student_id) &&
+          (a.status === 'recovery' || a.status === 'day_switch')) {
+        occupied += 1; // alumno externo que ocupa un cupo este día
+      }
+    }
+
+    return occupied;
+  };
 
   // -------------------------------------------------------------------------
   // Alumnos elegibles para el selector
@@ -412,12 +441,18 @@ export default function AttendanceRecoveryDialog({
                   <SelectValue placeholder="Seleccioná un horario..." />
                 </SelectTrigger>
                 <SelectContent>
-                  {schedulesForDay.map((sc) => (
-                    <SelectItem key={sc.id} value={sc.id}>
-                      {sc.start_time.slice(0, 5)} – {sc.end_time.slice(0, 5)}
-                      <span className="text-muted-foreground ml-1">({sc.max_capacity} máx.)</span>
-                    </SelectItem>
-                  ))}
+                  {schedulesForDay.map((sc) => {
+                    const occupied = getOccupiedCount(sc.id);
+                    const isFull = occupied >= sc.max_capacity;
+                    return (
+                      <SelectItem key={sc.id} value={sc.id}>
+                        {sc.start_time.slice(0, 5)} – {sc.end_time.slice(0, 5)}
+                        <span className={isFull ? 'text-destructive ml-1' : 'text-muted-foreground ml-1'}>
+                          ({occupied}/{sc.max_capacity}{isFull ? ' · sin cupo' : ''})
+                        </span>
+                      </SelectItem>
+                    );
+                  })}
                 </SelectContent>
               </Select>
             )}
@@ -427,7 +462,7 @@ export default function AttendanceRecoveryDialog({
           {!fromStudent && selectedScheduleId && (
             <div className="space-y-1.5">
               <Label>Alumno</Label>
-              {loadingTaken ? (
+              {loadingDayAttendance ? (
                 <div className="flex items-center gap-2 text-sm text-muted-foreground">
                   <Loader2 className="w-4 h-4 animate-spin" /> Cargando...
                 </div>
