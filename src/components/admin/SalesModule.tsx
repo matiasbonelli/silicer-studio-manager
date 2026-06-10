@@ -14,8 +14,9 @@ import { ChevronsUpDown, Check } from 'lucide-react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
-import { Plus, Minus, Trash2, ShoppingCart, Printer, Loader2, Search, History, TrendingUp, CalendarDays, DollarSign, Pencil, Upload, FileText, ExternalLink, UserSquare, MessageCircle, Banknote, ArrowRightLeft, CreditCard, Smartphone, Receipt, CheckCircle2, XCircle, Clock } from 'lucide-react';
+import { Plus, Minus, Trash2, ShoppingCart, Printer, Loader2, Search, History, TrendingUp, CalendarDays, DollarSign, Pencil, Upload, FileText, ExternalLink, UserSquare, MessageCircle, Banknote, ArrowRightLeft, CreditCard, Smartphone, QrCode, Receipt, CheckCircle2, XCircle, Clock } from 'lucide-react';
 import { whatsAppChatUrl } from '@/lib/whatsapp';
+import { QRCodeSVG } from 'qrcode.react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -82,6 +83,16 @@ export default function SalesModule() {
   const pointChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
   const pointTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pointPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // Estado del flujo "Cobrar con QR"
+  const [qrWaiting, setQrWaiting] = useState(false);
+  const [qrSaleId, setQrSaleId] = useState<string | null>(null);
+  const [qrOrderId, setQrOrderId] = useState<string | null>(null);
+  const [qrData, setQrData] = useState<string | null>(null);
+  const [qrError, setQrError] = useState<string | null>(null);
+  const qrChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
+  const qrTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const qrPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Facturación diaria
   const [uninvoicedSales, setUninvoicedSales] = useState<SaleWithItems[]>([]);
@@ -762,6 +773,140 @@ export default function SalesModule() {
     }, 4000);
   };
 
+  // Flujo "Cobrar con QR" — Mercado Pago (orden híbrida vía Orders API)
+  const cancelQrSale = async () => {
+    if (qrChannelRef.current) {
+      qrChannelRef.current.unsubscribe();
+      qrChannelRef.current = null;
+    }
+    if (qrTimeoutRef.current) {
+      clearTimeout(qrTimeoutRef.current);
+      qrTimeoutRef.current = null;
+    }
+    if (qrPollRef.current) {
+      clearInterval(qrPollRef.current);
+      qrPollRef.current = null;
+    }
+    if (qrSaleId) {
+      await supabase.from('sale_items').delete().eq('sale_id', qrSaleId);
+      await supabase.from('sales').delete().eq('id', qrSaleId);
+    }
+    setQrWaiting(false);
+    setQrSaleId(null);
+    setQrOrderId(null);
+    setQrData(null);
+    setQrError(null);
+    const { data: newInv } = await supabase.from('inventory').select('*').order('name');
+    if (newInv) setInventory(newInv as InventoryItem[]);
+  };
+
+  const handleQrSale = async () => {
+    if (cart.length === 0) {
+      toast({ title: 'Carrito vacío', description: 'Agregá productos al carrito', variant: 'destructive' });
+      return;
+    }
+
+    setLoading(true);
+
+    const { data: saleData, error: saleError } = await supabase
+      .from('sales')
+      .insert({
+        student_id: selectedStudent || null,
+        total_amount: total,
+        payment_method: 'mercadopago',
+        payment_status: 'pending',
+        paid_amount: 0,
+      })
+      .select()
+      .single();
+
+    if (saleError || !saleData) {
+      toast({ title: 'Error al registrar la venta', variant: 'destructive' });
+      setLoading(false);
+      return;
+    }
+
+    const saleItems = cart.map(c => ({
+      sale_id: saleData.id,
+      inventory_id: c.inventory.id,
+      quantity: c.quantity,
+      unit_price: getEffectivePrice(c),
+      is_customer_piece: c.isCustomerPiece,
+    }));
+
+    if (saleItems.length > 0) {
+      await supabase.from('sale_items').insert(saleItems);
+    }
+
+    const { data: newInv } = await supabase.from('inventory').select('*').order('name');
+    if (newInv) setInventory(newInv as InventoryItem[]);
+
+    setLoading(false);
+    setQrSaleId(saleData.id);
+    setQrOrderId(null);
+    setQrData(null);
+    setQrError(null);
+    setQrWaiting(true);
+
+    // Suscripción Realtime: escucha cuando se confirme el pago
+    const channel = supabase
+      .channel(`sale-qr-${saleData.id}`)
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'sales', filter: `id=eq.${saleData.id}` },
+        async (payload) => {
+          const updated = payload.new as Sale;
+          if (updated.payment_status === 'paid') {
+            if (qrTimeoutRef.current) clearTimeout(qrTimeoutRef.current);
+            if (qrPollRef.current) clearInterval(qrPollRef.current);
+            qrPollRef.current = null;
+            channel.unsubscribe();
+            qrChannelRef.current = null;
+            setQrWaiting(false);
+            setQrSaleId(null);
+            setQrOrderId(null);
+            setQrData(null);
+            toast({ title: '¡Pago confirmado!', description: `Total cobrado: ${formatCurrency(total)}` });
+            await fetchSalesHistory();
+            setCart([]);
+            setSelectedStudent('');
+          }
+        },
+      )
+      .subscribe();
+
+    qrChannelRef.current = channel;
+
+    // Timeout de 5 minutos
+    qrTimeoutRef.current = setTimeout(() => {
+      setQrError('El pago no fue confirmado en 5 minutos. Podés cancelar o seguir esperando.');
+    }, 5 * 60 * 1000);
+
+    // Crear la orden QR híbrida (QR estático de la caja + QR dinámico)
+    let orderId: string | null = null;
+    try {
+      const { data: fnData, error: fnError } = await supabase.functions.invoke('mp-create-qr-order', {
+        body: { sale_id: saleData.id, amount: total },
+      });
+      if (fnError || !fnData?.success) {
+        setQrError('No se pudo generar el código QR. Verificá la configuración de Mercado Pago.');
+      } else {
+        orderId = fnData.order_id;
+        setQrOrderId(fnData.order_id);
+        setQrData(fnData.qr_data ?? null);
+      }
+    } catch {
+      setQrError('Error de conexión con Mercado Pago.');
+    }
+
+    if (!orderId) return;
+
+    // Polling de respaldo: consulta el estado de la orden cada 4s
+    qrPollRef.current = setInterval(() => {
+      supabase.functions.invoke('mp-check-qr-order-status', { body: { sale_id: saleData.id, order_id: orderId } });
+    }, 4000);
+  };
+
   // Cargar ventas sin facturar al cambiar a la tab de facturación
   useEffect(() => {
     if (salesTab === 'invoicing') {
@@ -1099,8 +1244,8 @@ export default function SalesModule() {
                     className={`w-full flex items-center gap-2 transition-colors ${paymentMethod === 'mercadopago' ? 'bg-[#009ee3] hover:bg-[#0082bd] border-[#009ee3] text-white' : 'hover:border-[#009ee3] hover:text-[#009ee3]'}`}
                     onClick={() => setPaymentMethod('mercadopago')}
                   >
-                    <Smartphone className="w-4 h-4" />
-                    <span>Mercado Pago — Point</span>
+                    <QrCode className="w-4 h-4" />
+                    <span>Mercado Pago — QR</span>
                   </Button>
                 </div>
 
@@ -1120,7 +1265,20 @@ export default function SalesModule() {
                   </div>
                 </div>
 
-                {paymentMethod !== 'cash' && paymentMethod !== 'transfer' ? (
+                {paymentMethod === 'mercadopago' ? (
+                  <Button
+                    className="w-full bg-[#009ee3] hover:bg-[#0082bd] border-[#009ee3] text-white"
+                    size="lg"
+                    onClick={handleQrSale}
+                    disabled={loading || cart.length === 0}
+                  >
+                    {loading ? (
+                      <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Procesando...</>
+                    ) : (
+                      <><QrCode className="w-4 h-4 mr-2" /> Cobrar con QR</>
+                    )}
+                  </Button>
+                ) : paymentMethod === 'debit_card' || paymentMethod === 'credit_card' ? (
                   <Button
                     className="w-full bg-[#009ee3] hover:bg-[#0082bd] border-[#009ee3] text-white"
                     size="lg"
@@ -1774,6 +1932,52 @@ export default function SalesModule() {
               variant="outline"
               className="w-full"
               onClick={cancelPointPayment}
+            >
+              Cancelar y anular venta
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Overlay: Cobrar con QR (Mercado Pago) */}
+      <Dialog open={qrWaiting} onOpenChange={() => {}}>
+        <DialogContent className="max-w-sm" onInteractOutside={(e) => e.preventDefault()}>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <QrCode className="w-5 h-5 text-[#009ee3]" />
+              Cobrar con QR — Mercado Pago
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-5 py-2">
+            <div className="text-center">
+              <p className="text-4xl font-bold text-primary">{formatCurrency(total)}</p>
+              <p className="text-sm text-muted-foreground mt-1">
+                Escaneá el código con la app de MercadoPago o cualquier billetera, o pagá con tarjeta en el Point
+              </p>
+            </div>
+            {!qrError ? (
+              <div className="flex flex-col items-center gap-3 py-2">
+                {qrData ? (
+                  <div className="p-3 bg-white rounded-md border">
+                    <QRCodeSVG value={qrData} size={220} />
+                  </div>
+                ) : (
+                  <Loader2 className="w-8 h-8 animate-spin text-[#009ee3]" />
+                )}
+                <p className="text-sm text-center text-muted-foreground">
+                  Esperando que el cliente pague...
+                </p>
+              </div>
+            ) : (
+              <div className="flex flex-col items-center gap-3 py-2">
+                <XCircle className="w-8 h-8 text-destructive" />
+                <p className="text-sm text-center text-destructive">{qrError}</p>
+              </div>
+            )}
+            <Button
+              variant="outline"
+              className="w-full"
+              onClick={cancelQrSale}
             >
               Cancelar y anular venta
             </Button>

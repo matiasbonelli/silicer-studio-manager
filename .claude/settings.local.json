@@ -16,7 +16,17 @@
       "Bash(xargs grep:*)",
       "Bash(npm test *)",
       "Bash(git log *)",
-      "Bash(gh pr *)"
+      "Bash(gh pr *)",
+      "Bash(Get-ChildItem -Path \"C:\\\\Users\\\\matia\\\\silicer-studio-manager\\\\silicer-studio-manager\" -Force)",
+      "Bash(Select-Object Name, PSIsContainer)",
+      "Bash(grep -E \"\\\\.\\(ts|tsx\\)$\")",
+      "Bash(dir /b)",
+      "Bash(ls -la .env*)",
+      "Bash(find . -maxdepth 2 -iname \".env*\")",
+      "Bash(find ~ -iname \"*.json\" -path \"*supabase*\" 2>/dev/null | grep -v node_modules | head -20; find / -maxdepth 6 -iname \"access-token*\" 2>/dev/null | grep -i supabase)",
+      "Bash(find / -maxdepth 8 \\\\\\( -iname \"*.supabase*\" -o -ipath \"*supabase*config*\" \\\\\\) 2>/dev/null | grep -vi node_modules | grep -vi \"/proc/\" | head -30)",
+      "PowerShell(Get-ChildItem -Path \"$env:APPDATA\\\\supabase\",\"$env:USERPROFILE\\\\.supabase\",\"$env:LOCALAPPDATA\\\\supabase\" -Recurse -ErrorAction SilentlyContinue | Select-Object FullName)",
+      "Bash(gh auth *)"
     ]
   }
 }
