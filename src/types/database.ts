@@ -152,7 +152,7 @@ export const PAYMENT_METHOD_LABELS: Record<PaymentMethod, string> = {
   cash: 'Efectivo',
   card: 'Tarjeta',
   transfer: 'Transferencia',
-  mercadopago: 'MercadoPago (Point)',
+  mercadopago: 'MercadoPago (QR)',
   debit_card: 'Tarjeta de Débito',
   credit_card: 'Tarjeta de Crédito',
 };
