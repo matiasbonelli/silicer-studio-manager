@@ -2009,6 +2009,7 @@ export default function SalesModule() {
                   </div>
 
                   <Button
+                    variant="secondary"
                     className="w-full"
                     size="lg"
                     onClick={handleMarkLoteInvoiced}
