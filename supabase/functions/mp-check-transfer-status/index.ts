@@ -12,12 +12,32 @@ serve(async (req) => {
   }
 
   try {
-    const { sale_id, amount, since } = await req.json()
+    const { sale_id } = await req.json()
 
-    if (!sale_id || !amount || !since) {
+    if (!sale_id) {
       return new Response(
-        JSON.stringify({ error: 'sale_id, amount and since are required' }),
+        JSON.stringify({ error: 'sale_id is required' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+      )
+    }
+
+    const supabase = createClient(
+      Deno.env.get('SUPABASE_URL')!,
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
+    )
+
+    // Leemos el monto y la hora de creación desde la DB — nunca confiar en
+    // valores que mande el cliente para esto, son la base del matching.
+    const { data: sale } = await supabase
+      .from('sales')
+      .select('total_amount, created_at, payment_status')
+      .eq('id', sale_id)
+      .single()
+
+    if (!sale || sale.payment_status !== 'pending') {
+      return new Response(
+        JSON.stringify({ status: 'pending' }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
       )
     }
 
@@ -38,14 +58,33 @@ serve(async (req) => {
     const mpData = await mpResponse.json()
     console.log('MP payments search response:', JSON.stringify(mpData))
 
-    const sinceTime = new Date(since).getTime()
+    const sinceTime = new Date(sale.created_at).getTime()
+    const amount = Number(sale.total_amount)
 
-    const match = (mpData.results || []).find((payment: { operation_type?: string; status?: string; transaction_amount?: number; date_created?: string }) => {
+    const candidates = (mpData.results || []).filter((payment: { operation_type?: string; status?: string; transaction_amount?: number; date_created?: string }) => {
       if (payment.operation_type !== 'money_transfer') return false
       if (payment.status !== 'approved') return false
       if (!payment.date_created || new Date(payment.date_created).getTime() < sinceTime) return false
-      return Math.abs(Number(payment.transaction_amount) - Number(amount)) < 0.01
+      return Math.abs(Number(payment.transaction_amount) - amount) < 0.01
     })
+
+    if (candidates.length === 0) {
+      return new Response(
+        JSON.stringify({ status: 'pending' }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+      )
+    }
+
+    // Evitar que la misma transferencia se use para marcar como pagada más
+    // de una venta (ej. dos ventas pendientes con el mismo monto).
+    const candidateIds = candidates.map((p: { id: number | string }) => String(p.id))
+    const { data: alreadyUsed } = await supabase
+      .from('sales')
+      .select('mp_payment_id')
+      .in('mp_payment_id', candidateIds)
+
+    const usedIds = new Set((alreadyUsed || []).map(s => s.mp_payment_id))
+    const match = candidates.find((p: { id: number | string }) => !usedIds.has(String(p.id)))
 
     if (!match) {
       return new Response(
@@ -53,11 +92,6 @@ serve(async (req) => {
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
       )
     }
-
-    const supabase = createClient(
-      Deno.env.get('SUPABASE_URL')!,
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
-    )
 
     await supabase
       .from('sales')

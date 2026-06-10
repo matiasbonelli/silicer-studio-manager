@@ -1023,9 +1023,8 @@ export default function SalesModule() {
     }, 5 * 60 * 1000);
 
     // Polling: busca una transferencia entrante con el mismo monto
-    const since = saleData.created_at;
     transferPollRef.current = setInterval(() => {
-      supabase.functions.invoke('mp-check-transfer-status', { body: { sale_id: saleData.id, amount: total, since } });
+      supabase.functions.invoke('mp-check-transfer-status', { body: { sale_id: saleData.id } });
     }, 4000);
   };
 
