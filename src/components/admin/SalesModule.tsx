@@ -53,8 +53,8 @@ export default function SalesModule() {
   const [salesHistory, setSalesHistory] = useState<SaleWithItems[]>([]);
   const [salesTab, setSalesTab] = useState('new');
   const [historySearch, setHistorySearch] = useState('');
-  const [filterMonth, setFilterMonth] = useState<string>('');
-  const [filterYear, setFilterYear] = useState<string>('');
+  const [filterMonth, setFilterMonth] = useState<string>(String(new Date().getMonth() + 1));
+  const [filterYear, setFilterYear] = useState<string>(String(new Date().getFullYear()));
   const [filterPaymentStatus, setFilterPaymentStatus] = useState<string>('');
   const [paymentType, setPaymentType] = useState<'total' | 'partial'>('total');
   const [partialAmount, setPartialAmount] = useState<string>('');
@@ -169,6 +169,7 @@ export default function SalesModule() {
   const availableYears = [currentYear, currentYear - 1, currentYear - 2];
 
   const monthNames = [
+    { value: 'all', label: 'Todos' },
     { value: '1', label: 'Enero' },
     { value: '2', label: 'Febrero' },
     { value: '3', label: 'Marzo' },
@@ -1055,7 +1056,7 @@ export default function SalesModule() {
       if (filterYear && saleDate.getFullYear() !== parseInt(filterYear)) {
         return false;
       }
-      if (filterMonth && (saleDate.getMonth() + 1) !== parseInt(filterMonth)) {
+      if (filterMonth && filterMonth !== 'all' && (saleDate.getMonth() + 1) !== parseInt(filterMonth)) {
         return false;
       }
     }
@@ -1080,7 +1081,7 @@ export default function SalesModule() {
 
   // Clear date filters
   const clearDateFilters = () => {
-    setFilterMonth('');
+    setFilterMonth('all');
     setFilterYear('');
     setFilterPaymentStatus('');
   };
@@ -1484,7 +1485,7 @@ export default function SalesModule() {
                   <SelectItem value="paid">Pagado</SelectItem>
                 </SelectContent>
               </Select>
-              {(filterMonth || filterYear || filterPaymentStatus) && (
+              {((filterMonth && filterMonth !== 'all') || filterYear || filterPaymentStatus) && (
                 <Button variant="outline" size="icon" onClick={clearDateFilters}>
                   <Trash2 className="w-4 h-4" />
                 </Button>
@@ -1721,7 +1722,7 @@ export default function SalesModule() {
                   ))}
                 </SelectContent>
               </Select>
-              {(filterMonth || filterYear) && (
+              {((filterMonth && filterMonth !== 'all') || filterYear) && (
                 <Button variant="outline" size="icon" onClick={clearDateFilters}>
                   <Trash2 className="w-4 h-4" />
                 </Button>
@@ -1955,25 +1956,6 @@ export default function SalesModule() {
 
               {uninvoicedSales.length > 0 && (
                 <>
-                  <div className="space-y-1.5">
-                    <Button
-                      variant="outline"
-                      className="w-full gap-2"
-                      onClick={() => {
-                        const amount = uninvoicedSales.reduce((s, v) => s + v.total_amount, 0);
-                        navigator.clipboard.writeText(String(Math.round(amount)));
-                        window.open('https://auth.afip.gob.ar/contribuyente_/login.xhtml?action=SYSTEM&system=rcel', '_blank', 'noopener,noreferrer');
-                        toast({ title: `Monto copiado: ${formatCurrency(amount)}`, description: 'Pegalo en el campo "Importe" dentro de AFIP' });
-                      }}
-                    >
-                      <ExternalLink className="w-4 h-4" />
-                      Ir a Comprobantes en línea (AFIP) y copiar monto
-                    </Button>
-                    <p className="text-xs text-muted-foreground text-center">
-                      Se abre Comprobantes en línea (AFIP). Ingresá con CUIT y clave fiscal — el monto ya está copiado en el portapapeles.
-                    </p>
-                  </div>
-
                   <div className="rounded-lg border bg-card overflow-x-auto">
                     <Table className="min-w-[500px]">
                       <TableHeader>
@@ -2005,6 +1987,25 @@ export default function SalesModule() {
                         ))}
                       </TableBody>
                     </Table>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <Button
+                      variant="default"
+                      className="w-full gap-2"
+                      onClick={() => {
+                        const amount = uninvoicedSales.reduce((s, v) => s + v.total_amount, 0);
+                        navigator.clipboard.writeText(String(Math.round(amount)));
+                        window.open('https://auth.afip.gob.ar/contribuyente_/login.xhtml?action=SYSTEM&system=rcel', '_blank', 'noopener,noreferrer');
+                        toast({ title: `Monto copiado: ${formatCurrency(amount)}`, description: 'Pegalo en el campo "Importe" dentro de AFIP' });
+                      }}
+                    >
+                      <ExternalLink className="w-4 h-4" />
+                      Ir a Comprobantes en línea (AFIP) y copiar monto
+                    </Button>
+                    <p className="text-xs text-muted-foreground text-center">
+                      Se abre Comprobantes en línea (AFIP). Ingresá con CUIT y clave fiscal — el monto ya está copiado en el portapapeles.
+                    </p>
                   </div>
 
                   <Button
