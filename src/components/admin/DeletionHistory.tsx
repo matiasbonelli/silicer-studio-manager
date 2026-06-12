@@ -3,7 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Loader2, History, Undo2, RefreshCw, CreditCard, CalendarCheck, Package } from 'lucide-react';
+import { Loader2, History, Undo2, RefreshCw, CreditCard, CalendarCheck, Package, Trash2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
 interface AuditEntry {
@@ -27,6 +27,7 @@ export default function DeletionHistory() {
   const [batches, setBatches] = useState<BatchGroup[]>([]);
   const [loading, setLoading] = useState(true);
   const [restoringBatch, setRestoringBatch] = useState<string | null>(null);
+  const [discardingBatch, setDiscardingBatch] = useState<string | null>(null);
 
   useEffect(() => {
     fetchHistory();
@@ -81,6 +82,23 @@ export default function DeletionHistory() {
       toast({ title: 'Error al restaurar', description: error.message, variant: 'destructive' });
     } else {
       toast({ title: 'Alumno restaurado correctamente' });
+      fetchHistory();
+    }
+  }
+
+  async function handleDiscard(batchId: string) {
+    if (!confirm('¿Estás seguro? El alumno y sus registros relacionados se perderán para siempre y ya no se podrán restaurar.')) {
+      return;
+    }
+
+    setDiscardingBatch(batchId);
+    const { error } = await supabase.rpc('discard_audit_batch', { p_batch_id: batchId });
+    setDiscardingBatch(null);
+
+    if (error) {
+      toast({ title: 'Error al descartar', description: error.message, variant: 'destructive' });
+    } else {
+      toast({ title: 'Registro descartado definitivamente' });
       fetchHistory();
     }
   }
@@ -150,16 +168,29 @@ export default function DeletionHistory() {
                       </div>
                     )}
                   </div>
-                  <Button
-                    size="sm"
-                    onClick={() => handleRestore(b.batch_id)}
-                    disabled={restoringBatch === b.batch_id}
-                  >
-                    {restoringBatch === b.batch_id
-                      ? <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                      : <Undo2 className="w-4 h-4 mr-2" />}
-                    Restaurar
-                  </Button>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      size="sm"
+                      onClick={() => handleRestore(b.batch_id)}
+                      disabled={restoringBatch === b.batch_id || discardingBatch === b.batch_id}
+                    >
+                      {restoringBatch === b.batch_id
+                        ? <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                        : <Undo2 className="w-4 h-4 mr-2" />}
+                      Restaurar
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="destructive"
+                      onClick={() => handleDiscard(b.batch_id)}
+                      disabled={restoringBatch === b.batch_id || discardingBatch === b.batch_id}
+                    >
+                      {discardingBatch === b.batch_id
+                        ? <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                        : <Trash2 className="w-4 h-4 mr-2" />}
+                      Descartar
+                    </Button>
+                  </div>
                 </li>
               );
             })}
