@@ -47,11 +47,12 @@ export interface Payment {
   payment_date: string | null;
   receipt_url: string | null;
   notes: string | null;
+  sale_id?: string | null;    // venta de Ventas que generó/actualizó este pago
   created_at: string;
   student?: Student;          // para queries con join
 }
 
-export type ProductCategory = 'insumos' | 'servicios' | 'moldes' | 'bizcochado' | 'final';
+export type ProductCategory = 'insumos' | 'servicios' | 'moldes' | 'bizcochado' | 'final' | 'cuota';
 
 export interface InventoryItem {
   id: string;
@@ -97,6 +98,8 @@ export interface SaleItem {
   quantity: number;
   unit_price: number;
   is_customer_piece: boolean;
+  cuota_student_id?: string | null;
+  cuota_month?: string | null; // formato YYYY-MM, solo para items de categoría 'cuota'
   created_at: string;
   inventory?: InventoryItem;
 }
@@ -163,6 +166,7 @@ export const PRODUCT_CATEGORY_LABELS: Record<ProductCategory, string> = {
   moldes: 'Moldes',
   bizcochado: 'Bizcochado',
   final: 'Final',
+  cuota: 'Cuota Mensual',
 };
 
 export type OrderStatus = 'pending' | 'ready' | 'delivered';
