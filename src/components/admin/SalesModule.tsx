@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { escapeHtml } from '@/lib/utils';
 import { formatCurrency, formatDate } from '@/lib/format';
-import { InventoryItem, Student, Sale, SaleItem, PaymentMethod, PaymentStatus, PAYMENT_METHOD_LABELS, PAYMENT_STATUS_LABELS, PRODUCT_CATEGORY_LABELS, ProductCategory as DBProductCategory } from '@/types/database';
+import { InventoryItem, Student, Sale, SaleItem, PaymentMethod, PaymentStatus, PAYMENT_METHOD_LABELS, PAYMENT_STATUS_LABELS, PRODUCT_CATEGORY_LABELS, ProductCategory as DBProductCategory, MONTH_NAMES } from '@/types/database';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -28,13 +28,18 @@ import {
 } from '@/lib/pricing';
 
 // Categorías de productos en ventas
-type ProductCategory = 'all' | 'insumos' | 'servicios' | 'moldes' | 'bizcochado' | 'final';
+type ProductCategory = 'all' | 'insumos' | 'servicios' | 'moldes' | 'bizcochado' | 'final' | 'cuota';
 
 interface CartItem {
   inventory: InventoryItem;
   quantity: number;
   isCustomerPiece: boolean;
   customerPiecePrice: number | null;
+  // Solo presentes en items de categoría 'cuota': cada línea es independiente
+  // (no se fusiona con otras) y representa la cuota de un alumno/mes puntual.
+  cartItemId?: string;
+  cuotaStudentId?: string;
+  cuotaMonth?: string; // formato YYYY-MM
 }
 
 interface SaleWithItems extends Sale {
@@ -72,6 +77,16 @@ export default function SalesModule() {
   const historyFileInputRef = useRef<HTMLInputElement>(null);
   const [uploadingSaleId, setUploadingSaleId] = useState<string | null>(null);
   const [studentComboOpen, setStudentComboOpen] = useState(false);
+
+  // Modal para agregar una "Cuota Mensual" al carrito (requiere alumno + mes)
+  const [cuotaPickerOpen, setCuotaPickerOpen] = useState(false);
+  const [cuotaPickerItem, setCuotaPickerItem] = useState<InventoryItem | null>(null);
+  const [cuotaPickerStudent, setCuotaPickerStudent] = useState<string>('');
+  const [cuotaPickerMonth, setCuotaPickerMonth] = useState<string>('');
+  const [cuotaPickerComboOpen, setCuotaPickerComboOpen] = useState(false);
+
+  // Cuotas ya pagadas (student_id|month), para evitar cobrarlas dos veces desde Ventas
+  const [paidCuotas, setPaidCuotas] = useState<Set<string>>(new Set());
 
   // Recargo global (cargado desde app_settings)
   const [recargo, setRecargo] = useState<number>(1);
@@ -144,7 +159,7 @@ export default function SalesModule() {
       });
     } else {
       toast({ title: 'Comprobante cargado correctamente' });
-      await fetchSalesHistory();
+      await Promise.all([fetchSalesHistory(), fetchPaidCuotas()]);
     }
     setUploadingSaleId(null);
   };
@@ -196,6 +211,17 @@ export default function SalesModule() {
     }
   };
 
+  const fetchPaidCuotas = async () => {
+    const { data } = await supabase
+      .from('payments')
+      .select('student_id, month')
+      .eq('status', 'paid');
+
+    if (data) {
+      setPaidCuotas(new Set(data.map(p => `${p.student_id}|${p.month}`)));
+    }
+  };
+
   useEffect(() => {
     const fetchData = async () => {
       const { data: { user } } = await supabase.auth.getUser();
@@ -214,9 +240,15 @@ export default function SalesModule() {
       ]);
 
       if (invRes.data) setInventory(invRes.data as InventoryItem[]);
-      if (studRes.data) setStudents(studRes.data as Student[]);
+      if (studRes.data) {
+        const sortedStudents = [...(studRes.data as Student[])].sort((a, b) =>
+          `${a.first_name} ${a.last_name}`.toLowerCase().localeCompare(`${b.first_name} ${b.last_name}`.toLowerCase(), 'es')
+        );
+        setStudents(sortedStudents);
+      }
       if (recargoRes.data) setRecargo(parseFloat(recargoRes.data.value) || 0);
       if (aliasRes.data) setMpAlias(aliasRes.data.value);
+      await fetchPaidCuotas();
 
       if (pricingProductsRes.data) {
         const map = new Map<string, PricingProduct>();
@@ -253,7 +285,7 @@ export default function SalesModule() {
         });
       }
 
-      await fetchSalesHistory();
+      await Promise.all([fetchSalesHistory(), fetchPaidCuotas()]);
       setLoading(false);
     };
     fetchData();
@@ -300,7 +332,74 @@ export default function SalesModule() {
     }));
   };
 
+  // Identificador único de una línea del carrito: las cuotas tienen su propio
+  // cartItemId (cada una es independiente), el resto se identifica por inventory.id
+  const getCartKey = (item: CartItem): string => item.cartItemId ?? item.inventory.id;
+
+  // Mes actual en formato YYYY-MM
+  const getCurrentMonth = () => {
+    const now = new Date();
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+  };
+
+  // Opciones de mes para el selector de cuota: 2 meses atrás a 3 meses adelante
+  const cuotaMonthOptions = (() => {
+    const now = new Date();
+    const options: { value: string; label: string }[] = [];
+    for (let offset = -2; offset <= 3; offset++) {
+      const d = new Date(now.getFullYear(), now.getMonth() + offset, 1);
+      const value = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+      const label = `${MONTH_NAMES[String(d.getMonth() + 1).padStart(2, '0')]} ${d.getFullYear()}`;
+      options.push({ value, label });
+    }
+    return options;
+  })();
+
+  const studentName = (studentId?: string | null) => {
+    const s = students.find(s => s.id === studentId);
+    return s ? `${s.first_name} ${s.last_name}` : 'Alumno no encontrado';
+  };
+
+  const isCuotaPaid = (studentId: string, month: string) => paidCuotas.has(`${studentId}|${month}`);
+
+  const warnCuotaPaid = (studentId: string, month: string) => {
+    toast({
+      title: 'Cuota ya pagada',
+      description: `La cuota de ${MONTH_NAMES[month.split('-')[1]]} ${month.split('-')[0]} de ${studentName(studentId)} ya está pagada`,
+      variant: 'destructive',
+    });
+  };
+
+  const addCuotaToCart = (item: InventoryItem, studentId: string, month: string) => {
+    setCart(prev => [...prev, {
+      inventory: item,
+      quantity: 1,
+      isCustomerPiece: false,
+      customerPiecePrice: null,
+      cartItemId: crypto.randomUUID(),
+      cuotaStudentId: studentId,
+      cuotaMonth: month,
+    }]);
+  };
+
   const addToCart = (item: InventoryItem) => {
+    if (item.category === 'cuota') {
+      const month = getCurrentMonth();
+      if (selectedStudent) {
+        if (isCuotaPaid(selectedStudent, month)) {
+          warnCuotaPaid(selectedStudent, month);
+          return;
+        }
+        addCuotaToCart(item, selectedStudent, month);
+        return;
+      }
+      setCuotaPickerItem(item);
+      setCuotaPickerStudent('');
+      setCuotaPickerMonth(month);
+      setCuotaPickerOpen(true);
+      return;
+    }
+
     const existing = cart.find(c => c.inventory.id === item.id);
     if (existing) {
       if (existing.quantity >= item.quantity) {
@@ -319,10 +418,31 @@ export default function SalesModule() {
     }
   };
 
+  const confirmAddCuota = () => {
+    if (!cuotaPickerItem || !cuotaPickerStudent || !cuotaPickerMonth) {
+      toast({
+        title: 'Datos incompletos',
+        description: 'Seleccioná un alumno y un mes',
+        variant: 'destructive',
+      });
+      return;
+    }
+    if (isCuotaPaid(cuotaPickerStudent, cuotaPickerMonth)) {
+      warnCuotaPaid(cuotaPickerStudent, cuotaPickerMonth);
+      return;
+    }
+    addCuotaToCart(cuotaPickerItem, cuotaPickerStudent, cuotaPickerMonth);
+    if (!selectedStudent) setSelectedStudent(cuotaPickerStudent);
+    setCuotaPickerOpen(false);
+    setCuotaPickerItem(null);
+    setCuotaPickerStudent('');
+  };
+
   const updateQuantity = (itemId: string, delta: number) => {
     setCart(prev => {
       return prev.map(c => {
-        if (c.inventory.id === itemId) {
+        if (getCartKey(c) === itemId) {
+          if (c.cartItemId) return c; // las cuotas no cambian de cantidad
           const newQty = c.quantity + delta;
           if (newQty <= 0) return null;
           if (newQty > c.inventory.quantity) {
@@ -340,7 +460,21 @@ export default function SalesModule() {
   };
 
   const removeFromCart = (itemId: string) => {
-    setCart(prev => prev.filter(c => c.inventory.id !== itemId));
+    setCart(prev => prev.filter(c => getCartKey(c) !== itemId));
+  };
+
+  // Verifica que toda línea de cuota tenga alumno y mes asignados antes de cobrar
+  const validateCuotaCart = (): boolean => {
+    const invalid = cart.find(c => c.cartItemId && (!c.cuotaStudentId || !c.cuotaMonth));
+    if (invalid) {
+      toast({
+        title: 'Falta alumno o mes',
+        description: 'Cada cuota mensual debe tener un alumno y un mes asignado',
+        variant: 'destructive',
+      });
+      return false;
+    }
+    return true;
   };
 
   const subtotal = cart.reduce((sum, c) => sum + getEffectivePrice(c) * c.quantity, 0);
@@ -356,6 +490,8 @@ export default function SalesModule() {
       });
       return;
     }
+
+    if (!validateCuotaCart()) return;
 
     setLoading(true);
 
@@ -389,6 +525,8 @@ export default function SalesModule() {
       quantity: c.quantity,
       unit_price: getEffectivePrice(c),
       is_customer_piece: c.isCustomerPiece,
+      cuota_student_id: c.cuotaStudentId ?? null,
+      cuota_month: c.cuotaMonth ?? null,
     }));
 
     let itemsError = null;
@@ -419,7 +557,7 @@ export default function SalesModule() {
       const { data: newInv } = await supabase.from('inventory').select('*').order('name');
       if (newInv) setInventory(newInv as InventoryItem[]);
 
-      await fetchSalesHistory();
+      await Promise.all([fetchSalesHistory(), fetchPaidCuotas()]);
 
       setCart([]);
       setSelectedStudent('');
@@ -506,7 +644,7 @@ export default function SalesModule() {
         paidAmount: paidAmount,
       });
       setShowReceiptModal(true);
-      await fetchSalesHistory();
+      await Promise.all([fetchSalesHistory(), fetchPaidCuotas()]);
       setPaymentType('total');
       setPartialAmount('');
     }
@@ -552,7 +690,7 @@ export default function SalesModule() {
           ? `Pago total de ${formatCurrency(paidAmount)} registrado`
           : `Pago parcial de ${formatCurrency(paidAmount)} registrado`,
       });
-      await fetchSalesHistory();
+      await Promise.all([fetchSalesHistory(), fetchPaidCuotas()]);
       setEditPaymentSale(null);
       setEditPaymentType('total');
       setEditPartialAmount('');
@@ -607,7 +745,7 @@ export default function SalesModule() {
       });
     } else {
       toast({ title: 'Venta eliminada correctamente' });
-      await fetchSalesHistory();
+      await Promise.all([fetchSalesHistory(), fetchPaidCuotas()]);
     }
   };
 
@@ -623,6 +761,7 @@ export default function SalesModule() {
       .select('*, student:students(*), sale_items(*, inventory:inventory(*))')
       .is('invoiced_at', null)
       .eq('payment_status', 'paid')
+      .not('payment_method', 'in', '(cash,transfer)')
       .gte('created_at', startOfDay)
       .lt('created_at', endOfDay)
       .order('created_at', { ascending: false });
@@ -644,7 +783,7 @@ export default function SalesModule() {
     } else {
       toast({ title: `${ids.length} venta${ids.length !== 1 ? 's' : ''} marcada${ids.length !== 1 ? 's' : ''} como facturada${ids.length !== 1 ? 's' : ''}` });
       await fetchUninvoicedSales();
-      await fetchSalesHistory();
+      await Promise.all([fetchSalesHistory(), fetchPaidCuotas()]);
     }
     setMarkingInvoiced(false);
   };
@@ -658,7 +797,7 @@ export default function SalesModule() {
       toast({ title: 'Error al facturar', variant: 'destructive' });
     } else {
       toast({ title: 'Venta marcada como facturada' });
-      await fetchSalesHistory();
+      await Promise.all([fetchSalesHistory(), fetchPaidCuotas()]);
       if (salesTab === 'invoicing') await fetchUninvoicedSales();
     }
   };
@@ -694,6 +833,8 @@ export default function SalesModule() {
       return;
     }
 
+    if (!validateCuotaCart()) return;
+
     setLoading(true);
 
     const { data: saleData, error: saleError } = await supabase
@@ -720,6 +861,8 @@ export default function SalesModule() {
       quantity: c.quantity,
       unit_price: getEffectivePrice(c),
       is_customer_piece: c.isCustomerPiece,
+      cuota_student_id: c.cuotaStudentId ?? null,
+      cuota_month: c.cuotaMonth ?? null,
     }));
 
     if (saleItems.length > 0) {
@@ -751,7 +894,7 @@ export default function SalesModule() {
             setPointWaiting(false);
             setPointSaleId(null);
             toast({ title: '¡Pago confirmado!', description: `Total cobrado: ${formatCurrency(total)}` });
-            await fetchSalesHistory();
+            await Promise.all([fetchSalesHistory(), fetchPaidCuotas()]);
             setCart([]);
             setSelectedStudent('');
           }
@@ -818,6 +961,8 @@ export default function SalesModule() {
       return;
     }
 
+    if (!validateCuotaCart()) return;
+
     setLoading(true);
 
     const { data: saleData, error: saleError } = await supabase
@@ -844,6 +989,8 @@ export default function SalesModule() {
       quantity: c.quantity,
       unit_price: getEffectivePrice(c),
       is_customer_piece: c.isCustomerPiece,
+      cuota_student_id: c.cuotaStudentId ?? null,
+      cuota_month: c.cuotaMonth ?? null,
     }));
 
     if (saleItems.length > 0) {
@@ -879,7 +1026,7 @@ export default function SalesModule() {
             setQrOrderId(null);
             setQrData(null);
             toast({ title: '¡Pago confirmado!', description: `Total cobrado: ${formatCurrency(total)}` });
-            await fetchSalesHistory();
+            await Promise.all([fetchSalesHistory(), fetchPaidCuotas()]);
             setCart([]);
             setSelectedStudent('');
           }
@@ -950,6 +1097,8 @@ export default function SalesModule() {
       return;
     }
 
+    if (!validateCuotaCart()) return;
+
     setLoading(true);
 
     const { data: saleData, error: saleError } = await supabase
@@ -976,6 +1125,8 @@ export default function SalesModule() {
       quantity: c.quantity,
       unit_price: getEffectivePrice(c),
       is_customer_piece: c.isCustomerPiece,
+      cuota_student_id: c.cuotaStudentId ?? null,
+      cuota_month: c.cuotaMonth ?? null,
     }));
 
     if (saleItems.length > 0) {
@@ -1007,7 +1158,7 @@ export default function SalesModule() {
             setTransferWaiting(false);
             setTransferSaleId(null);
             toast({ title: '¡Pago confirmado!', description: `Total cobrado: ${formatCurrency(total)}` });
-            await fetchSalesHistory();
+            await Promise.all([fetchSalesHistory(), fetchPaidCuotas()]);
             setCart([]);
             setSelectedStudent('');
           }
@@ -1037,7 +1188,9 @@ export default function SalesModule() {
   }, [salesTab]);
 
   // Productos disponibles para venta
-  const allProducts = inventory.filter(item => item.quantity > 0 && item.for_sale);
+  const allProducts = inventory.filter(item =>
+    item.for_sale && (item.category === 'cuota' || item.quantity > 0)
+  );
 
   // Filtrar por búsqueda y categoría
   const filteredProducts = allProducts.filter(item => {
@@ -1148,7 +1301,7 @@ export default function SalesModule() {
                 />
               </div>
               <div className="flex gap-1 bg-muted p-1 rounded-lg flex-wrap">
-                {([['all', 'Todos'], ['insumos', 'Insumos'], ['servicios', 'Servicios'], ['moldes', 'Moldes'], ['bizcochado', 'Bizc.'], ['final', 'Final']] as const).map(([value, label]) => (
+                {([['all', 'Todos'], ['cuota', 'Cuota'], ['insumos', 'Insumos'], ['servicios', 'Servicios'], ['moldes', 'Moldes'], ['bizcochado', 'Bizc.'], ['final', 'Final']] as const).map(([value, label]) => (
                   <Button
                     key={value}
                     size="sm"
@@ -1184,7 +1337,9 @@ export default function SalesModule() {
                     {item.category && !['moldes', 'bizcochado', 'final'].includes(item.category) && item.description && (
                       <p className="text-xs text-muted-foreground line-clamp-2 mt-1">{item.description}</p>
                     )}
-                    {item.category && ['moldes', 'bizcochado', 'final'].includes(item.category) ? (
+                    {item.category === 'cuota' ? (
+                      <p className="text-sm text-muted-foreground mt-1">Por alumno y mes</p>
+                    ) : item.category && ['moldes', 'bizcochado', 'final'].includes(item.category) ? (
                       <p className="text-sm text-muted-foreground mt-1">Disponible</p>
                     ) : (
                       <div className="mt-1">
@@ -1225,18 +1380,30 @@ export default function SalesModule() {
               ) : (
                 <div className="space-y-2">
                   {cart.map(item => {
-                    const supportsCustomerPiece = CUSTOMER_PIECE_CATEGORIES.has(item.inventory.category ?? '');
+                    const isCuota = !!item.cartItemId;
+                    const cartKey = getCartKey(item);
+                    const supportsCustomerPiece = !isCuota && CUSTOMER_PIECE_CATEGORIES.has(item.inventory.category ?? '');
                     const customerPiecePreview = supportsCustomerPiece && !item.isCustomerPiece
                       ? (item.customerPiecePrice ?? computeCustomerPiecePrice(item.inventory))
                       : null;
                     const effectivePrice = getEffectivePrice(item);
                     return (
-                      <div key={item.inventory.id} className="flex flex-col gap-2 p-2 bg-muted rounded-lg">
+                      <div key={cartKey} className="flex flex-col gap-2 p-2 bg-muted rounded-lg">
                         <div className="flex items-center gap-2">
                           <div className="flex-1 min-w-0">
-                            <p className="font-medium truncate text-sm">{item.inventory.name}</p>
+                            <p className="font-medium truncate text-sm">
+                              {isCuota
+                                ? `${item.inventory.name} — ${studentName(item.cuotaStudentId)}`
+                                : item.inventory.name}
+                            </p>
                             <p className="text-sm text-muted-foreground">
-                              {item.isCustomerPiece ? (
+                              {isCuota ? (
+                                <>
+                                  {formatCurrency(effectivePrice)}
+                                  {' · '}
+                                  {MONTH_NAMES[item.cuotaMonth!.split('-')[1]]} {item.cuotaMonth!.split('-')[0]}
+                                </>
+                              ) : item.isCustomerPiece ? (
                                 <>
                                   <span className="line-through mr-1 opacity-70">{formatCurrency(item.inventory.price)}</span>
                                   <span className="font-medium text-foreground">{formatCurrency(effectivePrice)}</span>
@@ -1248,14 +1415,18 @@ export default function SalesModule() {
                             </p>
                           </div>
                           <div className="flex items-center gap-1">
-                            <Button size="icon" variant="outline" className="h-7 w-7" onClick={() => updateQuantity(item.inventory.id, -1)}>
-                              <Minus className="w-3 h-3" />
-                            </Button>
-                            <span className="w-6 text-center text-sm">{item.quantity}</span>
-                            <Button size="icon" variant="outline" className="h-7 w-7" onClick={() => updateQuantity(item.inventory.id, 1)}>
-                              <Plus className="w-3 h-3" />
-                            </Button>
-                            <Button size="icon" variant="destructive" className="h-7 w-7 ml-1" onClick={() => removeFromCart(item.inventory.id)}>
+                            {!isCuota && (
+                              <>
+                                <Button size="icon" variant="outline" className="h-7 w-7" onClick={() => updateQuantity(cartKey, -1)}>
+                                  <Minus className="w-3 h-3" />
+                                </Button>
+                                <span className="w-6 text-center text-sm">{item.quantity}</span>
+                                <Button size="icon" variant="outline" className="h-7 w-7" onClick={() => updateQuantity(cartKey, 1)}>
+                                  <Plus className="w-3 h-3" />
+                                </Button>
+                              </>
+                            )}
+                            <Button size="icon" variant="destructive" className="h-7 w-7 ml-1" onClick={() => removeFromCart(cartKey)}>
                               <Trash2 className="w-3 h-3" />
                             </Button>
                           </div>
@@ -2522,6 +2693,84 @@ export default function SalesModule() {
 
             <Button onClick={handleEditPayment} className="w-full">
               <DollarSign className="w-4 h-4 mr-2" /> Actualizar Pago
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Agregar "Cuota Mensual" al carrito: requiere alumno y mes */}
+      <Dialog open={cuotaPickerOpen} onOpenChange={(open) => {
+        if (!open) {
+          setCuotaPickerOpen(false);
+          setCuotaPickerItem(null);
+          setCuotaPickerStudent('');
+        }
+      }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>{cuotaPickerItem?.name}</DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label>Alumno</Label>
+              <Popover open={cuotaPickerComboOpen} onOpenChange={setCuotaPickerComboOpen}>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    role="combobox"
+                    aria-expanded={cuotaPickerComboOpen}
+                    className="w-full justify-between font-normal"
+                  >
+                    {cuotaPickerStudent
+                      ? studentName(cuotaPickerStudent)
+                      : 'Seleccionar alumno'}
+                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-full p-0" align="start">
+                  <Command>
+                    <CommandInput placeholder="Buscar alumno..." />
+                    <CommandList>
+                      <CommandEmpty>No se encontró ningún alumno.</CommandEmpty>
+                      <CommandGroup>
+                        {students.map(s => (
+                          <CommandItem
+                            key={s.id}
+                            value={`${s.first_name} ${s.last_name}`}
+                            onSelect={() => { setCuotaPickerStudent(s.id); setCuotaPickerComboOpen(false); }}
+                          >
+                            <Check className={`mr-2 h-4 w-4 ${cuotaPickerStudent === s.id ? 'opacity-100' : 'opacity-0'}`} />
+                            {s.first_name} {s.last_name}
+                          </CommandItem>
+                        ))}
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Mes</Label>
+              <Select value={cuotaPickerMonth} onValueChange={setCuotaPickerMonth}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Seleccionar mes" />
+                </SelectTrigger>
+                <SelectContent>
+                  {cuotaMonthOptions.map(opt => (
+                    <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {cuotaPickerItem && (
+              <p className="text-lg font-bold text-primary">{formatCurrency(cuotaPickerItem.price)}</p>
+            )}
+
+            <Button onClick={confirmAddCuota} className="w-full" disabled={!cuotaPickerStudent || !cuotaPickerMonth}>
+              <Plus className="w-4 h-4 mr-2" /> Agregar al carrito
             </Button>
           </div>
         </DialogContent>

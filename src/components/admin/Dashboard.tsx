@@ -155,17 +155,13 @@ export default function Dashboard({ refreshTrigger }: DashboardProps) {
   const [pendingSearch, setPendingSearch] = useState('');
   const { toast } = useToast();
 
-  const CUOTA_KEY_ADULTO = 'silicer_cuota_adulto';
-  const CUOTA_KEY_NINO   = 'silicer_cuota_niño';
-  const [cuotaAdulto, setCuotaAdulto] = useState<string>(
-    () => localStorage.getItem(CUOTA_KEY_ADULTO) ?? ''
-  );
-  const [cuotaNino, setCuotaNino] = useState<string>(
-    () => localStorage.getItem(CUOTA_KEY_NINO) ?? ''
-  );
+  const CUOTA_KEY_ADULTO = 'cuota_adulto';
+  const CUOTA_KEY_NINO   = 'cuota_nino';
+  const [cuotaAdulto, setCuotaAdulto] = useState<string>('');
+  const [cuotaNino, setCuotaNino] = useState<string>('');
   const [editingCuota, setEditingCuota] = useState<'adulto' | 'niño' | null>(null);
 
-  const handleSaveCuota = (cat: 'adulto' | 'niño') => {
+  const handleSaveCuota = async (cat: 'adulto' | 'niño') => {
     const raw = cat === 'adulto' ? cuotaAdulto : cuotaNino;
     const key = cat === 'adulto' ? CUOTA_KEY_ADULTO : CUOTA_KEY_NINO;
     const val = parseFloat(raw);
@@ -173,7 +169,13 @@ export default function Dashboard({ refreshTrigger }: DashboardProps) {
       toast({ title: 'Ingresá un precio válido', variant: 'destructive' });
       return;
     }
-    localStorage.setItem(key, val.toString());
+    const { error } = await supabase
+      .from('app_settings')
+      .upsert({ key, value: val.toString(), updated_at: new Date().toISOString() });
+    if (error) {
+      toast({ title: 'Error al guardar la cuota', variant: 'destructive' });
+      return;
+    }
     setEditingCuota(null);
     toast({ title: `Cuota ${cat} actualizada a ${formatCurrency(val)}` });
   };
@@ -189,7 +191,7 @@ export default function Dashboard({ refreshTrigger }: DashboardProps) {
       // Build last 12 months range for historic query
       const twelveMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 11, 1).toISOString();
 
-      const [salesRes, studentsRes, inventoryRes, paymentsRes, historicRes, ordersRes] = await Promise.all([
+      const [salesRes, studentsRes, inventoryRes, paymentsRes, historicRes, ordersRes, cuotaSettingsRes] = await Promise.all([
         supabase.from('sales').select('*').gte('created_at', startOfMonth),
         supabase.from('students').select('*'),
         supabase.from('inventory').select('*'),
@@ -201,6 +203,7 @@ export default function Dashboard({ refreshTrigger }: DashboardProps) {
           .gte('payment_date', twelveMonthsAgo)
           .in('status', ['paid', 'partial']),
         supabase.from('mold_orders').select('id', { count: 'exact', head: true }).eq('status', 'pending'),
+        supabase.from('app_settings').select('key, value').in('key', [CUOTA_KEY_ADULTO, CUOTA_KEY_NINO]),
       ]);
 
       if (salesRes.error) throw salesRes.error;
@@ -213,9 +216,13 @@ export default function Dashboard({ refreshTrigger }: DashboardProps) {
       const inventory = (inventoryRes.data ?? []) as InventoryItem[];
 
       // Precios configurados (fallback cuando amount es null)
-      const precioAdulto = parseFloat(localStorage.getItem('silicer_cuota_adulto') ?? '0') || 0;
-      const precioNino   = parseFloat(localStorage.getItem('silicer_cuota_niño')   ?? '0') || 0;
+      const cuotaSettings: Record<string, string> = {};
+      for (const s of cuotaSettingsRes.data ?? []) cuotaSettings[s.key] = s.value;
+      const precioAdulto = parseFloat(cuotaSettings[CUOTA_KEY_ADULTO] ?? '0') || 0;
+      const precioNino   = parseFloat(cuotaSettings[CUOTA_KEY_NINO] ?? '0') || 0;
       const getPrecio = (cat: string) => cat === 'niño' ? precioNino : precioAdulto;
+      setCuotaAdulto(cuotaSettings[CUOTA_KEY_ADULTO] ?? '');
+      setCuotaNino(cuotaSettings[CUOTA_KEY_NINO] ?? '');
 
       // Mapa student_id → { status, amount, categoria }
       const categoriaMap: Record<string, string> = {};

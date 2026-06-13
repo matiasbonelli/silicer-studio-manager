@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
-import { Student, Payment, PaymentStatus, Schedule, Categoria, DAY_NAMES, MONTH_NAMES } from '@/types/database';
+import { Student, Payment, PaymentStatus, Schedule, Categoria, DAY_NAMES, DAY_ORDER, MONTH_NAMES } from '@/types/database';
 import { formatDate } from '@/lib/format';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -10,7 +10,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
-import { Trash2, ExternalLink, Check, Loader2, MessageCircle } from 'lucide-react';
+import { Trash2, ExternalLink, Check, Loader2, MessageCircle, ShoppingCart } from 'lucide-react';
 
 interface StudentModalProps {
   student: Student | null;
@@ -44,6 +44,7 @@ export default function StudentModal({ student, isOpen, onClose, onSave, isNew =
     categoria: 'adulto' as Categoria,
   });
   const [schedules, setSchedules] = useState<Schedule[]>([]);
+  const [scheduleOccupancy, setScheduleOccupancy] = useState<Record<string, number>>({});
   const [paymentHistory, setPaymentHistory] = useState<Payment[]>([]);
   const [loading, setLoading] = useState(false);
 
@@ -100,12 +101,29 @@ export default function StudentModal({ student, isOpen, onClose, onSave, isNew =
     const fetchSchedules = async () => {
       const { data } = await supabase
         .from('schedules')
-        .select('*')
-        .order('day_of_week')
-        .order('start_time');
-      if (data) setSchedules(data as Schedule[]);
+        .select('*');
+      if (data) {
+        const sorted = [...(data as Schedule[])].sort((a, b) => {
+          const dayDiff = (DAY_ORDER[a.day_of_week] ?? 99) - (DAY_ORDER[b.day_of_week] ?? 99);
+          return dayDiff !== 0 ? dayDiff : a.start_time.localeCompare(b.start_time);
+        });
+        setSchedules(sorted);
+      }
     };
     fetchSchedules();
+
+    const fetchOccupancy = async () => {
+      const { data } = await supabase.from('students').select('schedule_id');
+      if (data) {
+        const counts: Record<string, number> = {};
+        for (const s of data) {
+          if (!s.schedule_id) continue;
+          counts[s.schedule_id] = (counts[s.schedule_id] ?? 0) + 1;
+        }
+        setScheduleOccupancy(counts);
+      }
+    };
+    fetchOccupancy();
   }, []);
 
   /** Carga el pago del mes actual y el historial en secuencia para evitar race conditions */
@@ -426,11 +444,16 @@ export default function StudentModal({ student, isOpen, onClose, onSave, isNew =
                 <SelectValue placeholder="Seleccionar horario" />
               </SelectTrigger>
               <SelectContent>
-                {schedules.map(schedule => (
-                  <SelectItem key={schedule.id} value={schedule.id}>
-                    {DAY_NAMES[schedule.day_of_week]} {schedule.start_time.slice(0, 5)} - {schedule.end_time.slice(0, 5)}
-                  </SelectItem>
-                ))}
+                {schedules.map(schedule => {
+                  const occupied = scheduleOccupancy[schedule.id] ?? 0;
+                  const isFull = occupied >= schedule.max_capacity && schedule.id !== student?.schedule_id;
+                  return (
+                    <SelectItem key={schedule.id} value={schedule.id} disabled={isFull}>
+                      {DAY_NAMES[schedule.day_of_week]} {schedule.start_time.slice(0, 5)} - {schedule.end_time.slice(0, 5)}
+                      {' '}({occupied}/{schedule.max_capacity}{isFull ? ' · sin cupo' : ''})
+                    </SelectItem>
+                  );
+                })}
               </SelectContent>
             </Select>
           </div>
@@ -576,6 +599,11 @@ export default function StudentModal({ student, isOpen, onClose, onSave, isNew =
                         )}
                         {p.status === 'pending' && (
                           <Badge variant="destructive">Pendiente</Badge>
+                        )}
+                        {p.sale_id && (
+                          <Badge variant="outline" className="text-xs gap-1">
+                            <ShoppingCart className="w-3 h-3" /> Ventas
+                          </Badge>
                         )}
                         {p.payment_date && (
                           <span className="text-muted-foreground text-xs">
