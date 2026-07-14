@@ -168,7 +168,7 @@ export default function Admin() {
               </TabsTrigger>
               <TabsTrigger value="pricing" className="flex items-center gap-1.5 shrink-0 px-3 py-1.5">
                 <Calculator className="w-4 h-4 shrink-0" />
-                <span className="hidden sm:inline">Calculadora de Costos</span>
+                <span className="hidden sm:inline">Calculadora de Moldes</span>
               </TabsTrigger>
               <TabsTrigger value="dashboard" className="flex items-center gap-1.5 shrink-0 px-3 py-1.5">
                 <LayoutDashboard className="w-4 h-4 shrink-0" />
