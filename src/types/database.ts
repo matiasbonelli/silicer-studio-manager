@@ -179,6 +179,8 @@ export interface MoldOrder {
   product_price: number;
   quantity: number;
   pricing_product_id: string | null;
+  inventory_id: string | null;
+  sale_id: string | null;
   status: OrderStatus;
   payment_status: OrderPaymentStatus;
   notes: string | null;

@@ -26,6 +26,17 @@ import {
   calculateCustomerPiecePrice,
   extractPricingProductId,
 } from '@/lib/pricing';
+import {
+  createPendingSale,
+  deletePendingSale,
+  registerSalePayment,
+  subscribeToSalePayment,
+  invokeMpPointCharge,
+  checkMpPointStatus,
+  invokeMpQrCharge,
+  checkMpQrStatus,
+  checkMpTransferStatus,
+} from '@/lib/sales';
 
 // Categorías de productos en ventas
 type ProductCategory = 'all' | 'insumos' | 'servicios' | 'moldes' | 'bizcochado' | 'final' | 'cuota';
@@ -95,7 +106,7 @@ export default function SalesModule() {
   const [pointWaiting, setPointWaiting] = useState(false);
   const [pointSaleId, setPointSaleId] = useState<string | null>(null);
   const [pointError, setPointError] = useState<string | null>(null);
-  const pointChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
+  const pointChannelRef = useRef<(() => void) | null>(null);
   const pointTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pointPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -105,7 +116,7 @@ export default function SalesModule() {
   const [qrOrderId, setQrOrderId] = useState<string | null>(null);
   const [qrData, setQrData] = useState<string | null>(null);
   const [qrError, setQrError] = useState<string | null>(null);
-  const qrChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
+  const qrChannelRef = useRef<(() => void) | null>(null);
   const qrTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const qrPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -114,7 +125,7 @@ export default function SalesModule() {
   const [transferSaleId, setTransferSaleId] = useState<string | null>(null);
   const [transferError, setTransferError] = useState<string | null>(null);
   const [mpAlias, setMpAlias] = useState<string>('');
-  const transferChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
+  const transferChannelRef = useRef<(() => void) | null>(null);
   const transferTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const transferPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -495,20 +506,21 @@ export default function SalesModule() {
 
     setLoading(true);
 
-    // Create sale
-    const { data: saleData, error: saleError } = await supabase
-      .from('sales')
-      .insert({
-        student_id: selectedStudent || null,
-        total_amount: total,
-        payment_method: paymentMethod,
-        payment_status: 'pending',
-        paid_amount: 0,
-      })
-      .select()
-      .single();
+    const { sale: saleData, error: saleError } = await createPendingSale({
+      studentId: selectedStudent || null,
+      totalAmount: total,
+      paymentMethod,
+      items: cart.map(c => ({
+        inventory_id: c.inventory.id,
+        quantity: c.quantity,
+        unit_price: getEffectivePrice(c),
+        is_customer_piece: c.isCustomerPiece,
+        cuota_student_id: c.cuotaStudentId ?? null,
+        cuota_month: c.cuotaMonth ?? null,
+      })),
+    });
 
-    if (saleError || !saleData) {
+    if (!saleData) {
       toast({
         title: 'Error',
         description: 'No se pudo registrar la venta',
@@ -518,22 +530,7 @@ export default function SalesModule() {
       return;
     }
 
-    // Create sale items
-    const saleItems = cart.map(c => ({
-      sale_id: saleData.id,
-      inventory_id: c.inventory.id,
-      quantity: c.quantity,
-      unit_price: getEffectivePrice(c),
-      is_customer_piece: c.isCustomerPiece,
-      cuota_student_id: c.cuotaStudentId ?? null,
-      cuota_month: c.cuotaMonth ?? null,
-    }));
-
-    let itemsError = null;
-    if (saleItems.length > 0) {
-      const result = await supabase.from('sale_items').insert(saleItems);
-      itemsError = result.error;
-    }
+    const itemsError = saleError;
 
     if (itemsError) {
       toast({
@@ -612,15 +609,10 @@ export default function SalesModule() {
       return;
     }
 
-    const newStatus: PaymentStatus = paymentType === 'total' ? 'paid' : 'partial';
-
-    const { error } = await supabase
-      .from('sales')
-      .update({
-        payment_status: newStatus,
-        paid_amount: paidAmount,
-      })
-      .eq('id', pendingSale.sale.id);
+    const { error } = await registerSalePayment(pendingSale.sale.id, {
+      type: paymentType,
+      amount: paidAmount,
+    });
 
     if (error) {
       toast({
@@ -667,15 +659,10 @@ export default function SalesModule() {
       return;
     }
 
-    const newStatus: PaymentStatus = editPaymentType === 'total' ? 'paid' : 'partial';
-
-    const { error } = await supabase
-      .from('sales')
-      .update({
-        payment_status: newStatus,
-        paid_amount: paidAmount,
-      })
-      .eq('id', editPaymentSale.id);
+    const { error } = await registerSalePayment(editPaymentSale.id, {
+      type: editPaymentType,
+      amount: paidAmount,
+    });
 
     if (error) {
       toast({
@@ -805,7 +792,7 @@ export default function SalesModule() {
   // Flujo "Cobrar con Point" — Mercado Pago
   const cancelPointPayment = async () => {
     if (pointChannelRef.current) {
-      pointChannelRef.current.unsubscribe();
+      pointChannelRef.current();
       pointChannelRef.current = null;
     }
     if (pointTimeoutRef.current) {
@@ -817,8 +804,7 @@ export default function SalesModule() {
       pointPollRef.current = null;
     }
     if (pointSaleId) {
-      await supabase.from('sale_items').delete().eq('sale_id', pointSaleId);
-      await supabase.from('sales').delete().eq('id', pointSaleId);
+      await deletePendingSale(pointSaleId);
     }
     setPointWaiting(false);
     setPointSaleId(null);
@@ -837,37 +823,26 @@ export default function SalesModule() {
 
     setLoading(true);
 
-    const { data: saleData, error: saleError } = await supabase
-      .from('sales')
-      .insert({
-        student_id: selectedStudent || null,
-        total_amount: total,
-        payment_method: 'mercadopago',
-        payment_status: 'pending',
-        paid_amount: 0,
-      })
-      .select()
-      .single();
+    const { sale: saleData, error: saleError } = await createPendingSale({
+      studentId: selectedStudent || null,
+      totalAmount: total,
+      paymentMethod: 'mercadopago',
+      items: cart.map(c => ({
+        inventory_id: c.inventory.id,
+        quantity: c.quantity,
+        unit_price: getEffectivePrice(c),
+        is_customer_piece: c.isCustomerPiece,
+        cuota_student_id: c.cuotaStudentId ?? null,
+        cuota_month: c.cuotaMonth ?? null,
+      })),
+    });
 
-    if (saleError || !saleData) {
+    if (!saleData) {
       toast({ title: 'Error al registrar la venta', variant: 'destructive' });
       setLoading(false);
       return;
     }
-
-    const saleItems = cart.map(c => ({
-      sale_id: saleData.id,
-      inventory_id: c.inventory.id,
-      quantity: c.quantity,
-      unit_price: getEffectivePrice(c),
-      is_customer_piece: c.isCustomerPiece,
-      cuota_student_id: c.cuotaStudentId ?? null,
-      cuota_month: c.cuotaMonth ?? null,
-    }));
-
-    if (saleItems.length > 0) {
-      await supabase.from('sale_items').insert(saleItems);
-    }
+    void saleError;
 
     const { data: newInv } = await supabase.from('inventory').select('*').order('name');
     if (newInv) setInventory(newInv as InventoryItem[]);
@@ -878,31 +853,21 @@ export default function SalesModule() {
     setPointWaiting(true);
 
     // Suscripción Realtime: escucha cuando el webhook confirme el pago
-    const channel = supabase
-      .channel(`sale-point-${saleData.id}`)
-      .on(
-        'postgres_changes',
-        { event: 'UPDATE', schema: 'public', table: 'sales', filter: `id=eq.${saleData.id}` },
-        async (payload) => {
-          const updated = payload.new as Sale;
-          if (updated.payment_status === 'paid') {
-            if (pointTimeoutRef.current) clearTimeout(pointTimeoutRef.current);
-            if (pointPollRef.current) clearInterval(pointPollRef.current);
-            pointPollRef.current = null;
-            channel.unsubscribe();
-            pointChannelRef.current = null;
-            setPointWaiting(false);
-            setPointSaleId(null);
-            toast({ title: '¡Pago confirmado!', description: `Total cobrado: ${formatCurrency(total)}` });
-            await Promise.all([fetchSalesHistory(), fetchPaidCuotas()]);
-            setCart([]);
-            setSelectedStudent('');
-          }
-        },
-      )
-      .subscribe();
+    const unsubscribe = subscribeToSalePayment(saleData.id, async () => {
+      if (pointTimeoutRef.current) clearTimeout(pointTimeoutRef.current);
+      if (pointPollRef.current) clearInterval(pointPollRef.current);
+      pointPollRef.current = null;
+      pointChannelRef.current?.();
+      pointChannelRef.current = null;
+      setPointWaiting(false);
+      setPointSaleId(null);
+      toast({ title: '¡Pago confirmado!', description: `Total cobrado: ${formatCurrency(total)}` });
+      await Promise.all([fetchSalesHistory(), fetchPaidCuotas()]);
+      setCart([]);
+      setSelectedStudent('');
+    });
 
-    pointChannelRef.current = channel;
+    pointChannelRef.current = unsubscribe;
 
     // Timeout de 5 minutos
     pointTimeoutRef.current = setTimeout(() => {
@@ -911,9 +876,7 @@ export default function SalesModule() {
 
     // Enviar la orden al Point Smart vía Edge Function
     try {
-      const { error: fnError } = await supabase.functions.invoke('mp-create-payment-intent', {
-        body: { sale_id: saleData.id, amount: total },
-      });
+      const { error: fnError } = await invokeMpPointCharge(saleData.id, total);
       if (fnError) {
         setPointError('No se pudo enviar la orden al Point. Verificá la configuración de Mercado Pago.');
       }
@@ -924,14 +887,14 @@ export default function SalesModule() {
     // Mercado Pago no entrega webhooks de forma confiable para Point en esta cuenta,
     // así que se consulta el estado del pago periódicamente como respaldo.
     pointPollRef.current = setInterval(() => {
-      supabase.functions.invoke('mp-check-payment-status', { body: { sale_id: saleData.id } });
+      checkMpPointStatus(saleData.id);
     }, 4000);
   };
 
   // Flujo "Cobrar con QR" — Mercado Pago (orden híbrida vía Orders API)
   const cancelQrSale = async () => {
     if (qrChannelRef.current) {
-      qrChannelRef.current.unsubscribe();
+      qrChannelRef.current();
       qrChannelRef.current = null;
     }
     if (qrTimeoutRef.current) {
@@ -943,8 +906,7 @@ export default function SalesModule() {
       qrPollRef.current = null;
     }
     if (qrSaleId) {
-      await supabase.from('sale_items').delete().eq('sale_id', qrSaleId);
-      await supabase.from('sales').delete().eq('id', qrSaleId);
+      await deletePendingSale(qrSaleId);
     }
     setQrWaiting(false);
     setQrSaleId(null);
@@ -965,37 +927,26 @@ export default function SalesModule() {
 
     setLoading(true);
 
-    const { data: saleData, error: saleError } = await supabase
-      .from('sales')
-      .insert({
-        student_id: selectedStudent || null,
-        total_amount: total,
-        payment_method: 'mercadopago',
-        payment_status: 'pending',
-        paid_amount: 0,
-      })
-      .select()
-      .single();
+    const { sale: saleData, error: saleError } = await createPendingSale({
+      studentId: selectedStudent || null,
+      totalAmount: total,
+      paymentMethod: 'mercadopago',
+      items: cart.map(c => ({
+        inventory_id: c.inventory.id,
+        quantity: c.quantity,
+        unit_price: getEffectivePrice(c),
+        is_customer_piece: c.isCustomerPiece,
+        cuota_student_id: c.cuotaStudentId ?? null,
+        cuota_month: c.cuotaMonth ?? null,
+      })),
+    });
 
-    if (saleError || !saleData) {
+    if (!saleData) {
       toast({ title: 'Error al registrar la venta', variant: 'destructive' });
       setLoading(false);
       return;
     }
-
-    const saleItems = cart.map(c => ({
-      sale_id: saleData.id,
-      inventory_id: c.inventory.id,
-      quantity: c.quantity,
-      unit_price: getEffectivePrice(c),
-      is_customer_piece: c.isCustomerPiece,
-      cuota_student_id: c.cuotaStudentId ?? null,
-      cuota_month: c.cuotaMonth ?? null,
-    }));
-
-    if (saleItems.length > 0) {
-      await supabase.from('sale_items').insert(saleItems);
-    }
+    void saleError;
 
     const { data: newInv } = await supabase.from('inventory').select('*').order('name');
     if (newInv) setInventory(newInv as InventoryItem[]);
@@ -1008,33 +959,23 @@ export default function SalesModule() {
     setQrWaiting(true);
 
     // Suscripción Realtime: escucha cuando se confirme el pago
-    const channel = supabase
-      .channel(`sale-qr-${saleData.id}`)
-      .on(
-        'postgres_changes',
-        { event: 'UPDATE', schema: 'public', table: 'sales', filter: `id=eq.${saleData.id}` },
-        async (payload) => {
-          const updated = payload.new as Sale;
-          if (updated.payment_status === 'paid') {
-            if (qrTimeoutRef.current) clearTimeout(qrTimeoutRef.current);
-            if (qrPollRef.current) clearInterval(qrPollRef.current);
-            qrPollRef.current = null;
-            channel.unsubscribe();
-            qrChannelRef.current = null;
-            setQrWaiting(false);
-            setQrSaleId(null);
-            setQrOrderId(null);
-            setQrData(null);
-            toast({ title: '¡Pago confirmado!', description: `Total cobrado: ${formatCurrency(total)}` });
-            await Promise.all([fetchSalesHistory(), fetchPaidCuotas()]);
-            setCart([]);
-            setSelectedStudent('');
-          }
-        },
-      )
-      .subscribe();
+    const unsubscribe = subscribeToSalePayment(saleData.id, async () => {
+      if (qrTimeoutRef.current) clearTimeout(qrTimeoutRef.current);
+      if (qrPollRef.current) clearInterval(qrPollRef.current);
+      qrPollRef.current = null;
+      qrChannelRef.current?.();
+      qrChannelRef.current = null;
+      setQrWaiting(false);
+      setQrSaleId(null);
+      setQrOrderId(null);
+      setQrData(null);
+      toast({ title: '¡Pago confirmado!', description: `Total cobrado: ${formatCurrency(total)}` });
+      await Promise.all([fetchSalesHistory(), fetchPaidCuotas()]);
+      setCart([]);
+      setSelectedStudent('');
+    });
 
-    qrChannelRef.current = channel;
+    qrChannelRef.current = unsubscribe;
 
     // Timeout de 5 minutos
     qrTimeoutRef.current = setTimeout(() => {
@@ -1044,9 +985,7 @@ export default function SalesModule() {
     // Crear la orden QR híbrida (QR estático de la caja + QR dinámico)
     let orderId: string | null = null;
     try {
-      const { data: fnData, error: fnError } = await supabase.functions.invoke('mp-create-qr-order', {
-        body: { sale_id: saleData.id, amount: total },
-      });
+      const { data: fnData, error: fnError } = await invokeMpQrCharge(saleData.id, total);
       if (fnError || !fnData?.success) {
         setQrError('No se pudo generar el código QR. Verificá la configuración de Mercado Pago.');
       } else {
@@ -1062,14 +1001,14 @@ export default function SalesModule() {
 
     // Polling de respaldo: consulta el estado de la orden cada 4s
     qrPollRef.current = setInterval(() => {
-      supabase.functions.invoke('mp-check-qr-order-status', { body: { sale_id: saleData.id, order_id: orderId } });
+      checkMpQrStatus(saleData.id, orderId as string);
     }, 4000);
   };
 
   // Flujo "Cobrar con Transferencia" — detecta la transferencia entrante en la cuenta de MP
   const cancelTransferSale = async () => {
     if (transferChannelRef.current) {
-      transferChannelRef.current.unsubscribe();
+      transferChannelRef.current();
       transferChannelRef.current = null;
     }
     if (transferTimeoutRef.current) {
@@ -1081,8 +1020,7 @@ export default function SalesModule() {
       transferPollRef.current = null;
     }
     if (transferSaleId) {
-      await supabase.from('sale_items').delete().eq('sale_id', transferSaleId);
-      await supabase.from('sales').delete().eq('id', transferSaleId);
+      await deletePendingSale(transferSaleId);
     }
     setTransferWaiting(false);
     setTransferSaleId(null);
@@ -1101,37 +1039,26 @@ export default function SalesModule() {
 
     setLoading(true);
 
-    const { data: saleData, error: saleError } = await supabase
-      .from('sales')
-      .insert({
-        student_id: selectedStudent || null,
-        total_amount: total,
-        payment_method: 'transfer',
-        payment_status: 'pending',
-        paid_amount: 0,
-      })
-      .select()
-      .single();
+    const { sale: saleData, error: saleError } = await createPendingSale({
+      studentId: selectedStudent || null,
+      totalAmount: total,
+      paymentMethod: 'transfer',
+      items: cart.map(c => ({
+        inventory_id: c.inventory.id,
+        quantity: c.quantity,
+        unit_price: getEffectivePrice(c),
+        is_customer_piece: c.isCustomerPiece,
+        cuota_student_id: c.cuotaStudentId ?? null,
+        cuota_month: c.cuotaMonth ?? null,
+      })),
+    });
 
-    if (saleError || !saleData) {
+    if (!saleData) {
       toast({ title: 'Error al registrar la venta', variant: 'destructive' });
       setLoading(false);
       return;
     }
-
-    const saleItems = cart.map(c => ({
-      sale_id: saleData.id,
-      inventory_id: c.inventory.id,
-      quantity: c.quantity,
-      unit_price: getEffectivePrice(c),
-      is_customer_piece: c.isCustomerPiece,
-      cuota_student_id: c.cuotaStudentId ?? null,
-      cuota_month: c.cuotaMonth ?? null,
-    }));
-
-    if (saleItems.length > 0) {
-      await supabase.from('sale_items').insert(saleItems);
-    }
+    void saleError;
 
     const { data: newInv } = await supabase.from('inventory').select('*').order('name');
     if (newInv) setInventory(newInv as InventoryItem[]);
@@ -1142,31 +1069,21 @@ export default function SalesModule() {
     setTransferWaiting(true);
 
     // Suscripción Realtime: escucha cuando se confirme el pago
-    const channel = supabase
-      .channel(`sale-transfer-${saleData.id}`)
-      .on(
-        'postgres_changes',
-        { event: 'UPDATE', schema: 'public', table: 'sales', filter: `id=eq.${saleData.id}` },
-        async (payload) => {
-          const updated = payload.new as Sale;
-          if (updated.payment_status === 'paid') {
-            if (transferTimeoutRef.current) clearTimeout(transferTimeoutRef.current);
-            if (transferPollRef.current) clearInterval(transferPollRef.current);
-            transferPollRef.current = null;
-            channel.unsubscribe();
-            transferChannelRef.current = null;
-            setTransferWaiting(false);
-            setTransferSaleId(null);
-            toast({ title: '¡Pago confirmado!', description: `Total cobrado: ${formatCurrency(total)}` });
-            await Promise.all([fetchSalesHistory(), fetchPaidCuotas()]);
-            setCart([]);
-            setSelectedStudent('');
-          }
-        },
-      )
-      .subscribe();
+    const unsubscribe = subscribeToSalePayment(saleData.id, async () => {
+      if (transferTimeoutRef.current) clearTimeout(transferTimeoutRef.current);
+      if (transferPollRef.current) clearInterval(transferPollRef.current);
+      transferPollRef.current = null;
+      transferChannelRef.current?.();
+      transferChannelRef.current = null;
+      setTransferWaiting(false);
+      setTransferSaleId(null);
+      toast({ title: '¡Pago confirmado!', description: `Total cobrado: ${formatCurrency(total)}` });
+      await Promise.all([fetchSalesHistory(), fetchPaidCuotas()]);
+      setCart([]);
+      setSelectedStudent('');
+    });
 
-    transferChannelRef.current = channel;
+    transferChannelRef.current = unsubscribe;
 
     // Timeout de 5 minutos
     transferTimeoutRef.current = setTimeout(() => {
@@ -1175,7 +1092,7 @@ export default function SalesModule() {
 
     // Polling: busca una transferencia entrante con el mismo monto
     transferPollRef.current = setInterval(() => {
-      supabase.functions.invoke('mp-check-transfer-status', { body: { sale_id: saleData.id } });
+      checkMpTransferStatus(saleData.id);
     }, 4000);
   };
 
