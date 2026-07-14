@@ -1,15 +1,25 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import {
   Student,
   InventoryItem,
   MoldOrder,
   OrderStatus,
-  OrderPaymentStatus,
+  PaymentMethod,
   ORDER_STATUS_LABELS,
-  ORDER_PAYMENT_STATUS_LABELS,
 } from '@/types/database';
 import { formatCurrency, formatDate } from '@/lib/format';
+import {
+  createPendingSale,
+  deletePendingSale,
+  registerSalePayment,
+  subscribeToSalePayment,
+  invokeMpPointCharge,
+  checkMpPointStatus,
+  invokeMpQrCharge,
+  checkMpQrStatus,
+  checkMpTransferStatus,
+} from '@/lib/sales';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -21,6 +31,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/hooks/use-toast';
 import { sendWhatsApp } from '@/lib/whatsapp';
+import { QRCodeSVG } from 'qrcode.react';
 import {
   Plus,
   Search,
@@ -32,6 +43,12 @@ import {
   ChevronLeft,
   ClipboardCheck,
   Loader2,
+  Banknote,
+  ArrowRightLeft,
+  CreditCard,
+  Smartphone,
+  QrCode,
+  XCircle,
 } from 'lucide-react';
 
 // ---------------------------------------------------------------------------
@@ -74,13 +91,27 @@ export default function OrdersManager() {
   const [formPricingProductId, setFormPricingProductId] = useState<string | null>(null);
   const [formSelectedInventoryId, setFormSelectedInventoryId] = useState<string>('');
   const [formStatus, setFormStatus] = useState<OrderStatus>('pending');
-  const [formPaymentStatus, setFormPaymentStatus] = useState<OrderPaymentStatus>('pending');
   const [formNotes, setFormNotes] = useState('');
 
   // Delete confirmation
   const [orderToDelete, setOrderToDelete] = useState<MoldOrder | null>(null);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+
+  // Registrar pago (misma lógica que Ventas)
+  const [paymentOrder, setPaymentOrder] = useState<MoldOrder | null>(null);
+  const [pmMethod, setPmMethod] = useState<PaymentMethod>('cash');
+  const [pmCreating, setPmCreating] = useState(false);
+  const [pmSaleId, setPmSaleId] = useState<string | null>(null);
+  const [pmManualStep, setPmManualStep] = useState(false);
+  const [pmPaymentType, setPmPaymentType] = useState<'total' | 'partial'>('total');
+  const [pmPartialAmount, setPmPartialAmount] = useState('');
+  const [pmWaiting, setPmWaiting] = useState(false);
+  const [pmError, setPmError] = useState<string | null>(null);
+  const [pmQrData, setPmQrData] = useState<string | null>(null);
+  const pmChannelRef = useRef<(() => void) | null>(null);
+  const pmTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pmPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const { toast } = useToast();
 
@@ -159,7 +190,6 @@ export default function OrdersManager() {
     setFormQuantity('1');
     setFormPricingProductId(null);
     setFormStatus('pending');
-    setFormPaymentStatus('pending');
     setFormNotes('');
     setIsModalOpen(true);
   };
@@ -167,13 +197,12 @@ export default function OrdersManager() {
   const openEditModal = (order: MoldOrder) => {
     setEditingOrder(order);
     setFormStudentId(order.student_id);
-    setFormSelectedInventoryId('');
+    setFormSelectedInventoryId(order.inventory_id ?? '');
     setFormProductName(order.product_name);
     setFormProductPrice(String(order.product_price));
     setFormQuantity(String(order.quantity ?? 1));
     setFormPricingProductId(order.pricing_product_id);
     setFormStatus(order.status);
-    setFormPaymentStatus(order.payment_status);
     setFormNotes(order.notes ?? '');
     setIsModalOpen(true);
   };
@@ -209,8 +238,8 @@ export default function OrdersManager() {
       product_price: parseFloat(formProductPrice) || 0,
       quantity: qty,
       pricing_product_id: formPricingProductId,
+      inventory_id: formSelectedInventoryId || null,
       status: formStatus,
-      payment_status: formPaymentStatus,
       notes: formNotes || null,
     };
 
@@ -254,18 +283,171 @@ export default function OrdersManager() {
     }
   };
 
-  const handleTogglePayment = async (order: MoldOrder) => {
-    const next: OrderPaymentStatus = order.payment_status === 'paid' ? 'pending' : 'paid';
-    const { error } = await supabase
-      .from('mold_orders')
-      .update({ payment_status: next })
-      .eq('id', order.id);
-    if (error) {
-      toast({ title: 'Error al cambiar pago', variant: 'destructive' });
-    } else {
-      toast({ title: next === 'paid' ? 'Marcado como pagado' : 'Marcado como no pagado' });
-      fetchOrders();
+  // ---------------------------------------------------------------------------
+  // Registrar pago (misma lógica que Ventas: crea sale + sale_item y pasa por
+  // el mismo flujo de cobro, incluido Mercado Pago)
+  // ---------------------------------------------------------------------------
+
+  const cleanupPaymentFlow = () => {
+    if (pmChannelRef.current) {
+      pmChannelRef.current();
+      pmChannelRef.current = null;
     }
+    if (pmTimeoutRef.current) {
+      clearTimeout(pmTimeoutRef.current);
+      pmTimeoutRef.current = null;
+    }
+    if (pmPollRef.current) {
+      clearInterval(pmPollRef.current);
+      pmPollRef.current = null;
+    }
+  };
+
+  const closePaymentModal = () => {
+    cleanupPaymentFlow();
+    setPaymentOrder(null);
+    setPmMethod('cash');
+    setPmCreating(false);
+    setPmSaleId(null);
+    setPmManualStep(false);
+    setPmPaymentType('total');
+    setPmPartialAmount('');
+    setPmWaiting(false);
+    setPmError(null);
+    setPmQrData(null);
+  };
+
+  const openPaymentModal = (order: MoldOrder) => {
+    setPaymentOrder(order);
+    setPmMethod('cash');
+  };
+
+  const cancelPaymentFlow = async () => {
+    cleanupPaymentFlow();
+    if (pmSaleId && paymentOrder) {
+      await deletePendingSale(pmSaleId);
+      await supabase.from('mold_orders').update({ sale_id: null }).eq('id', paymentOrder.id);
+    }
+    setPmWaiting(false);
+    setPmSaleId(null);
+    setPmManualStep(false);
+    setPmError(null);
+    setPmQrData(null);
+    fetchOrders();
+  };
+
+  const orderTotal = (order: MoldOrder) => order.product_price * (order.quantity ?? 1);
+
+  const startMpWaitingFlow = (order: MoldOrder, saleId: string) => {
+    setPmWaiting(true);
+    setPmError(null);
+
+    const unsubscribe = subscribeToSalePayment(saleId, async () => {
+      cleanupPaymentFlow();
+      toast({ title: '¡Pago confirmado!', description: `Total cobrado: ${formatCurrency(orderTotal(order))}` });
+      closePaymentModal();
+      fetchOrders();
+    });
+    pmChannelRef.current = unsubscribe;
+
+    pmTimeoutRef.current = setTimeout(() => {
+      setPmError('El pago no fue confirmado en 5 minutos. Podés cancelar o seguir esperando.');
+    }, 5 * 60 * 1000);
+  };
+
+  const handleConfirmPaymentMethod = async () => {
+    if (!paymentOrder || !paymentOrder.inventory_id) return;
+    setPmCreating(true);
+
+    const total = orderTotal(paymentOrder);
+    const isPointMethod = pmMethod === 'debit_card' || pmMethod === 'credit_card';
+    const isQrMethod = pmMethod === 'mercadopago';
+    const isTransferMethod = pmMethod === 'transfer';
+
+    const { sale, error } = await createPendingSale({
+      studentId: paymentOrder.student_id,
+      totalAmount: total,
+      paymentMethod: isPointMethod || isQrMethod ? 'mercadopago' : pmMethod,
+      items: [
+        {
+          inventory_id: paymentOrder.inventory_id,
+          quantity: paymentOrder.quantity ?? 1,
+          unit_price: paymentOrder.product_price,
+        },
+      ],
+    });
+
+    setPmCreating(false);
+
+    if (!sale || error) {
+      toast({ title: 'Error', description: 'No se pudo registrar la venta', variant: 'destructive' });
+      return;
+    }
+
+    await supabase.from('mold_orders').update({ sale_id: sale.id }).eq('id', paymentOrder.id);
+    setPmSaleId(sale.id);
+
+    if (isPointMethod) {
+      startMpWaitingFlow(paymentOrder, sale.id);
+      try {
+        const { error: fnError } = await invokeMpPointCharge(sale.id, total);
+        if (fnError) {
+          setPmError('No se pudo enviar la orden al Point. Verificá la configuración de Mercado Pago.');
+        }
+      } catch {
+        setPmError('Error de conexión con Mercado Pago.');
+      }
+      pmPollRef.current = setInterval(() => {
+        checkMpPointStatus(sale.id);
+      }, 4000);
+    } else if (isQrMethod) {
+      startMpWaitingFlow(paymentOrder, sale.id);
+      let orderId: string | null = null;
+      try {
+        const { data: fnData, error: fnError } = await invokeMpQrCharge(sale.id, total);
+        if (fnError || !fnData?.success) {
+          setPmError('No se pudo generar el código QR. Verificá la configuración de Mercado Pago.');
+        } else {
+          orderId = fnData.order_id;
+          setPmQrData(fnData.qr_data ?? null);
+        }
+      } catch {
+        setPmError('Error de conexión con Mercado Pago.');
+      }
+      if (!orderId) return;
+      pmPollRef.current = setInterval(() => {
+        checkMpQrStatus(sale.id, orderId as string);
+      }, 4000);
+    } else if (isTransferMethod) {
+      startMpWaitingFlow(paymentOrder, sale.id);
+      pmPollRef.current = setInterval(() => {
+        checkMpTransferStatus(sale.id);
+      }, 4000);
+    } else {
+      // Efectivo / registro manual: pedir total o parcial
+      setPmManualStep(true);
+    }
+  };
+
+  const handleConfirmManualPayment = async () => {
+    if (!pmSaleId || !paymentOrder) return;
+    const total = orderTotal(paymentOrder);
+    const paidAmount = pmPaymentType === 'total' ? total : parseFloat(pmPartialAmount) || 0;
+
+    if (pmPaymentType === 'partial' && (paidAmount <= 0 || paidAmount >= total)) {
+      toast({ title: 'Monto inválido', description: 'El pago parcial debe ser mayor a 0 y menor al total', variant: 'destructive' });
+      return;
+    }
+
+    const { error } = await registerSalePayment(pmSaleId, { type: pmPaymentType, amount: paidAmount });
+    if (error) {
+      toast({ title: 'Error', description: 'No se pudo registrar el pago', variant: 'destructive' });
+      return;
+    }
+
+    toast({ title: 'Pago registrado' });
+    closePaymentModal();
+    fetchOrders();
   };
 
   const handleDelete = async () => {
@@ -298,13 +480,18 @@ export default function OrdersManager() {
     }
   };
 
-  const paymentBadge = (ps: OrderPaymentStatus) => {
-    switch (ps) {
-      case 'pending':
-        return <Badge variant="outline">No pagado</Badge>;
-      case 'paid':
-        return <Badge className="bg-green-500 hover:bg-green-600">Pagado</Badge>;
+  const paymentBadge = (order: MoldOrder) => {
+    if (order.payment_status === 'pending') {
+      return <Badge variant="outline">No pagado</Badge>;
     }
+    if (!order.sale_id) {
+      return (
+        <Badge className="bg-green-500/70 hover:bg-green-600/70" title="Pagado antes de vincularse con Ventas">
+          Pagado (histórico)
+        </Badge>
+      );
+    }
+    return <Badge className="bg-green-500 hover:bg-green-600">Pagado</Badge>;
   };
 
   // ---------------------------------------------------------------------------
@@ -448,7 +635,7 @@ export default function OrdersManager() {
                     <TableCell className="text-right">{formatCurrency(order.product_price)}</TableCell>
                     <TableCell className="text-right font-medium">{formatCurrency(total)}</TableCell>
                     <TableCell className="text-center">{statusBadge(order.status)}</TableCell>
-                    <TableCell className="text-center">{paymentBadge(order.payment_status)}</TableCell>
+                    <TableCell className="text-center">{paymentBadge(order)}</TableCell>
                     <TableCell className="text-center text-sm">{formatDate(order.created_at)}</TableCell>
                     <TableCell className="text-center">
                       {canWhatsApp ? (
@@ -482,8 +669,15 @@ export default function OrdersManager() {
                           size="sm"
                           variant="outline"
                           className={`h-7 px-2 ${order.payment_status === 'paid' ? 'text-green-600' : ''}`}
-                          title={order.payment_status === 'paid' ? 'Marcar no pagado' : 'Marcar pagado'}
-                          onClick={() => handleTogglePayment(order)}
+                          title={
+                            order.payment_status === 'paid'
+                              ? 'Pagado'
+                              : order.inventory_id
+                                ? 'Registrar pago'
+                                : 'Editá el pedido y seleccioná un producto de inventario para poder cobrarlo'
+                          }
+                          disabled={order.payment_status === 'paid' || !order.inventory_id}
+                          onClick={() => openPaymentModal(order)}
                         >
                           <DollarSign className="w-4 h-4" />
                         </Button>
@@ -614,34 +808,25 @@ export default function OrdersManager() {
               </p>
             )}
 
-            {/* Estado + Pago */}
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-2">
-                <Label>Estado</Label>
-                <Select value={formStatus} onValueChange={(v) => setFormStatus(v as OrderStatus)}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="pending">Pendiente</SelectItem>
-                    <SelectItem value="ready">Listo</SelectItem>
-                    <SelectItem value="delivered">Entregado</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label>Pago</Label>
-                <Select value={formPaymentStatus} onValueChange={(v) => setFormPaymentStatus(v as OrderPaymentStatus)}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="pending">No pagado</SelectItem>
-                    <SelectItem value="paid">Pagado</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
+            {/* Estado */}
+            <div className="space-y-2">
+              <Label>Estado</Label>
+              <Select value={formStatus} onValueChange={(v) => setFormStatus(v as OrderStatus)}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="pending">Pendiente</SelectItem>
+                  <SelectItem value="ready">Listo</SelectItem>
+                  <SelectItem value="delivered">Entregado</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
+            {editingOrder && (
+              <p className="text-xs text-muted-foreground -mt-2">
+                El pago se gestiona con el botón <DollarSign className="w-3 h-3 inline" /> "Registrar pago" de la tabla, no desde este formulario.
+              </p>
+            )}
 
             {/* Notas */}
             <div className="space-y-2">
@@ -693,6 +878,188 @@ export default function OrdersManager() {
               Eliminar
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal Registrar Pago */}
+      <Dialog
+        open={!!paymentOrder && !pmWaiting}
+        onOpenChange={(open) => { if (!open) closePaymentModal(); }}
+      >
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Registrar Pago</DialogTitle>
+          </DialogHeader>
+
+          {paymentOrder && (
+            <div className="space-y-4">
+              <div className="p-3 bg-muted rounded-lg text-center">
+                <p className="text-sm text-muted-foreground">{paymentOrder.product_name}</p>
+                <p className="text-2xl font-bold text-primary">{formatCurrency(orderTotal(paymentOrder))}</p>
+              </div>
+
+              {!pmManualStep ? (
+                <>
+                  <div className="space-y-2">
+                    <Label>Método de Pago</Label>
+                    <div className="grid grid-cols-2 gap-2">
+                      {(
+                        [
+                          { value: 'cash', label: 'Efectivo', Icon: Banknote },
+                          { value: 'transfer', label: 'Transferencia', Icon: ArrowRightLeft },
+                          { value: 'debit_card', label: 'T. Débito', Icon: CreditCard },
+                          { value: 'credit_card', label: 'T. Crédito', Icon: CreditCard },
+                        ] as const
+                      ).map(({ value, label, Icon }) => (
+                        <Button
+                          key={value}
+                          type="button"
+                          variant={pmMethod === value ? 'default' : 'outline'}
+                          size="sm"
+                          className="flex flex-col h-auto py-2 gap-1"
+                          onClick={() => setPmMethod(value)}
+                        >
+                          <Icon className="w-4 h-4" />
+                          <span className="text-xs leading-none">{label}</span>
+                        </Button>
+                      ))}
+                    </div>
+                    <Button
+                      type="button"
+                      variant={pmMethod === 'mercadopago' ? 'default' : 'outline'}
+                      size="sm"
+                      className={`w-full flex items-center gap-2 transition-colors ${pmMethod === 'mercadopago' ? 'bg-[#009ee3] hover:bg-[#0082bd] border-[#009ee3] text-white' : 'hover:border-[#009ee3] hover:text-[#009ee3]'}`}
+                      onClick={() => setPmMethod('mercadopago')}
+                    >
+                      <QrCode className="w-4 h-4" />
+                      <span>Mercado Pago — QR</span>
+                    </Button>
+                  </div>
+
+                  <Button
+                    className={`w-full ${pmMethod !== 'cash' ? 'bg-[#009ee3] hover:bg-[#0082bd] border-[#009ee3] text-white' : ''}`}
+                    size="lg"
+                    onClick={handleConfirmPaymentMethod}
+                    disabled={pmCreating}
+                  >
+                    {pmCreating ? (
+                      <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Procesando...</>
+                    ) : pmMethod === 'cash' ? (
+                      'Continuar'
+                    ) : (
+                      <><DollarSign className="w-4 h-4 mr-2" /> Cobrar</>
+                    )}
+                  </Button>
+                </>
+              ) : (
+                <div className="space-y-3">
+                  <Label className="text-sm font-medium">Tipo de Pago</Label>
+                  <div className="flex gap-2">
+                    <Button
+                      variant={pmPaymentType === 'total' ? 'default' : 'outline'}
+                      size="sm"
+                      className="flex-1"
+                      onClick={() => setPmPaymentType('total')}
+                    >
+                      Pago Total
+                    </Button>
+                    <Button
+                      variant={pmPaymentType === 'partial' ? 'default' : 'outline'}
+                      size="sm"
+                      className="flex-1"
+                      onClick={() => setPmPaymentType('partial')}
+                    >
+                      Pago Parcial
+                    </Button>
+                  </div>
+
+                  {pmPaymentType === 'total' ? (
+                    <p className="text-sm text-muted-foreground text-center">
+                      Se registrará el pago completo de {formatCurrency(orderTotal(paymentOrder))}
+                    </p>
+                  ) : (
+                    <div className="space-y-2">
+                      <Label htmlFor="pmPartialAmount">Monto del pago parcial</Label>
+                      <Input
+                        id="pmPartialAmount"
+                        type="number"
+                        placeholder="Ej: 5000"
+                        value={pmPartialAmount}
+                        onChange={(e) => setPmPartialAmount(e.target.value)}
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        Total del pedido: {formatCurrency(orderTotal(paymentOrder))}
+                      </p>
+                    </div>
+                  )}
+
+                  <Button onClick={handleConfirmManualPayment} className="w-full">
+                    <DollarSign className="w-4 h-4 mr-2" /> Confirmar Pago
+                  </Button>
+                </div>
+              )}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Overlay: esperando confirmación de Mercado Pago (Point / QR / Transferencia) */}
+      <Dialog open={pmWaiting} onOpenChange={() => {}}>
+        <DialogContent className="max-w-sm" onInteractOutside={(e) => e.preventDefault()}>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              {pmMethod === 'mercadopago' ? (
+                <><QrCode className="w-5 h-5 text-[#009ee3]" /> Cobrar con QR — Mercado Pago</>
+              ) : pmMethod === 'transfer' ? (
+                <><ArrowRightLeft className="w-5 h-5 text-[#009ee3]" /> Cobrar con Transferencia</>
+              ) : (
+                <><Smartphone className="w-5 h-5 text-[#009ee3]" /> Cobrar con Point</>
+              )}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-5 py-2">
+            <div className="text-center">
+              <p className="text-4xl font-bold text-primary">
+                {formatCurrency(paymentOrder ? orderTotal(paymentOrder) : 0)}
+              </p>
+              {pmMethod === 'mercadopago' && (
+                <p className="text-sm text-muted-foreground mt-1">
+                  Escaneá el código con la app de MercadoPago o cualquier billetera, o pagá con tarjeta en el Point
+                </p>
+              )}
+              {pmMethod === 'transfer' && (
+                <p className="text-sm text-muted-foreground mt-1">Pasale tu alias de Mercado Pago al cliente</p>
+              )}
+            </div>
+
+            {!pmError ? (
+              <div className="flex flex-col items-center gap-3 py-2">
+                {pmMethod === 'mercadopago' ? (
+                  pmQrData ? (
+                    <div className="p-3 bg-white rounded-md border">
+                      <QRCodeSVG value={pmQrData} size={220} />
+                    </div>
+                  ) : (
+                    <Loader2 className="w-8 h-8 animate-spin text-[#009ee3]" />
+                  )
+                ) : (
+                  <Loader2 className="w-8 h-8 animate-spin text-[#009ee3]" />
+                )}
+                <p className="text-sm text-center text-muted-foreground">
+                  Esperando que se confirme el pago...
+                </p>
+              </div>
+            ) : (
+              <div className="flex flex-col items-center gap-3 py-2">
+                <XCircle className="w-8 h-8 text-destructive" />
+                <p className="text-sm text-center text-destructive">{pmError}</p>
+              </div>
+            )}
+
+            <Button variant="outline" className="w-full" onClick={cancelPaymentFlow}>
+              Cancelar y anular venta
+            </Button>
+          </div>
         </DialogContent>
       </Dialog>
     </div>
