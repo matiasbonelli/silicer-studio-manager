@@ -78,6 +78,9 @@ export default function OrdersManager() {
   const [page, setPage] = useState(0);
   const PAGE_SIZE = 20;
 
+  // Recargo global (mismo que aplica Ventas, cargado desde app_settings)
+  const [recargo, setRecargo] = useState<number>(1);
+
   // Modal state
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingOrder, setEditingOrder] = useState<MoldOrder | null>(null);
@@ -152,11 +155,21 @@ export default function OrdersManager() {
     if (data) setMoldProducts(data as InventoryItem[]);
   }, []);
 
+  const fetchRecargo = useCallback(async () => {
+    const { data } = await supabase
+      .from('app_settings')
+      .select('value')
+      .eq('key', 'recargo_percent')
+      .single();
+    if (data) setRecargo(parseFloat(data.value) || 0);
+  }, []);
+
   useEffect(() => {
     fetchOrders();
     fetchStudents();
     fetchMoldProducts();
-  }, [fetchOrders, fetchStudents, fetchMoldProducts]);
+    fetchRecargo();
+  }, [fetchOrders, fetchStudents, fetchMoldProducts, fetchRecargo]);
 
   // ---------------------------------------------------------------------------
   // Filtering & pagination
@@ -336,7 +349,9 @@ export default function OrdersManager() {
     fetchOrders();
   };
 
-  const orderTotal = (order: MoldOrder) => order.product_price * (order.quantity ?? 1);
+  const applyRecargo = (subtotal: number) => subtotal + Math.round(subtotal * recargo / 100);
+
+  const orderTotal = (order: MoldOrder) => applyRecargo(order.product_price * (order.quantity ?? 1));
 
   const startMpWaitingFlow = (order: MoldOrder, saleId: string) => {
     setPmWaiting(true);
@@ -618,7 +633,7 @@ export default function OrdersManager() {
                   ? `${student.first_name} ${student.last_name}`
                   : 'Alumno eliminado';
                 const qty = order.quantity ?? 1;
-                const total = order.product_price * qty;
+                const total = orderTotal(order);
                 const canWhatsApp = order.status === 'ready' && student?.phone;
                 const whatsAppMsg =
                   `Hola ${student?.first_name ?? ''}, tu pedido está listo para retirar en Silicer Studio! 🎉\n\n` +
@@ -798,12 +813,12 @@ export default function OrdersManager() {
               </div>
             </div>
 
-            {/* Total calculado */}
+            {/* Total calculado (con recargo, igual que Ventas) */}
             {formProductPrice && formQuantity && (
               <p className="text-sm text-muted-foreground -mt-2">
-                Total:{' '}
+                Total (con recargo {recargo}%):{' '}
                 <span className="font-semibold text-foreground">
-                  {formatCurrency((parseFloat(formProductPrice) || 0) * (parseInt(formQuantity) || 1))}
+                  {formatCurrency(applyRecargo((parseFloat(formProductPrice) || 0) * (parseInt(formQuantity) || 1)))}
                 </span>
               </p>
             )}
@@ -896,6 +911,11 @@ export default function OrdersManager() {
               <div className="p-3 bg-muted rounded-lg text-center">
                 <p className="text-sm text-muted-foreground">{paymentOrder.product_name}</p>
                 <p className="text-2xl font-bold text-primary">{formatCurrency(orderTotal(paymentOrder))}</p>
+                {recargo > 0 && (
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Incluye recargo del {recargo}% ({formatCurrency(orderTotal(paymentOrder) - paymentOrder.product_price * (paymentOrder.quantity ?? 1))})
+                  </p>
+                )}
               </div>
 
               {!pmManualStep ? (
