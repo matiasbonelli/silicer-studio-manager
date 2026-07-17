@@ -34,6 +34,7 @@ import { sendWhatsApp } from '@/lib/whatsapp';
 import { QRCodeSVG } from 'qrcode.react';
 import {
   Plus,
+  Minus,
   Search,
   MessageCircle,
   Trash2,
@@ -259,7 +260,7 @@ export default function OrdersManager() {
     if (editingOrder) {
       const { error } = await supabase
         .from('mold_orders')
-        .update(payload)
+        .update({ ...payload, produced_quantity: Math.min(editingOrder.produced_quantity, qty) })
         .eq('id', editingOrder.id);
       if (error) {
         toast({ title: 'Error al actualizar', variant: 'destructive' });
@@ -292,6 +293,32 @@ export default function OrdersManager() {
       toast({ title: 'Error al cambiar estado', variant: 'destructive' });
     } else {
       toast({ title: `Estado: ${ORDER_STATUS_LABELS[next]}` });
+      fetchOrders();
+    }
+  };
+
+  // ---------------------------------------------------------------------------
+  // Seguimiento de producción: cuántas unidades del pedido ya están hechas
+  // ---------------------------------------------------------------------------
+
+  const handleProducedDelta = async (order: MoldOrder, delta: number) => {
+    const qty = order.quantity ?? 1;
+    const next = Math.max(0, Math.min(qty, order.produced_quantity + delta));
+    if (next === order.produced_quantity) return;
+
+    const completingNow = next === qty && order.produced_quantity < qty;
+    const payload: Record<string, unknown> = { produced_quantity: next };
+    if (completingNow && order.status === 'pending') {
+      payload.status = 'ready';
+    }
+
+    const { error } = await supabase.from('mold_orders').update(payload).eq('id', order.id);
+    if (error) {
+      toast({ title: 'Error al actualizar producción', variant: 'destructive' });
+    } else {
+      if (completingNow && order.status === 'pending') {
+        toast({ title: 'Producción completa', description: 'El pedido pasó a "Listo"' });
+      }
       fetchOrders();
     }
   };
@@ -587,6 +614,7 @@ export default function OrdersManager() {
               <TableHead>Alumno</TableHead>
               <TableHead>Producto</TableHead>
               <TableHead className="text-center">Cant.</TableHead>
+              <TableHead className="text-center">Producción</TableHead>
               <TableHead className="text-right">P. unitario</TableHead>
               <TableHead className="text-right">Total</TableHead>
               <TableHead className="text-center">Estado</TableHead>
@@ -600,7 +628,7 @@ export default function OrdersManager() {
             {loading ? (
               Array.from({ length: 5 }).map((_, i) => (
                 <TableRow key={i}>
-                  {Array.from({ length: 10 }).map((_, j) => (
+                  {Array.from({ length: 11 }).map((_, j) => (
                     <TableCell key={j}>
                       <Skeleton className="h-4 w-20 mx-auto" />
                     </TableCell>
@@ -609,7 +637,7 @@ export default function OrdersManager() {
               ))
             ) : filtered.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={10} className="py-16">
+                <TableCell colSpan={11} className="py-16">
                   <div className="flex flex-col items-center gap-3 text-muted-foreground">
                     <ClipboardCheck className="h-10 w-10 opacity-30" />
                     {search || statusFilter !== 'all' || paymentFilter !== 'all' ? (
@@ -647,6 +675,35 @@ export default function OrdersManager() {
                     <TableCell className="font-medium">{studentName}</TableCell>
                     <TableCell>{order.product_name}</TableCell>
                     <TableCell className="text-center">{qty}</TableCell>
+                    <TableCell className="text-center">
+                      <div className="flex items-center justify-center gap-1.5">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-6 w-6 p-0"
+                          title="Restar unidad producida"
+                          disabled={order.produced_quantity <= 0}
+                          onClick={() => handleProducedDelta(order, -1)}
+                        >
+                          <Minus className="w-3 h-3" />
+                        </Button>
+                        <span
+                          className={`text-sm tabular-nums min-w-[2.5rem] ${order.produced_quantity >= qty ? 'text-green-600 font-medium' : ''}`}
+                        >
+                          {order.produced_quantity}/{qty}
+                        </span>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-6 w-6 p-0"
+                          title="Sumar unidad producida"
+                          disabled={order.produced_quantity >= qty}
+                          onClick={() => handleProducedDelta(order, 1)}
+                        >
+                          <Plus className="w-3 h-3" />
+                        </Button>
+                      </div>
+                    </TableCell>
                     <TableCell className="text-right">{formatCurrency(order.product_price)}</TableCell>
                     <TableCell className="text-right font-medium">{formatCurrency(total)}</TableCell>
                     <TableCell className="text-center">{statusBadge(order.status)}</TableCell>
