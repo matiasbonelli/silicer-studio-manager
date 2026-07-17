@@ -8,7 +8,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
-import { Settings, Save, Plus, Trash2, Loader2, ImagePlus, X, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Settings, Save, Plus, Trash2, Loader2, ImagePlus, X, ChevronLeft, ChevronRight, Search } from 'lucide-react';
 import { formatCurrency } from '@/lib/format';
 import { ProductCategory } from '@/types/database';
 import {
@@ -71,6 +71,7 @@ export default function PricingCalculator() {
   const imageInputRef = useRef<HTMLInputElement>(null);
   const [activeImageProductId, setActiveImageProductId] = useState<string | null>(null);
   const [page, setPage] = useState(0);
+  const [productSearch, setProductSearch] = useState('');
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [newProductForm, setNewProductForm] = useState<{
     nombre: string;
@@ -510,16 +511,29 @@ export default function PricingCalculator() {
     );
   }
 
-  const totalPages = Math.max(1, Math.ceil(products.length / PAGE_SIZE));
-  const pageProducts = products.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
+  const filteredProducts = productSearch.trim()
+    ? products.filter(p => p.nombre.toLowerCase().includes(productSearch.trim().toLowerCase()))
+    : products;
+  const totalPages = Math.max(1, Math.ceil(filteredProducts.length / PAGE_SIZE));
+  const currentPage = Math.min(page, totalPages - 1);
+  const pageProducts = filteredProducts.slice(currentPage * PAGE_SIZE, (currentPage + 1) * PAGE_SIZE);
 
   return (
     <div className="space-y-6">
       {/* Tabla de Productos */}
       <Card>
-        <CardHeader className="flex flex-row items-center justify-between">
+        <CardHeader className="flex flex-row items-center justify-between gap-3 flex-wrap">
           <CardTitle>Calculadora de Precios - Productos</CardTitle>
-          <div className="flex gap-2">
+          <div className="flex gap-2 items-center">
+            <div className="relative">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground w-4 h-4" />
+              <Input
+                placeholder="Buscar producto..."
+                value={productSearch}
+                onChange={(e) => { setProductSearch(e.target.value); setPage(0); }}
+                className="pl-8 w-48"
+              />
+            </div>
             <Button onClick={saveProducts} variant="outline" size="sm" disabled={syncing}>
               {syncing ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Guardando...</> : <><Save className="w-4 h-4 mr-2" /> Guardar Todo</>}
             </Button>
@@ -705,10 +719,12 @@ export default function PricingCalculator() {
                     </TableRow>
                   );
                 })}
-                {products.length === 0 && (
+                {filteredProducts.length === 0 && (
                   <TableRow>
                     <TableCell colSpan={12} className="text-center text-muted-foreground py-8">
-                      No hay productos. Haz clic en "Agregar Producto" para comenzar.
+                      {products.length === 0
+                        ? 'No hay productos. Haz clic en "Agregar Producto" para comenzar.'
+                        : 'No se encontraron productos con ese nombre.'}
                     </TableCell>
                   </TableRow>
                 )}
@@ -719,24 +735,24 @@ export default function PricingCalculator() {
           {totalPages > 1 && (
             <div className="mt-4 flex items-center justify-between text-sm text-muted-foreground">
               <span>
-                {products.length === 0 ? 0 : page * PAGE_SIZE + 1}–{Math.min((page + 1) * PAGE_SIZE, products.length)} de {products.length} productos
+                {filteredProducts.length === 0 ? 0 : currentPage * PAGE_SIZE + 1}–{Math.min((currentPage + 1) * PAGE_SIZE, filteredProducts.length)} de {filteredProducts.length} productos
               </span>
               <div className="flex items-center gap-2">
                 <Button
                   variant="outline"
                   size="sm"
                   onClick={() => setPage(p => p - 1)}
-                  disabled={page === 0}
+                  disabled={currentPage === 0}
                 >
                   <ChevronLeft className="w-4 h-4" />
                   Anterior
                 </Button>
-                <span className="px-2">Página {page + 1} de {totalPages}</span>
+                <span className="px-2">Página {currentPage + 1} de {totalPages}</span>
                 <Button
                   variant="outline"
                   size="sm"
                   onClick={() => setPage(p => p + 1)}
-                  disabled={page >= totalPages - 1}
+                  disabled={currentPage >= totalPages - 1}
                 >
                   Siguiente
                   <ChevronRight className="w-4 h-4" />
