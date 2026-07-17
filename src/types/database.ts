@@ -178,6 +178,7 @@ export interface MoldOrder {
   product_name: string;
   product_price: number;
   quantity: number;
+  produced_quantity: number;
   pricing_product_id: string | null;
   inventory_id: string | null;
   sale_id: string | null;
