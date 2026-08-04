@@ -31,6 +31,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/hooks/use-toast';
 import { sendWhatsApp } from '@/lib/whatsapp';
+import { MESSAGE_TEMPLATES, fetchMessageTemplate, renderTemplate } from '@/lib/messageTemplates';
 import { QRCodeSVG } from 'qrcode.react';
 import {
   Plus,
@@ -81,6 +82,11 @@ export default function OrdersManager() {
 
   // Recargo global (mismo que aplica Ventas, cargado desde app_settings)
   const [recargo, setRecargo] = useState<number>(1);
+
+  // Mensaje de "pedido listo" (editable en Utilidades > Respuestas automáticas)
+  const [readyMsgTemplate, setReadyMsgTemplate] = useState<string>(
+    MESSAGE_TEMPLATES.find((t) => t.key === 'msg_pedido_listo')!.defaultMessage,
+  );
 
   // Modal state
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -170,6 +176,7 @@ export default function OrdersManager() {
     fetchStudents();
     fetchMoldProducts();
     fetchRecargo();
+    fetchMessageTemplate('msg_pedido_listo').then(setReadyMsgTemplate).catch(() => {});
   }, [fetchOrders, fetchStudents, fetchMoldProducts, fetchRecargo]);
 
   // ---------------------------------------------------------------------------
@@ -663,12 +670,12 @@ export default function OrdersManager() {
                 const qty = order.quantity ?? 1;
                 const total = orderTotal(order);
                 const canWhatsApp = order.status === 'ready' && student?.phone;
-                const whatsAppMsg =
-                  `Hola ${student?.first_name ?? ''}, tu pedido está listo para retirar en Silicer Studio! 🎉\n\n` +
-                  `📦 Producto: ${order.product_name}\n` +
-                  `🔢 Cantidad: ${qty}\n` +
-                  `💰 Total: ${formatCurrency(total)}\n\n` +
-                  `¡Cualquier consulta escribinos!`;
+                const whatsAppMsg = renderTemplate(readyMsgTemplate, {
+                  nombre: student?.first_name ?? '',
+                  producto: order.product_name,
+                  cantidad: String(qty),
+                  total: formatCurrency(total),
+                });
 
                 return (
                   <TableRow key={order.id}>

@@ -5,12 +5,20 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Button } from '@/components/ui/button';
 import { MessageCircle } from 'lucide-react';
 import { sendWhatsApp } from '@/lib/whatsapp';
+import { MESSAGE_TEMPLATES, fetchMessageTemplate, renderTemplate } from '@/lib/messageTemplates';
 import { useToast } from '@/hooks/use-toast';
 
 export default function BirthdayModal() {
   const [isOpen, setIsOpen] = useState(false);
   const [birthdayStudents, setBirthdayStudents] = useState<Student[]>([]);
+  const [birthdayMsgTemplate, setBirthdayMsgTemplate] = useState<string>(
+    MESSAGE_TEMPLATES.find((t) => t.key === 'msg_cumpleanos')!.defaultMessage,
+  );
   const { toast } = useToast();
+
+  useEffect(() => {
+    fetchMessageTemplate('msg_cumpleanos').then(setBirthdayMsgTemplate).catch(() => {});
+  }, []);
 
   useEffect(() => {
     const dismissedKey = `birthday-modal-dismissed-${new Date().toISOString().slice(0, 10)}`;
@@ -57,8 +65,7 @@ export default function BirthdayModal() {
   };
 
   const handleSendWhatsApp = (student: Student) => {
-    const name = student.first_name;
-    const message = `Muy feliz cumple años ${name} 🥳, esperemos que disfrutes en tu hermoso día 💫. Te saluda Caro y todo el equipo de Silicer 💖`;
+    const message = renderTemplate(birthdayMsgTemplate, { nombre: student.first_name });
     sendWhatsApp(student.phone!, message, toast);
   };
 
