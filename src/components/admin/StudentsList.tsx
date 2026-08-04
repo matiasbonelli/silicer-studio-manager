@@ -3,6 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { Student, Payment, Schedule, DAY_NAMES, DAY_ORDER, PAYMENT_STATUS_LABELS, PaymentStatus, MONTH_NAMES } from '@/types/database';
 import { isNewStudent, isStudentActiveThisMonth } from '@/lib/utils';
 import { formatDate } from '@/lib/format';
+import { MESSAGE_TEMPLATES, fetchMessageTemplate, renderTemplate } from '@/lib/messageTemplates';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -57,7 +58,14 @@ export default function StudentsList({ onStudentClick, refreshTrigger, onStudent
   const [paymentNotes, setPaymentNotes] = useState<string>('');
   const [uploading, setUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [reminderTemplate, setReminderTemplate] = useState<string>(
+    MESSAGE_TEMPLATES.find((t) => t.key === 'msg_reminder_pago')!.defaultMessage,
+  );
   const { toast } = useToast();
+
+  useEffect(() => {
+    fetchMessageTemplate('msg_reminder_pago').then(setReminderTemplate).catch(() => {});
+  }, []);
 
   const fetchStudents = async () => {
     setLoading(true);
@@ -620,7 +628,7 @@ export default function StudentsList({ onStudentClick, refreshTrigger, onStudent
                           const isPending = !payment || payment.status === 'pending';
                           const monthLabel = formatMonth(selectedMonth !== 'all' ? selectedMonth : getCurrentMonth());
                           const msg = isPending
-                            ? `Hola ${student.first_name}, te recordamos que tenés la cuota del mes de ${monthLabel} pendiente en Silicer. Si ya transferiste o pagaste en efectivo, recordanos o envíanos el comprobante. ¡Cualquier consulta escribinos!\n\n_Esto es un mensaje automático._`
+                            ? renderTemplate(reminderTemplate, { nombre: student.first_name, mes: monthLabel })
                             : '';
                           const url = msg
                             ? `https://wa.me/54${phone}?text=${encodeURIComponent(msg)}`

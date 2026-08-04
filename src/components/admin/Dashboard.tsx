@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import {
   Student,
@@ -11,6 +11,7 @@ import {
 import { formatCurrency } from '@/lib/format';
 import { isStudentActiveThisMonth } from '@/lib/utils';
 import { sendWhatsApp, sendWhatsAppBulk, whatsAppChatUrl } from '@/lib/whatsapp';
+import { MESSAGE_TEMPLATES, renderTemplate } from '@/lib/messageTemplates';
 import { useToast } from '@/hooks/use-toast';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -139,8 +140,8 @@ interface DashboardData {
 // Component
 // ---------------------------------------------------------------------------
 
-const DEFAULT_REMINDER_MSG =
-  'Hola [nombre], te recordamos que tenés la cuota del mes de [mes] pendiente en Silicer. Si ya transferiste o pagaste en efectivo, recordanos o envíanos el comprobante. ¡Cualquier consulta escribinos!\n\n_Esto es un mensaje automático._';
+const REMINDER_MSG_KEY = 'msg_reminder_pago';
+const DEFAULT_REMINDER_MSG = MESSAGE_TEMPLATES.find((t) => t.key === REMINDER_MSG_KEY)!.defaultMessage;
 
 interface DashboardProps {
   refreshTrigger?: number;
@@ -152,6 +153,7 @@ export default function Dashboard({ refreshTrigger }: DashboardProps) {
   const [error, setError] = useState<string | null>(null);
   const [reminderOpen, setReminderOpen] = useState(false);
   const [reminderMsg, setReminderMsg] = useState(DEFAULT_REMINDER_MSG);
+  const reminderMsgLoadedRef = useRef(false);
   const [pendingSearch, setPendingSearch] = useState('');
   const { toast } = useToast();
 
@@ -203,7 +205,7 @@ export default function Dashboard({ refreshTrigger }: DashboardProps) {
           .gte('payment_date', twelveMonthsAgo)
           .in('status', ['paid', 'partial']),
         supabase.from('mold_orders').select('id', { count: 'exact', head: true }).eq('status', 'pending'),
-        supabase.from('app_settings').select('key, value').in('key', [CUOTA_KEY_ADULTO, CUOTA_KEY_NINO]),
+        supabase.from('app_settings').select('key, value').in('key', [CUOTA_KEY_ADULTO, CUOTA_KEY_NINO, REMINDER_MSG_KEY]),
       ]);
 
       if (salesRes.error) throw salesRes.error;
@@ -223,6 +225,10 @@ export default function Dashboard({ refreshTrigger }: DashboardProps) {
       const getPrecio = (cat: string) => cat === 'niño' ? precioNino : precioAdulto;
       setCuotaAdulto(cuotaSettings[CUOTA_KEY_ADULTO] ?? '');
       setCuotaNino(cuotaSettings[CUOTA_KEY_NINO] ?? '');
+      if (!reminderMsgLoadedRef.current && cuotaSettings[REMINDER_MSG_KEY]) {
+        reminderMsgLoadedRef.current = true;
+        setReminderMsg(cuotaSettings[REMINDER_MSG_KEY]);
+      }
 
       // Mapa student_id → { status, amount, categoria }
       const categoriaMap: Record<string, string> = {};
@@ -436,9 +442,7 @@ export default function Dashboard({ refreshTrigger }: DashboardProps) {
   const monthLabel = formatMonth(currentMonth);
 
   const buildReminderMsg = (student: Student): string => {
-    return reminderMsg
-      .replace(/\[nombre\]/g, student.first_name)
-      .replace(/\[mes\]/g, monthLabel);
+    return renderTemplate(reminderMsg, { nombre: student.first_name, mes: monthLabel });
   };
 
   const handleSendReminder = (student: Student) => {
@@ -887,8 +891,9 @@ export default function Dashboard({ refreshTrigger }: DashboardProps) {
             <div className="space-y-1.5">
               <p className="text-sm font-medium">Mensaje (editable)</p>
               <p className="text-xs text-muted-foreground">
-                Usá <code className="bg-muted px-1 rounded">[nombre]</code> y{' '}
-                <code className="bg-muted px-1 rounded">[mes]</code> como variables.
+                Usá <code className="bg-muted px-1 rounded">{'{nombre}'}</code> y{' '}
+                <code className="bg-muted px-1 rounded">{'{mes}'}</code> como variables. Se
+                edita de forma permanente desde Utilidades → Respuestas automáticas.
               </p>
               <Textarea
                 value={reminderMsg}
