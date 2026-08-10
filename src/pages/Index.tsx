@@ -18,7 +18,7 @@ const WhatsAppIcon = ({ className }: { className?: string }) => (
   </svg>
 );
 
-const WHATSAPP_NUMBER = '5493585737156';
+const WHATSAPP_NUMBER = '5493584255245';
 const WHATSAPP_PREFILLED_MESSAGE = 'Hola! Ya me preinscribí, ¿me pasarías más información?';
 
 
