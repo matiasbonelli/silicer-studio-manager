@@ -18,6 +18,9 @@ const WhatsAppIcon = ({ className }: { className?: string }) => (
   </svg>
 );
 
+const WHATSAPP_NUMBER = '5493584255245';
+const WHATSAPP_PREFILLED_MESSAGE = 'Hola! Ya me preinscribí, ¿me pasarías más información?';
+
 
 const enrollmentSchema = z.object({
   first_name: z.string().trim().min(1, 'El nombre es requerido').max(100),
@@ -122,6 +125,11 @@ export default function Index() {
     }
     setFormErrors({});
 
+    // Se abre en blanco en el mismo tick del submit (no después del await) porque
+    // iOS Safari bloquea window.open si no ocurre sincrónicamente sobre el gesto del usuario.
+    // Se completa con la URL de WhatsApp si el envío tiene éxito, o se cierra si falla.
+    const whatsappWindow = window.open('', '_blank');
+
     const { data: rpcResult, error } = await supabase.rpc('submit_enrollment', {
       p_first_name: formData.first_name,
       p_last_name: formData.last_name,
@@ -135,12 +143,20 @@ export default function Index() {
     const result = rpcResult as { success: boolean; message: string } | null;
 
     if (error || !result?.success) {
+      whatsappWindow?.close();
       toast({
         title: 'Error',
         description: result?.message || 'No se pudo enviar la inscripción. Intenta de nuevo.',
         variant: 'destructive',
       });
     } else {
+      const whatsappUrl = `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(WHATSAPP_PREFILLED_MESSAGE)}`;
+      if (whatsappWindow) {
+        whatsappWindow.location.href = whatsappUrl;
+      } else {
+        window.open(whatsappUrl, '_blank');
+      }
+
       // Show success modal instead of toast
       setFormErrors({});
       setShowSuccessModal(true);
@@ -398,7 +414,7 @@ useEffect(() => {
             <CardHeader className="text-center">
               <CardTitle className="text-2xl text-[#4a3f35] font-serif">¡Preinscribite!</CardTitle>
               <CardDescription className="text-[#6b5c4c]">
-                Completá el formulario y te contactaremos para confirmar tu lugar
+                Completá el formulario para preinscribirte
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -558,7 +574,7 @@ useEffect(() => {
                     </>
                   ) : (
                     <>
-                      <Send className="w-4 h-4 mr-2" /> Enviar preinscripción
+                      <Send className="w-4 h-4 mr-2" /> Quiero preinscribirme
                     </>
                   )}
                 </Button>
@@ -620,10 +636,10 @@ useEffect(() => {
               <CheckCircle2 className="w-10 h-10 text-green-600" />
             </div>
             <h2 className="text-2xl text-[#4a3f35] mb-3">
-              ¡Preinscripción enviada!
+              ¡Listo! Te llevamos a WhatsApp
             </h2>
             <p className="text-[#6b5c4c] leading-relaxed max-w-sm">
-              La preinscripción no garantiza el cupo, nos pondremos en contacto pronto para confirmar tu lugar.
+              Agilizá tu preinscripción enviando el mensaje que te dejamos precargado en WhatsApp.
             </p>
             <Button
               onClick={() => setShowSuccessModal(false)}
