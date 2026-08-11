@@ -1,16 +1,32 @@
 import { useState, useEffect, useRef } from 'react';
+import '@/styles/landing.css';
 import { supabase } from '@/integrations/supabase/client';
 import { Schedule, DAY_NAMES } from '@/types/database';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
 import { z } from 'zod';
-import { Instagram, Send, Loader2, Clock, Users, Sparkles, CheckCircle2, X } from 'lucide-react';
+import { Send, Loader2, CheckCircle2, X } from 'lucide-react';
+import { InstagramIcon } from '@/components/landing/icons';
+import Header from '@/components/landing/Header';
+import Hero from '@/components/landing/Hero';
+import About from '@/components/landing/About';
+import Learn from '@/components/landing/Learn';
+import Students from '@/components/landing/Students';
+import PracticalInfo from '@/components/landing/PracticalInfo';
+import { landingContent } from '@/content/landing';
+
+const fieldClass =
+  'border-[var(--landing-border)] bg-[var(--landing-bg)] text-[var(--landing-ink)] placeholder:text-[var(--landing-muted)] focus-visible:ring-[var(--landing-primary)] focus-visible:border-[var(--landing-primary)] rounded-[var(--landing-radius-sm)]';
+const fieldLabelClass = 'text-[var(--landing-ink)] font-[var(--landing-font-body)]';
+const fields = landingContent.enrollment.form.fields;
+
+const WHATSAPP_NUMBER = '5493585737156';
+const WHATSAPP_PREFILLED_MESSAGE = 'Hola! Ya me preinscribí, ¿me pasarías más información?';
 
 const WhatsAppIcon = ({ className }: { className?: string }) => (
   <svg className={className} viewBox="0 0 24 24" fill="currentColor">
@@ -58,7 +74,6 @@ export default function Index() {
     }
   };
 
-  const infoSectionRef = useRef<HTMLElement>(null);
   const formSectionRef = useRef<HTMLElement>(null);
 
   useEffect(() => {
@@ -122,25 +137,38 @@ export default function Index() {
     }
     setFormErrors({});
 
+    // Se abre en blanco en el mismo tick del submit (no después del await) porque
+    // iOS Safari bloquea window.open si no ocurre sincrónicamente sobre el gesto del usuario.
+    // Se completa con la URL de WhatsApp si el envío tiene éxito, o se cierra si falla.
+    const whatsappWindow = window.open('', '_blank');
+
     const { data: rpcResult, error } = await supabase.rpc('submit_enrollment', {
       p_first_name: formData.first_name,
       p_last_name: formData.last_name,
-      p_email: formData.email || null,
+      p_email: formData.email || undefined,
       p_phone: formData.phone,
-      p_birthday: formData.birthday || null,
+      p_birthday: formData.birthday || undefined,
       p_schedule_id: formData.schedule_id,
-      p_message: formData.message || null,
+      p_message: formData.message || undefined,
     });
 
     const result = rpcResult as { success: boolean; message: string } | null;
 
     if (error || !result?.success) {
+      whatsappWindow?.close();
       toast({
         title: 'Error',
         description: result?.message || 'No se pudo enviar la inscripción. Intenta de nuevo.',
         variant: 'destructive',
       });
     } else {
+      const whatsappUrl = `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(WHATSAPP_PREFILLED_MESSAGE)}`;
+      if (whatsappWindow) {
+        whatsappWindow.location.href = whatsappUrl;
+      } else {
+        window.open(whatsappUrl, '_blank');
+      }
+
       // Show success modal instead of toast
       setFormErrors({});
       setShowSuccessModal(true);
@@ -168,29 +196,26 @@ export default function Index() {
   };
 
   const scrollToSection = (ref: React.RefObject<HTMLElement>) => {
-    const element = ref.current;
-    if (!element) return;
+    // El destino se recalcula en cada frame (en vez de una sola vez al arrancar)
+    // para que la animación se autocorrija si el layout todavía se está
+    // acomodando (p.ej. mientras cargan las tipografías del hero).
+    const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-    const targetPosition = element.getBoundingClientRect().top + window.scrollY;
-    const startPosition = window.scrollY;
-    const distance = targetPosition - startPosition;
-    const duration = 1200;
-    let startTime: number | null = null;
+    const animation = () => {
+      const element = ref.current;
+      if (!element) return;
 
-    const easeInOutCubic = (t: number) =>
-      t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+      const target = element.getBoundingClientRect().top + window.scrollY;
+      const current = window.scrollY;
+      const diff = target - current;
 
-    const animation = (currentTime: number) => {
-      if (!startTime) startTime = currentTime;
-      const elapsed = currentTime - startTime;
-      const progress = Math.min(elapsed / duration, 1);
-      const eased = easeInOutCubic(progress);
-
-      window.scrollTo(0, startPosition + distance * eased);
-
-      if (progress < 1) {
-        requestAnimationFrame(animation);
+      if (Math.abs(diff) < 1 || prefersReducedMotion) {
+        window.scrollTo(0, target);
+        return;
       }
+
+      window.scrollTo(0, current + diff * 0.18);
+      requestAnimationFrame(animation);
     };
 
     requestAnimationFrame(animation);
@@ -203,405 +228,319 @@ export default function Index() {
   const schedulesForSelectedDay = selectedDay
     ? schedules.filter(s => s.day_of_week === selectedDay)
     : [];
-const age = formData.birthday
-  ? Math.floor(
-      (new Date().getTime() - new Date(formData.birthday).getTime()) /
-      (365.25 * 24 * 60 * 60 * 1000)
-    )
-  : null;
-
-const validAge = age !== null && age >= 0 && age < 14;
-
-useEffect(() => {
-  if (!validAge) {
-    setSelectedDay(null);
-    setFormData(prev => ({ ...prev, schedule_id: "" }));
-  }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-}, [formData.birthday]);
 
   return (
-    <div className="min-h-screen bg-[#EBEBEB] landing-page">
-      {/* Hero Section - Living Clay Style */}
-      <section className="min-h-screen relative flex flex-col items-center justify-start px-4 pt-8 pb-20 overflow-hidden">
-        {/* Background abstract image */}
-        <div
-          className="absolute inset-0"
-          style={{
-            backgroundImage: 'url(/hero-background.png)',
-            backgroundSize: 'cover',
-            backgroundPosition: 'center',
-            opacity: 0.5,
-          }}
-        />
-        {/* Fallback gradient if image doesn't load */}
-        <div className="absolute inset-0 bg-gradient-to-br from-[#d4c4b0]/20 via-transparent to-[#a08060]/10 pointer-events-none" />
+    <div className="landing-page">
+      <Header onCtaClick={() => scrollToSection(formSectionRef)} />
+      <Hero onCtaClick={() => scrollToSection(formSectionRef)} />
+      <About />
+      <Learn />
+      <Students />
+      <PracticalInfo />
 
-        {/* Header with logo - more spacing */}
-        <div className="w-full max-w-6xl mx-auto flex items-center justify-center mt-4 mb-20 relative z-10">
-          {/* Logo - 50% smaller with more margin */}
-          <img
-            src="/logo.svg"
-            alt="Silicer Logo"
-            className="h-8 md:h-10"
-          />
-        </div>
-
-        {/* Main content - Oval image with overlapping text */}
-        <div className="relative flex flex-col items-center justify-center flex-1 w-full max-w-4xl mx-auto">
-          {/* Oval image container */}
-          <div className="relative">
-            <img
-              src="/hero-ceramica.jpg"
-              alt="Cerámica artesanal"
-              className="w-[320px] h-[420px] md:w-[400px] md:h-[520px] lg:w-[450px] lg:h-[580px] object-cover shadow-2xl"
-              style={{
-                borderRadius: '50%',
-              }}
-            />
-          </div>
-
-          {/* Title - separated from oval */}
-          <h1
-            className="mt-8 text-2xl md:text-3xl lg:text-4xl text-[#4a3f35] text-center tracking-[0.08em]"
+      {/* Preinscripción — formulario sobre imagen con textura propia,
+          contenedor de bordes redondeados (referencia unikorns) */}
+      <section
+        ref={formSectionRef}
+        id="inscripcion"
+        style={{
+          position: 'relative',
+          paddingBlock: 'var(--landing-space-7)',
+          backgroundImage: 'url(/hero-background.jpg)',
+          backgroundSize: 'cover',
+          backgroundPosition: 'center',
+        }}
+      >
+        <div className="landing-container" style={{ display: 'flex', justifyContent: 'center' }}>
+          <div
+            style={{
+              width: '100%',
+              maxWidth: 620,
+              backgroundColor: 'var(--landing-surface)',
+              borderRadius: 'var(--landing-radius-form)',
+              padding: 'var(--landing-space-5) var(--landing-space-4)',
+              boxShadow: '0 40px 90px -35px rgba(20, 14, 30, 0.55)',
+            }}
           >
-            Descubrí el arte de la cerámica
-          </h1>
-
-          {/* Subtitle - closer to title */}
-          <p className="mt-3 text-lg md:text-xl text-[#4a3f35]/70 text-center max-w-xl leading-relaxed font-light">
-            Un espacio para crear, aprender y conectar con tus manos
-          </p>
-
-          {/* CTA Buttons - closer to subtitle */}
-          <div className="flex flex-col sm:flex-row gap-4 mt-6">
-            <Button
-              size="lg"
-              className="bg-[#5C329E] hover:bg-[#4a2880] text-white px-10 py-6 text-base rounded-full tracking-wide"
-              onClick={() => scrollToSection(formSectionRef)}
-            >
-              Preinscripción
-            </Button>
-            <Button
-              size="lg"
-              variant="outline"
-              className="border-[#5C329E]/30 text-[#5C329E] hover:bg-[#5C329E]/5 px-10 py-6 text-base rounded-full bg-transparent tracking-wide"
-              onClick={() => scrollToSection(infoSectionRef)}
-            >
-              Conocer más
-            </Button>
-          </div>
-        </div>
-
-        {/* Scroll indicator - more space from buttons */}
-        <div className="absolute bottom-4 left-0 right-0 flex justify-center">
-          <div className="animate-bounce">
-            <div className="w-5 h-8 border border-[#4a3f35]/30 rounded-full flex justify-center pt-1.5">
-              <div className="w-0.5 h-1.5 bg-[#4a3f35]/40 rounded-full" />
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* Info Section */}
-      <section ref={infoSectionRef} className="py-20 px-4 bg-white">
-        <div className="container mx-auto max-w-4xl">
-          {/* Main Info Card */}
-          <Card className="border-none shadow-xl bg-[#faf9f7] mb-12">
-            <CardContent className="p-8 md:p-12">
-              <h2 className="text-3xl md:text-4xl font-serif text-[#4a3f35] text-center mb-8">
-                ¡Sumate a nuestro taller este año!
+            <div style={{ textAlign: 'center', marginBottom: 'var(--landing-space-4)' }}>
+              <h2
+                style={{
+                  fontFamily: 'var(--landing-font-display)',
+                  fontWeight: 400,
+                  fontSize: 'var(--landing-text-h2)',
+                  color: 'var(--landing-ink)',
+                  margin: '0 0 0.5rem',
+                }}
+              >
+                {landingContent.enrollment.title}
               </h2>
+              <p
+                style={{
+                  fontFamily: 'var(--landing-font-body)',
+                  fontWeight: 300,
+                  fontSize: 'var(--landing-text-body)',
+                  color: 'var(--landing-muted)',
+                  margin: 0,
+                }}
+              >
+                {landingContent.enrollment.subtitle}
+              </p>
+            </div>
 
-              <div className="space-y-6 text-lg text-[#6b5c4c]">
-                <p className="text-center">
-                  En Silicer tenemos todo listo para que aprendas cerámica en serio.
-                </p>
-
-                <div className="flex items-start gap-4 p-4 bg-[#f5f1ec] rounded-lg">
-                  <Sparkles className="w-6 h-6 text-[#4a3f35] shrink-0 mt-1" />
-                  <div>
-                    <strong className="text-[#4a3f35]">¿Qué vas a aprender?</strong>
-                    <p>Técnicas de construcción y decoración en todos los estados (cuero, crudo, bizcocho y sobre esmalte).</p>
-                  </div>
+            <form onSubmit={handleSubmit} noValidate className="space-y-4">
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-2">
+                  <Label htmlFor="first_name" className={fieldLabelClass}>{fields.firstName.label} *</Label>
+                  <Input
+                    id="first_name"
+                    placeholder={fields.firstName.placeholder}
+                    value={formData.first_name}
+                    onChange={(e) => updateField('first_name', e.target.value)}
+                    className={fieldClass}
+                  />
+                  {formErrors.first_name && (
+                    <p className="text-sm text-destructive mt-1">{formErrors.first_name}</p>
+                  )}
                 </div>
-
-                <div className="flex items-start gap-4 p-4 bg-[#f5f1ec] rounded-lg">
-                  <span className="text-2xl shrink-0">🚀</span>
-                  <div>
-                    <strong className="text-[#4a3f35]">¿Límites?</strong>
-                    <p>Ninguno. Hacé las piezas que quieras del tamaño que quieras (¡siempre que el horno nos dé espacio 😊!).</p>
-                  </div>
-                </div>
-
-                <div className="flex items-start gap-4 p-4 bg-[#f5f1ec] rounded-lg">
-                  <span className="text-2xl shrink-0">🧉</span>
-                  <div>
-                    <strong className="text-[#4a3f35]">El plus:</strong>
-                    <p>No es solo cerámica, es comunidad. Vení a encontrarte, a compartir y a que tomemos juntos unos matecitos con peperina.</p>
-                  </div>
+                <div className="space-y-2">
+                  <Label htmlFor="last_name" className={fieldLabelClass}>{fields.lastName.label} *</Label>
+                  <Input
+                    id="last_name"
+                    placeholder={fields.lastName.placeholder}
+                    value={formData.last_name}
+                    onChange={(e) => updateField('last_name', e.target.value)}
+                    className={fieldClass}
+                  />
+                  {formErrors.last_name && (
+                    <p className="text-sm text-destructive mt-1">{formErrors.last_name}</p>
+                  )}
                 </div>
               </div>
-            </CardContent>
-          </Card>
 
-          {/* Three Columns */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <Card className="border-none shadow-lg bg-[#faf9f7] text-center">
-              <CardContent className="p-6">
-                <Clock className="w-10 h-10 text-[#4a3f35] mx-auto mb-4" />
-                <h3 className="text-xl font-bold text-[#4a3f35] mb-2">2 Horas</h3>
-                <p className="text-[#6b5c4c]">
-                  La cuota mensual contempla 1 clase por semana con duración de 2 horas cada una
-                </p>
-              </CardContent>
-            </Card>
+              <div className="space-y-2">
+                <Label htmlFor="email" className={fieldLabelClass}>{fields.email.label}</Label>
+                <Input
+                  id="email"
+                  type="email"
+                  placeholder={fields.email.placeholder}
+                  value={formData.email}
+                  onChange={(e) => updateField('email', e.target.value)}
+                  className={fieldClass}
+                />
+                {formErrors.email && (
+                  <p className="text-sm text-destructive mt-1">{formErrors.email}</p>
+                )}
+              </div>
 
-            <Card className="border-none shadow-lg bg-[#faf9f7] text-center">
-              <CardContent className="p-6">
-                <Users className="w-10 h-10 text-[#4a3f35] mx-auto mb-4" />
-                <h3 className="text-xl font-bold text-[#4a3f35] mb-2">Cupos limitados</h3>
-                <p className="text-[#6b5c4c]">
-                  10 personas por turno, te recomendamos preinscribirte con antelación
-                </p>
-              </CardContent>
-            </Card>
-
-            <Card className="border-none shadow-lg bg-[#faf9f7] text-center">
-              <CardContent className="p-6">
-                <Sparkles className="w-10 h-10 text-[#4a3f35] mx-auto mb-4" />
-                <h3 className="text-xl font-bold text-[#4a3f35] mb-2">Experiencia</h3>
-                <p className="text-[#6b5c4c]">
-                  No importa si no tenés experiencia, todos aprendemos juntos!
-                </p>
-              </CardContent>
-            </Card>
-          </div>
-
-          {/* CTA Button */}
-          <div className="text-center mt-12">
-            <Button
-              size="lg"
-              className="bg-[#5C329E] hover:bg-[#4a2880] text-white px-10 py-6 text-lg rounded-full"
-              onClick={() => scrollToSection(formSectionRef)}
-            >
-              Quiero preinscribirme
-            </Button>
-          </div>
-        </div>
-      </section>
-
-      {/* Enrollment Form */}
-      <section ref={formSectionRef} className="py-20 bg-[#EBEBEB]" id="inscripcion">
-        <div className="container mx-auto px-4 max-w-xl">
-          <Card className="shadow-xl border-none bg-white">
-            <CardHeader className="text-center">
-              <CardTitle className="text-2xl text-[#4a3f35] font-serif">¡Preinscribite!</CardTitle>
-              <CardDescription className="text-[#6b5c4c]">
-                Completá el formulario y te contactaremos para confirmar tu lugar
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <form onSubmit={handleSubmit} noValidate className="space-y-4">
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-2">
-                    <Label htmlFor="first_name" className="text-[#4a3f35]">Nombre *</Label>
-                    <Input
-                      id="first_name"
-                      value={formData.first_name}
-                      onChange={(e) => updateField('first_name', e.target.value)}
-                      className="border-[#d4c4b0] focus:border-[#4a3f35]"
-                    />
-                    {formErrors.first_name && (
-                      <p className="text-sm text-destructive mt-1">{formErrors.first_name}</p>
-                    )}
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="last_name" className="text-[#4a3f35]">Apellido *</Label>
-                    <Input
-                      id="last_name"
-                      value={formData.last_name}
-                      onChange={(e) => updateField('last_name', e.target.value)}
-                      className="border-[#d4c4b0] focus:border-[#4a3f35]"
-                    />
-                    {formErrors.last_name && (
-                      <p className="text-sm text-destructive mt-1">{formErrors.last_name}</p>
-                    )}
-                  </div>
-                </div>
-
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="space-y-2">
-                  <Label htmlFor="email" className="text-[#4a3f35]">Email</Label>
+                  <Label htmlFor="phone" className={fieldLabelClass}>{fields.phone.label} *</Label>
                   <Input
-                    id="email"
-                    type="email"
-                    value={formData.email}
-                    onChange={(e) => updateField('email', e.target.value)}
-                    className="border-[#d4c4b0] focus:border-[#4a3f35]"
+                    id="phone"
+                    type="tel"
+                    placeholder={fields.phone.placeholder}
+                    value={formData.phone}
+                    onChange={(e) => updateField('phone', e.target.value)}
+                    className={fieldClass}
                   />
-                  {formErrors.email && (
-                    <p className="text-sm text-destructive mt-1">{formErrors.email}</p>
+                  {formErrors.phone && (
+                    <p className="text-sm text-destructive mt-1">{formErrors.phone}</p>
                   )}
                 </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div className="space-y-2">
-                    <Label htmlFor="phone" className="text-[#4a3f35]">Teléfono *</Label>
-                    <Input
-                      id="phone"
-                      type="tel"
-                      value={formData.phone}
-                      onChange={(e) => updateField('phone', e.target.value)}
-                      className="border-[#d4c4b0] focus:border-[#4a3f35]"
-                    />
-                    {formErrors.phone && (
-                      <p className="text-sm text-destructive mt-1">{formErrors.phone}</p>
-                    )}
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="birthday" className="text-[#4a3f35]">Fecha de Nacimiento</Label>
-                    <Input
-                      id="birthday"
-                      type="date"
-                      value={formData.birthday}
-                      onChange={(e) => updateField('birthday', e.target.value)}
-                      className="border-[#d4c4b0] focus:border-[#4a3f35] max-w-[200px]"
-                    />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-2">
-                    <Label htmlFor="day" className="text-[#4a3f35]">Día *</Label>
-                    <Select
-                      value={selectedDay}
-                      onValueChange={(value) => {
-                        setSelectedDay(value);
-                        updateField('schedule_id', '');
-                      }}
-                    >
-                      <SelectTrigger className="border-[#d4c4b0] focus:border-[#4a3f35]">
-                        <SelectValue placeholder={loading ? 'Cargando...' : 'Seleccionar día'} />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {availableDays.map(day => (
-                          <SelectItem key={day} value={day}>
-                            {DAY_NAMES[day]}
-                          </SelectItem>
-                        ))}
-                        {availableDays.length === 0 && !loading && (
-                          <SelectItem value="none" disabled>
-                            No hay días disponibles
-                          </SelectItem>
-                        )}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-2">
-  <Label htmlFor="schedule" className="text-[#4a3f35]">Horario *</Label>
-  <Select
-    value={formData.schedule_id}
-    onValueChange={(value) => updateField('schedule_id', value)}
-    disabled={!selectedDay  || loading || (!validAge && selectedDay === "saturday")}
-  >
-    <SelectTrigger className="border-[#d4c4b0] focus:border-[#4a3f35]">
-      <SelectValue
-        placeholder={!selectedDay ? 'Elegí un día' : 'Seleccionar horario'}
-      />
-    </SelectTrigger>
-    <SelectContent>
-      {schedulesForSelectedDay.map(schedule => (
-        <SelectItem key={schedule.id} value={schedule.id} disabled={schedule.current_count >= schedule.max_capacity}>
-          {schedule.start_time.slice(0, 5)} - {schedule.end_time.slice(0, 5)}
-          <span className="text-muted-foreground ml-2">
-           {schedule.current_count >= schedule.max_capacity ? 'Completo' : `${schedule.max_capacity - schedule.current_count} cupos`}
-          </span>
-        </SelectItem>
-      ))}
-      {schedulesForSelectedDay.length === 0 && selectedDay && (
-        <SelectItem value="none" disabled>
-          No hay horarios disponibles
-        </SelectItem>
-      )}
-    </SelectContent>
-  </Select>
-  {formErrors.schedule_id && (
-    <p className="text-sm text-destructive mt-1">{formErrors.schedule_id}</p>
-  )}
-</div>
-                </div>
-
                 <div className="space-y-2">
-                  <Label htmlFor="message" className="text-[#4a3f35]">Mensaje (opcional)</Label>
-                  <Textarea
-                    id="message"
-                    value={formData.message}
-                    onChange={(e) => updateField('message', e.target.value)}
-                    placeholder="¿Tenés alguna consulta o comentario?"
-                    className="border-[#d4c4b0] focus:border-[#4a3f35]"
-                    rows={3}
+                  <Label htmlFor="birthday" className={fieldLabelClass}>{fields.birthday.label}</Label>
+                  <Input
+                    id="birthday"
+                    type="date"
+                    value={formData.birthday}
+                    onChange={(e) => updateField('birthday', e.target.value)}
+                    className={`${fieldClass} max-w-[200px]`}
                   />
-                  {formErrors.message && (
-                    <p className="text-sm text-destructive mt-1">{formErrors.message}</p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-2">
+                  <Label htmlFor="day" className={fieldLabelClass}>{fields.day.label} *</Label>
+                  <Select
+                    value={selectedDay}
+                    onValueChange={(value) => {
+                      setSelectedDay(value);
+                      updateField('schedule_id', '');
+                    }}
+                  >
+                    <SelectTrigger className={fieldClass}>
+                      <SelectValue placeholder={loading ? 'Cargando...' : 'Seleccionar día'} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {availableDays.map(day => (
+                        <SelectItem key={day} value={day}>
+                          {DAY_NAMES[day]}
+                        </SelectItem>
+                      ))}
+                      {availableDays.length === 0 && !loading && (
+                        <SelectItem value="none" disabled>
+                          No hay días disponibles
+                        </SelectItem>
+                      )}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="schedule" className={fieldLabelClass}>{fields.schedule.label} *</Label>
+                  <Select
+                    value={formData.schedule_id}
+                    onValueChange={(value) => updateField('schedule_id', value)}
+                    disabled={!selectedDay || loading}
+                  >
+                    <SelectTrigger className={fieldClass}>
+                      <SelectValue
+                        placeholder={!selectedDay ? 'Elegí un día' : 'Seleccionar horario'}
+                      />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {schedulesForSelectedDay.map(schedule => (
+                        <SelectItem key={schedule.id} value={schedule.id} disabled={schedule.current_count >= schedule.max_capacity}>
+                          {schedule.start_time.slice(0, 5)} - {schedule.end_time.slice(0, 5)}
+                          <span className="text-muted-foreground ml-2">
+                            {schedule.current_count >= schedule.max_capacity ? 'Completo' : `${schedule.max_capacity - schedule.current_count} cupos`}
+                          </span>
+                        </SelectItem>
+                      ))}
+                      {schedulesForSelectedDay.length === 0 && selectedDay && (
+                        <SelectItem value="none" disabled>
+                          No hay horarios disponibles
+                        </SelectItem>
+                      )}
+                    </SelectContent>
+                  </Select>
+                  {formErrors.schedule_id && (
+                    <p className="text-sm text-destructive mt-1">{formErrors.schedule_id}</p>
                   )}
                 </div>
+              </div>
 
-                <Button
-                  type="submit"
-                  size="lg"
-                  className="w-full bg-[#5C329E] hover:bg-[#4a2880] text-white rounded-full"
-                  disabled={submitting || loading}
-                >
-                  {submitting ? (
-                    <>
-                      <Loader2 className="w-4 h-4 mr-2 animate-spin" /> Enviando...
-                    </>
-                  ) : (
-                    <>
-                      <Send className="w-4 h-4 mr-2" /> Enviar preinscripción
-                    </>
-                  )}
-                </Button>
-              </form>
-            </CardContent>
-          </Card>
+              <div className="space-y-2">
+                <Label htmlFor="message" className={fieldLabelClass}>{fields.message.label}</Label>
+                <Textarea
+                  id="message"
+                  placeholder={fields.message.placeholder}
+                  value={formData.message}
+                  onChange={(e) => updateField('message', e.target.value)}
+                  className={fieldClass}
+                  rows={3}
+                />
+                {formErrors.message && (
+                  <p className="text-sm text-destructive mt-1">{formErrors.message}</p>
+                )}
+              </div>
+
+              <button
+                type="submit"
+                disabled={submitting || loading}
+                style={{
+                  width: '100%',
+                  fontFamily: 'var(--landing-font-body)',
+                  fontWeight: 700,
+                  fontSize: 'var(--landing-text-body)',
+                  color: 'var(--landing-primary-foreground)',
+                  backgroundColor: 'var(--landing-primary)',
+                  border: 'none',
+                  borderRadius: 'var(--landing-radius-md)',
+                  padding: '0.9rem',
+                  cursor: submitting || loading ? 'not-allowed' : 'pointer',
+                  opacity: submitting || loading ? 0.7 : 1,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '0.5rem',
+                }}
+              >
+                {submitting ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" /> {landingContent.enrollment.form.submittingLabel}
+                  </>
+                ) : (
+                  <>
+                    <Send className="w-4 h-4" /> {landingContent.enrollment.form.submitLabel}
+                  </>
+                )}
+              </button>
+            </form>
+          </div>
         </div>
       </section>
 
-      {/* Footer */}
-      <footer className="bg-[#EBEBEB] py-12 border-t border-[#d4c4b0]/30">
-        <div className="container mx-auto px-4 text-center">
-          <h3 className="text-2xl font-serif text-[#4a3f35] mb-4">¿Tenés dudas? ¡Contactanos!</h3>
-          <div className="flex justify-center gap-4 flex-wrap">
-            <Button
-              variant="outline"
-              size="lg"
-              className="border-[#5C329E]/30 text-[#5C329E] hover:bg-[#5C329E]/5 bg-transparent rounded-full"
-              asChild
+      {/* Footer — cierre-statement protagonista + contacto directo */}
+      <footer style={{ backgroundColor: 'var(--landing-bg-alt)', paddingBlock: 'var(--landing-space-7)' }}>
+        <div className="landing-container" style={{ textAlign: 'center' }}>
+          <p
+            style={{
+              fontFamily: 'var(--landing-font-display)',
+              fontWeight: 400,
+              fontSize: 'var(--landing-text-h2)',
+              lineHeight: 'var(--landing-leading-heading)',
+              color: 'var(--landing-ink)',
+              maxWidth: '24ch',
+              marginInline: 'auto',
+              marginBlock: '0 var(--landing-space-5)',
+            }}
+          >
+            {landingContent.footer.closingStatement}
+          </p>
+
+          <div style={{ display: 'flex', justifyContent: 'center', gap: 'var(--landing-space-2)', flexWrap: 'wrap' }}>
+            <a
+              href="https://wa.me/5493585737156?text=Hola!%20Quiero%20consultar%20por%20las%20clases%20de%20ceramica"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="landing-footer-link"
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '0.5rem',
+                fontFamily: 'var(--landing-font-body)',
+                fontWeight: 700,
+                fontSize: 'var(--landing-text-body)',
+                color: 'var(--landing-primary)',
+                border: '1px solid var(--landing-primary)',
+                borderRadius: 'var(--landing-radius-md)',
+                padding: '0.7rem 1.4rem',
+                textDecoration: 'none',
+                transition: `background-color var(--landing-duration-fast) var(--landing-ease-out)`,
+              }}
             >
-              <a
-                href="https://wa.me/5493585737156?text=Hola!%20Quiero%20consultar%20por%20las%20clases%20de%20ceramica"
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                <WhatsAppIcon className="w-5 h-5 mr-2" /> WhatsApp
-              </a>
-            </Button>
-            <Button
-              variant="outline"
-              size="lg"
-              className="border-[#5C329E]/30 text-[#5C329E] hover:bg-[#5C329E]/5 bg-transparent rounded-full"
-              asChild
+              <WhatsAppIcon className="w-5 h-5" /> {landingContent.footer.contact.whatsappLabel}
+            </a>
+            <a
+              href="https://www.instagram.com/silicerespacio/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="landing-footer-link"
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '0.5rem',
+                fontFamily: 'var(--landing-font-body)',
+                fontWeight: 700,
+                fontSize: 'var(--landing-text-body)',
+                color: 'var(--landing-primary)',
+                border: '1px solid var(--landing-primary)',
+                borderRadius: 'var(--landing-radius-md)',
+                padding: '0.7rem 1.4rem',
+                textDecoration: 'none',
+                transition: `background-color var(--landing-duration-fast) var(--landing-ease-out)`,
+              }}
             >
-              <a
-                href="https://www.instagram.com/silicerespacio/"
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                <Instagram className="w-5 h-5 mr-2" /> Instagram
-              </a>
-            </Button>
+              <InstagramIcon className="w-5 h-5" /> {landingContent.footer.contact.instagramLabel}
+            </a>
           </div>
+
+          <style>{`
+            .landing-footer-link:hover {
+              background-color: color-mix(in srgb, var(--landing-primary) 8%, transparent);
+            }
+          `}</style>
         </div>
       </footer>
 
@@ -619,15 +558,15 @@ useEffect(() => {
             <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mb-4">
               <CheckCircle2 className="w-10 h-10 text-green-600" />
             </div>
-            <h2 className="text-2xl text-[#4a3f35] mb-3">
-              ¡Preinscripción enviada!
+            <h2 className="text-2xl text-[var(--landing-ink)] mb-3">
+              ¡Listo! Te llevamos a WhatsApp
             </h2>
-            <p className="text-[#6b5c4c] leading-relaxed max-w-sm">
-              La preinscripción no garantiza el cupo, nos pondremos en contacto pronto para confirmar tu lugar.
+            <p className="text-[var(--landing-muted)] leading-relaxed max-w-sm">
+              Agilizá tu preinscripción enviando el mensaje que te dejamos precargado en WhatsApp.
             </p>
             <Button
               onClick={() => setShowSuccessModal(false)}
-              className="mt-6 bg-[#5C329E] hover:bg-[#4a2880] text-white rounded-full px-8"
+              className="mt-6 bg-[var(--landing-primary)] hover:bg-[var(--landing-primary-hover)] text-[var(--landing-primary-foreground)] rounded-[var(--landing-radius-md)] px-8"
             >
               Entendido
             </Button>

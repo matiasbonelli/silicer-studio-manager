@@ -1,0 +1,164 @@
+/*
+ * Sistema de diseño de la landing de Silicer — aislado del sistema global (shadcn/Admin).
+ * Todo vive bajo el selector `.landing-page`; nada de esto debe tocar --background,
+ * --primary, etc. de src/index.css, que usa el panel de Admin.
+ *
+ * Dirección visual (brief-pinned, ver docs/01-03 y PRODUCT.md):
+ * hueso cálido + violeta de marca como color comprometido en CTA/acentos;
+ * Restora editorial para titulares protagonistas, Helvetica Neue Light para cuerpo;
+ * radios grandes en contenedores, ritmo generoso de aire, movimiento sutil tipo revista.
+ */
+
+/* ---------- Tipografías reales de marca ---------- */
+
+@font-face {
+  font-family: 'Restora';
+  src: url('/fonts/Restora.otf') format('opentype');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Restora';
+  src: url('/fonts/RestoraItalic.otf') format('opentype');
+  font-weight: 400;
+  font-style: italic;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Restora';
+  src: url('/fonts/RestoraBoldItalic.otf') format('opentype');
+  font-weight: 700;
+  font-style: italic;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Helvetica Neue LT Pro Landing';
+  src: url('/fonts/HelveticaNeue-Light.otf') format('opentype');
+  font-weight: 300;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Helvetica Neue LT Pro Landing';
+  src: url('/fonts/HelveticaNeueBold.ttf') format('truetype');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* ---------- Tokens, aislados bajo .landing-page ---------- */
+
+.landing-page {
+  /* Color — fondo hueso cálido (nunca blanco puro), violeta de marca como
+     color comprometido (CTA/acentos), texto a un solo color siempre. */
+  --landing-bg: #f4efe4;
+  --landing-bg-alt: #ece3d1;
+  --landing-surface: #fbf8f2;
+  --landing-primary: #5c329e;
+  --landing-primary-hover: #4c2a83;
+  --landing-primary-foreground: #f4efe4;
+  --landing-secondary: #7f8bd3;
+  --landing-ink: #221933;
+  --landing-muted: #6b6156;
+  --landing-border: #ddd2bb;
+
+  /* Tipografía */
+  --landing-font-display: 'Restora', Georgia, 'Times New Roman', serif;
+  --landing-font-body: 'Helvetica Neue LT Pro Landing', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+
+  --landing-text-display: clamp(2.75rem, 1.2rem + 6vw, 7rem);
+  --landing-text-h1: clamp(2.25rem, 1.3rem + 3.2vw, 3.75rem);
+  --landing-text-h2: clamp(1.75rem, 1.2rem + 2vw, 2.75rem);
+  --landing-text-h3: clamp(1.25rem, 1rem + 0.9vw, 1.625rem);
+  --landing-text-body-lg: clamp(1.125rem, 1rem + 0.4vw, 1.375rem);
+  --landing-text-body: 1.0625rem;
+  --landing-text-small: 0.875rem;
+
+  --landing-leading-display: 0.95;
+  --landing-leading-heading: 1.05;
+  --landing-leading-body: 1.6;
+
+  /* Espaciado — densidad baja, mucho aire */
+  --landing-space-1: 0.5rem;
+  --landing-space-2: 1rem;
+  --landing-space-3: 1.5rem;
+  --landing-space-4: 2rem;
+  --landing-space-5: 3rem;
+  --landing-space-6: 4.5rem;
+  --landing-space-7: 6.5rem;
+  --landing-space-8: 9rem;
+  --landing-container-padding: clamp(1.5rem, 1rem + 4vw, 4rem);
+  --landing-container-max: 1320px;
+
+  /* Radios — 30px confirmado en la referencia unikorns para contenedores protagonistas */
+  --landing-radius-sm: 0.5rem;
+  --landing-radius-md: 1rem;
+  --landing-radius-lg: 1.5rem;
+  --landing-radius-form: 1.875rem;
+
+  /* Movimiento — sutil, tipo revista; easing confirmado en referencia chdartmaker */
+  --landing-ease-out: cubic-bezier(0.19, 1, 0.22, 1);
+  --landing-duration-fast: 300ms;
+  --landing-duration-base: 600ms;
+  --landing-duration-slow: 900ms;
+  --landing-stagger: 80ms;
+
+  background-color: var(--landing-bg);
+  color: var(--landing-ink);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .landing-page {
+    --landing-duration-fast: 0ms;
+    --landing-duration-base: 0ms;
+    --landing-duration-slow: 0ms;
+    --landing-stagger: 0ms;
+  }
+}
+
+/* ---------- Base tipográfica ---------- */
+
+.landing-page h1,
+.landing-page h2,
+.landing-page h3,
+.landing-page h4 {
+  font-family: var(--landing-font-display);
+  font-weight: 400;
+  line-height: var(--landing-leading-heading);
+  color: var(--landing-ink);
+}
+
+.landing-page p,
+.landing-page span,
+.landing-page label,
+.landing-page input,
+.landing-page textarea,
+.landing-page select,
+.landing-page button,
+.landing-page li {
+  font-family: var(--landing-font-body);
+  font-weight: 300;
+}
+
+.landing-page strong,
+.landing-page b {
+  font-family: var(--landing-font-body);
+  font-weight: 700;
+}
+
+.landing-page p {
+  line-height: var(--landing-leading-body);
+  color: var(--landing-ink);
+}
+
+.landing-page .landing-container {
+  width: 100%;
+  max-width: var(--landing-container-max);
+  margin-inline: auto;
+  padding-inline: var(--landing-container-padding);
+}
