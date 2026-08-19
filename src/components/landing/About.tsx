@@ -1,4 +1,6 @@
 import { landingContent } from '@/content/landing';
+import SplitText from './SplitText';
+import AnimatedContent from './AnimatedContent';
 
 /**
  * Bloque editorial texto+imagen (referencia soil-net: imagen primero en el
@@ -64,56 +66,67 @@ export default function About() {
         </div>
 
         <div>
-          <p
-            style={{
-              fontFamily: 'var(--landing-font-body)',
-              fontWeight: 700,
-              fontSize: 'var(--landing-text-small)',
-              letterSpacing: '0.08em',
-              textTransform: 'uppercase',
-              color: 'var(--landing-primary)',
-              margin: '0 0 var(--landing-space-2)',
-            }}
-          >
-            {about.eyebrow}
-          </p>
+          <AnimatedContent>
+            <p
+              style={{
+                fontFamily: 'var(--landing-font-body)',
+                fontWeight: 700,
+                fontSize: 'var(--landing-text-small)',
+                letterSpacing: '0.08em',
+                textTransform: 'uppercase',
+                color: 'var(--landing-primary)',
+                margin: '0 0 var(--landing-space-2)',
+              }}
+            >
+              {about.eyebrow}
+            </p>
+          </AnimatedContent>
 
-          <h2
-            style={{
-              fontFamily: 'var(--landing-font-display)',
-              fontWeight: 400,
-              fontSize: 'var(--landing-text-h2)',
-              lineHeight: 'var(--landing-leading-heading)',
-              color: 'var(--landing-ink)',
-              margin: '0 0 var(--landing-space-3)',
-              maxWidth: '16ch',
-            }}
-          >
-            {about.title}
-          </h2>
+          <SplitText
+            tag="h2"
+            className="landing-about-title"
+            text={about.title}
+            splitType="words"
+            textAlign="left"
+            delay={90}
+            duration={1.2}
+            ease="power2.out"
+            from={{ opacity: 0, y: 20 }}
+            to={{ opacity: 1, y: 0 }}
+          />
 
           <div style={{ display: 'grid', gap: 'var(--landing-space-2)' }}>
-            {about.paragraphs.map((paragraph) => (
-              <p
-                key={paragraph}
-                style={{
-                  fontFamily: 'var(--landing-font-body)',
-                  fontWeight: 300,
-                  fontSize: 'var(--landing-text-body-lg)',
-                  lineHeight: 'var(--landing-leading-body)',
-                  color: 'var(--landing-muted)',
-                  margin: 0,
-                  maxWidth: '52ch',
-                }}
-              >
-                {paragraph}
-              </p>
+            {about.paragraphs.map((paragraph, i) => (
+              <AnimatedContent key={paragraph} delay={150 + i * 150}>
+                <p
+                  style={{
+                    fontFamily: 'var(--landing-font-body)',
+                    fontWeight: 300,
+                    fontSize: 'var(--landing-text-body-lg)',
+                    lineHeight: 'var(--landing-leading-body)',
+                    color: 'var(--landing-muted)',
+                    margin: 0,
+                    maxWidth: '52ch',
+                  }}
+                >
+                  {paragraph}
+                </p>
+              </AnimatedContent>
             ))}
           </div>
         </div>
       </div>
 
       <style>{`
+        .landing-about-title {
+          font-family: var(--landing-font-display);
+          font-weight: 400;
+          font-size: var(--landing-text-h2);
+          line-height: var(--landing-leading-heading);
+          color: var(--landing-ink);
+          margin: 0 0 var(--landing-space-3);
+          max-width: 16ch;
+        }
         @media (max-width: 780px) {
           .landing-about-grid {
             grid-template-columns: 1fr !important;

@@ -27,12 +27,12 @@ export const landingContent = {
     title: 'No es solo cerámica, es comunidad',
     paragraphs: [
       'Silicer es un taller de cerámica presencial en Río Cuarto, pensado como un lugar con vida propia: manos en la arcilla, grupo, mate de por medio.',
-      'Acá se aprende la técnica de verdad — torno, modelado, esmaltado — pero lo que sostiene el taller clase a clase es el grupo que se arma alrededor de la mesa.',
+      'Acá se aprende la técnica de verdad — modelado, esmaltado — pero lo que sostiene el taller clase a clase es el grupo que se arma alrededor de la mesa.',
     ],
     image: {
-      src: null,
-      alt: 'Foto del espacio del taller o de quien enseña',
-      pendingAsset: true,
+      src: '/about-taller.jpg',
+      alt: 'Alumnas trabajando la cerámica en el taller de Silicer',
+      pendingAsset: false,
     },
   },
 
@@ -41,19 +41,19 @@ export const landingContent = {
     title: 'Técnicas reales, a tu ritmo',
     cards: [
       {
-        icon: 'wheel',
+        icon: 'hands',
         title: 'Técnicas en todos los estados',
         description: 'Trabajás la arcilla cruda, en cuero y bizcochada — aprendés el proceso completo, no solo una etapa.',
       },
       {
-        icon: 'infinity',
+        icon: 'spiral',
         title: 'Sin límites de pieza',
         description: 'Hacés las piezas que quieras, ¡siempre que el horno nos dé espacio!',
       },
       {
         icon: 'mate',
         title: 'Grupo y comunidad',
-        description: 'Se aprende en grupo, con mate de por medio — esa es la impronta del taller, no un agregado.',
+        description: 'Se aprende en grupo, con mate de por medio — esa es la impronta del taller.',
       },
     ],
   },
@@ -73,17 +73,17 @@ export const landingContent = {
     cards: [
       {
         icon: 'clock',
-        label: 'Duración',
-        value: '2 horas',
+        label: '',
+        value: 'Turnos de 2 horas de duración',
       },
       {
         icon: 'users',
-        label: 'Cupos',
-        value: 'Limitados',
+        label: '',
+        value: 'Cupos limitados',
       },
       {
         icon: 'sparkles',
-        label: 'Experiencia',
+        label: '',
         value: 'No hace falta experiencia previa',
       },
     ],

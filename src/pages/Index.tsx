@@ -1,5 +1,11 @@
 import { useState, useEffect, useRef } from 'react';
+import { gsap } from 'gsap';
+import { ScrollTrigger } from 'gsap/ScrollTrigger';
+import { ScrollSmoother } from 'gsap/ScrollSmoother';
+import { useGSAP } from '@gsap/react';
 import '@/styles/landing.css';
+
+gsap.registerPlugin(ScrollTrigger, ScrollSmoother, useGSAP);
 import { supabase } from '@/integrations/supabase/client';
 import { Schedule, DAY_NAMES } from '@/types/database';
 import { Button } from '@/components/ui/button';
@@ -12,12 +18,13 @@ import { useToast } from '@/hooks/use-toast';
 import { z } from 'zod';
 import { Send, Loader2, CheckCircle2, X } from 'lucide-react';
 import { InstagramIcon } from '@/components/landing/icons';
+import CustomCursor from '@/components/landing/CustomCursor';
 import Header from '@/components/landing/Header';
 import Hero from '@/components/landing/Hero';
 import About from '@/components/landing/About';
 import Learn from '@/components/landing/Learn';
-import Students from '@/components/landing/Students';
 import PracticalInfo from '@/components/landing/PracticalInfo';
+import AnimatedContent from '@/components/landing/AnimatedContent';
 import { landingContent } from '@/content/landing';
 
 const fieldClass =
@@ -51,6 +58,7 @@ export default function Index() {
   const [submitting, setSubmitting] = useState(false);
   const [selectedDay, setSelectedDay] = useState('');
   const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [headerHeight, setHeaderHeight] = useState(0);
   const [formData, setFormData] = useState({
     first_name: '',
     last_name: '',
@@ -75,6 +83,29 @@ export default function Index() {
   };
 
   const formSectionRef = useRef<HTMLElement>(null);
+  const smootherRef = useRef<ScrollSmoother | null>(null);
+
+  useEffect(() => {
+    const smoother = ScrollSmoother.create({
+      wrapper: '#smooth-wrapper',
+      content: '#smooth-content',
+      smooth: 1.2,
+      effects: false,
+    });
+    smootherRef.current = smoother;
+
+    // Los ScrollTrigger de las secciones hijas (Hero, About, Learn, etc.) se
+    // crean en su propio useGSAP, que corre ANTES que este efecto del padre
+    // — es decir, miden sus puntos de disparo contra el scroll nativo, sin
+    // el smoother todavía activo. Sin este refresh quedan calculados con
+    // coordenadas viejas y pueden dispararse antes de tiempo.
+    ScrollTrigger.refresh();
+
+    return () => {
+      smoother.kill();
+      smootherRef.current = null;
+    };
+  }, []);
 
   useEffect(() => {
     const fetchSchedules = async () => {
@@ -196,29 +227,20 @@ export default function Index() {
   };
 
   const scrollToSection = (ref: React.RefObject<HTMLElement>) => {
-    // El destino se recalcula en cada frame (en vez de una sola vez al arrancar)
-    // para que la animación se autocorrija si el layout todavía se está
-    // acomodando (p.ej. mientras cargan las tipografías del hero).
+    const element = ref.current;
+    if (!element) return;
+
     const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-    const animation = () => {
-      const element = ref.current;
-      if (!element) return;
+    // Con ScrollSmoother activo hay que pedirle a él que scrollee (maneja el
+    // scroll real internamente); si todavía no se creó, caemos al scrollTo
+    // nativo para no perder el click.
+    if (smootherRef.current) {
+      smootherRef.current.scrollTo(element, !prefersReducedMotion, 'top top');
+      return;
+    }
 
-      const target = element.getBoundingClientRect().top + window.scrollY;
-      const current = window.scrollY;
-      const diff = target - current;
-
-      if (Math.abs(diff) < 1 || prefersReducedMotion) {
-        window.scrollTo(0, target);
-        return;
-      }
-
-      window.scrollTo(0, current + diff * 0.18);
-      requestAnimationFrame(animation);
-    };
-
-    requestAnimationFrame(animation);
+    element.scrollIntoView({ behavior: prefersReducedMotion ? 'auto' : 'smooth', block: 'start' });
   };
 
   const availableSchedules = schedules.filter(s => s.current_count < s.max_capacity);
@@ -231,11 +253,14 @@ export default function Index() {
 
   return (
     <div className="landing-page">
-      <Header onCtaClick={() => scrollToSection(formSectionRef)} />
+      <CustomCursor />
+      <Header onCtaClick={() => scrollToSection(formSectionRef)} onHeightChange={setHeaderHeight} />
+      <div id="smooth-wrapper">
+        <div id="smooth-content">
+      <div aria-hidden="true" style={{ height: headerHeight, backgroundColor: 'var(--landing-bg)' }} />
       <Hero onCtaClick={() => scrollToSection(formSectionRef)} />
       <About />
       <Learn />
-      <Students />
       <PracticalInfo />
 
       {/* Preinscripción — formulario sobre imagen con textura propia,
@@ -252,7 +277,7 @@ export default function Index() {
         }}
       >
         <div className="landing-container" style={{ display: 'flex', justifyContent: 'center' }}>
-          <div
+          <AnimatedContent
             style={{
               width: '100%',
               maxWidth: 620,
@@ -438,6 +463,7 @@ export default function Index() {
               <button
                 type="submit"
                 disabled={submitting || loading}
+                className="landing-form-submit"
                 style={{
                   width: '100%',
                   fontFamily: 'var(--landing-font-body)',
@@ -467,8 +493,17 @@ export default function Index() {
                 )}
               </button>
             </form>
-          </div>
+          </AnimatedContent>
         </div>
+
+        <style>{`
+          .landing-form-submit {
+            transition: background-color 0.3s ease;
+          }
+          .landing-form-submit:not(:disabled):hover {
+            background-color: var(--landing-secondary) !important;
+          }
+        `}</style>
       </section>
 
       {/* Footer — cierre-statement protagonista + contacto directo */}
@@ -507,7 +542,6 @@ export default function Index() {
                 borderRadius: 'var(--landing-radius-md)',
                 padding: '0.7rem 1.4rem',
                 textDecoration: 'none',
-                transition: `background-color var(--landing-duration-fast) var(--landing-ease-out)`,
               }}
             >
               <WhatsAppIcon className="w-5 h-5" /> {landingContent.footer.contact.whatsappLabel}
@@ -529,7 +563,6 @@ export default function Index() {
                 borderRadius: 'var(--landing-radius-md)',
                 padding: '0.7rem 1.4rem',
                 textDecoration: 'none',
-                transition: `background-color var(--landing-duration-fast) var(--landing-ease-out)`,
               }}
             >
               <InstagramIcon className="w-5 h-5" /> {landingContent.footer.contact.instagramLabel}
@@ -573,6 +606,8 @@ export default function Index() {
           </div>
         </DialogContent>
       </Dialog>
+        </div>
+      </div>
     </div>
   );
 }

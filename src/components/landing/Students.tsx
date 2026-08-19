@@ -1,5 +1,7 @@
 import { landingContent } from '@/content/landing';
 import { ImagePendingIcon } from './icons';
+import SplitText from './SplitText';
+import AnimatedContent from './AnimatedContent';
 
 /**
  * Grilla tipo mosaicist (recuadros foto+texto). Sin fotos reales todavía:
@@ -24,19 +26,21 @@ export default function Students() {
             marginBottom: 'var(--landing-space-2)',
           }}
         >
-          <p
-            style={{
-              fontFamily: 'var(--landing-font-body)',
-              fontWeight: 700,
-              fontSize: 'var(--landing-text-small)',
-              letterSpacing: '0.08em',
-              textTransform: 'uppercase',
-              color: 'var(--landing-primary)',
-              margin: 0,
-            }}
-          >
-            {students.eyebrow}
-          </p>
+          <AnimatedContent>
+            <p
+              style={{
+                fontFamily: 'var(--landing-font-body)',
+                fontWeight: 700,
+                fontSize: 'var(--landing-text-small)',
+                letterSpacing: '0.08em',
+                textTransform: 'uppercase',
+                color: 'var(--landing-primary)',
+                margin: 0,
+              }}
+            >
+              {students.eyebrow}
+            </p>
+          </AnimatedContent>
           {students.pendingAsset && (
             <span
               style={{
@@ -54,30 +58,32 @@ export default function Students() {
           )}
         </div>
 
-        <h2
-          style={{
-            fontFamily: 'var(--landing-font-display)',
-            fontWeight: 400,
-            fontSize: 'var(--landing-text-h2)',
-            lineHeight: 'var(--landing-leading-heading)',
-            color: 'var(--landing-ink)',
-            margin: '0 0 var(--landing-space-1)',
-          }}
-        >
-          {students.title}
-        </h2>
-        <p
-          style={{
-            fontFamily: 'var(--landing-font-body)',
-            fontWeight: 300,
-            fontSize: 'var(--landing-text-body-lg)',
-            color: 'var(--landing-muted)',
-            margin: '0 0 var(--landing-space-5)',
-            maxWidth: '50ch',
-          }}
-        >
-          {students.subtitle}
-        </p>
+        <SplitText
+          tag="h2"
+          className="landing-students-title"
+          text={students.title}
+          splitType="words"
+          textAlign="left"
+          delay={90}
+          duration={1.2}
+          ease="power2.out"
+          from={{ opacity: 0, y: 20 }}
+          to={{ opacity: 1, y: 0 }}
+        />
+        <AnimatedContent delay={150}>
+          <p
+            style={{
+              fontFamily: 'var(--landing-font-body)',
+              fontWeight: 300,
+              fontSize: 'var(--landing-text-body-lg)',
+              color: 'var(--landing-muted)',
+              margin: '0 0 var(--landing-space-5)',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            {students.subtitle}
+          </p>
+        </AnimatedContent>
 
         {hasRealItems ? (
           <div className="landing-students-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 'var(--landing-space-3)' }}>
@@ -115,6 +121,14 @@ export default function Students() {
       </div>
 
       <style>{`
+        .landing-students-title {
+          font-family: var(--landing-font-display);
+          font-weight: 400;
+          font-size: var(--landing-text-h2);
+          line-height: var(--landing-leading-heading);
+          color: var(--landing-ink);
+          margin: 0 0 var(--landing-space-1);
+        }
         @media (max-width: 780px) {
           .landing-students-grid {
             grid-template-columns: repeat(2, 1fr) !important;
