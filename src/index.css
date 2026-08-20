@@ -6,37 +6,16 @@
 All colors MUST be HSL.
 */
 
-/* Custom Fonts - Silicer */
-@font-face {
-  font-family: 'Restora';
-  src: url('/fonts/RestoraBoldItalic.otf') format('opentype');
-  font-weight: bold;
-  font-style: normal;
-  font-display: swap;
-}
-
-@font-face {
-  font-family: 'Raleway';
-  src: url('/fonts/Raleway-Regular.ttf') format('truetype');
-  font-weight: 400;
-  font-style: normal;
-  font-display: swap;
-}
-
-@font-face {
-  font-family: 'Raleway';
-  src: url('/fonts/Raleway-Bold.ttf') format('truetype');
-  font-weight: 700;
-  font-style: normal;
-  font-display: swap;
-}
+/* Los tokens y la tipografía de la landing (Restora / Helvetica Neue) viven en
+   src/styles/landing.css, aislados bajo .landing-page — no comparten variables
+   con el Admin. Ese archivo se importa desde los componentes que lo necesitan
+   (no acá), porque @import de CSS debe ser la primera regla del stylesheet y
+   este archivo ya empieza con @tailwind. */
 
 /* Font families */
 :root {
   --font-sans: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   --font-serif: 'Playfair Display', Georgia, 'Times New Roman', serif;
-  --font-restora: 'Restora', 'Playfair Display', Georgia, serif;
-  --font-raleway: 'Raleway', 'Inter', system-ui, sans-serif;
 }
 
 body {
@@ -45,30 +24,6 @@ body {
 
 .font-serif {
   font-family: var(--font-serif);
-}
-
-/* Landing page fonts - solo vista cliente */
-.landing-page h1,
-.landing-page h2,
-.landing-page h3,
-.landing-page h4 {
-  font-family: var(--font-restora);
-}
-
-.landing-page p,
-.landing-page span,
-.landing-page label,
-.landing-page input,
-.landing-page textarea,
-.landing-page select,
-.landing-page button {
-  font-family: var(--font-raleway);
-}
-
-.landing-page strong,
-.landing-page b {
-  font-family: var(--font-raleway);
-  font-weight: 700;
 }
 
 @layer base {
