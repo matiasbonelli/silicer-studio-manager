@@ -67,7 +67,6 @@ const WhatsAppIcon = ({ className }: { className?: string }) => (
   </svg>
 );
 
-
 const enrollmentSchema = z.object({
   first_name: z.string().trim().min(1, 'El nombre es requerido').max(100),
   last_name: z.string().trim().min(1, 'El apellido es requerido').max(100),
