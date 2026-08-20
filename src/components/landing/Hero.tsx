@@ -31,9 +31,10 @@ export default function Hero({ onCtaClick }: HeroProps) {
           alignItems: 'center',
         }}
       >
-        <div>
+        <div className="landing-hero-copy">
           <AnimatedContent>
             <p
+              className="landing-hero-eyebrow"
               style={{
                 fontFamily: 'var(--landing-font-body)',
                 fontWeight: 700,
@@ -68,6 +69,7 @@ export default function Hero({ onCtaClick }: HeroProps) {
 
           <AnimatedContent delay={150}>
             <p
+              className="landing-hero-subtitle"
               style={{
                 fontFamily: 'var(--landing-font-body)',
                 fontWeight: 300,
@@ -106,7 +108,7 @@ export default function Hero({ onCtaClick }: HeroProps) {
           </AnimatedContent>
         </div>
 
-        <div style={{ position: 'relative' }}>
+        <AnimatedContent style={{ position: 'relative' }} delay={200}>
           <div
             className="landing-hero-image-frame"
             style={{
@@ -114,6 +116,7 @@ export default function Hero({ onCtaClick }: HeroProps) {
               overflow: 'hidden',
               transform: 'rotate(-1.4deg)',
               boxShadow: '0 30px 60px -30px rgba(34, 25, 51, 0.35)',
+              backgroundColor: 'var(--landing-bg-alt)',
             }}
           >
             <img
@@ -127,7 +130,7 @@ export default function Hero({ onCtaClick }: HeroProps) {
               }}
             />
           </div>
-        </div>
+        </AnimatedContent>
       </div>
 
       <style>{`
@@ -153,6 +156,20 @@ export default function Hero({ onCtaClick }: HeroProps) {
         @media (max-width: 860px) {
           .landing-hero-grid {
             grid-template-columns: 1fr !important;
+          }
+          .landing-hero-copy {
+            text-align: center;
+          }
+          .landing-hero-title,
+          .landing-hero-subtitle {
+            margin-left: auto !important;
+            margin-right: auto !important;
+            text-align: center !important;
+          }
+        }
+        @media (max-width: 640px) {
+          .landing-hero-eyebrow {
+            max-width: 220px;
           }
         }
       `}</style>

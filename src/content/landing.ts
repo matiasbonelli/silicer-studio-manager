@@ -12,7 +12,7 @@ export const landingContent = {
   },
 
   hero: {
-    eyebrow: 'Taller de cerámica en Río Cuarto',
+    eyebrow: 'Taller de cerámica en Río Cuarto',
     title: 'Descubrí el arte de la cerámica',
     subtitle: 'Un espacio para crear, aprender y conectar con tus manos.',
     ctaLabel: 'Preinscribirme',
@@ -27,7 +27,7 @@ export const landingContent = {
     title: 'No es solo cerámica, es comunidad',
     paragraphs: [
       'Silicer es un taller de cerámica presencial en Río Cuarto, pensado como un lugar con vida propia: manos en la arcilla, grupo, mate de por medio.',
-      'Acá se aprende la técnica de verdad — modelado, esmaltado — pero lo que sostiene el taller clase a clase es el grupo que se arma alrededor de la mesa.',
+      'Aprendemos muchísimas técnicas, pero lo que sostiene el taller clase a clase es el grupo que se arma alrededor de la mesa.',
     ],
     image: {
       src: '/about-taller.jpg',
@@ -43,7 +43,7 @@ export const landingContent = {
       {
         icon: 'hands',
         title: 'Técnicas en todos los estados',
-        description: 'Trabajás la arcilla cruda, en cuero y bizcochada — aprendés el proceso completo, no solo una etapa.',
+        description: 'Trabajás la arcilla cruda, en cuero y bizcochada, aprendés el proceso completo, no solo una etapa.',
       },
       {
         icon: 'spiral',
@@ -53,7 +53,7 @@ export const landingContent = {
       {
         icon: 'mate',
         title: 'Grupo y comunidad',
-        description: 'Se aprende en grupo, con mate de por medio — esa es la impronta del taller.',
+        description: 'Se aprende en grupo, con mate de por medio, esa es la impronta del taller.',
       },
     ],
   },
@@ -89,7 +89,7 @@ export const landingContent = {
     ],
     schedule: {
       label: 'Días disponibles',
-      value: 'Lunes a viernes',
+      value: 'Lunes a viernes, sábados (solo niños)',
     },
     location: {
       label: 'Ubicación',
@@ -131,6 +131,7 @@ export const landingContent = {
       label: 'Ubicación',
       address: 'Amadeo Mozart 169, Río Cuarto, Córdoba',
     },
+    copyright: 'Todos los derechos reservados a Silicer © 2026.',
   },
 } as const;
 

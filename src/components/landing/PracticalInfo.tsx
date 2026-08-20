@@ -69,6 +69,7 @@ export default function PracticalInfo() {
                 style={{ height: '100%' }}
               >
                 <div
+                  className={`landing-info-item${i === 0 ? ' landing-info-item--first' : ''}`}
                   style={{
                     height: '100%',
                     boxSizing: 'border-box',
@@ -233,11 +234,11 @@ export default function PracticalInfo() {
           .landing-info-strip {
             grid-template-columns: 1fr !important;
           }
-          .landing-info-strip > div {
+          .landing-info-item {
             border-left: none !important;
             border-top: 1px solid var(--landing-border);
           }
-          .landing-info-strip > div:first-child {
+          .landing-info-item--first {
             border-top: none;
           }
           .landing-location-grid {

@@ -19,6 +19,7 @@ import { z } from 'zod';
 import { Send, Loader2, CheckCircle2, X } from 'lucide-react';
 import { InstagramIcon } from '@/components/landing/icons';
 import CustomCursor from '@/components/landing/CustomCursor';
+import Noise from '@/components/landing/Noise';
 import Header from '@/components/landing/Header';
 import Hero from '@/components/landing/Hero';
 import About from '@/components/landing/About';
@@ -34,6 +35,31 @@ const fields = landingContent.enrollment.form.fields;
 
 const WHATSAPP_NUMBER = '5493585737156';
 const WHATSAPP_PREFILLED_MESSAGE = 'Hola! Ya me preinscribí, ¿me pasarías más información?';
+
+// El campo de fecha de nacimiento es un input de texto libre (dd/mm/aaaa) en
+// vez de <input type="date"> — Safari/iOS renderiza el date picker nativo
+// más ancho que su contenedor sin forma de acotarlo por CSS. Acá se convierte
+// al formato ISO que espera la RPC de Supabase; si no matchea el patrón se
+// omite en vez de romper el envío (el campo es opcional).
+function birthdayToISO(value: string): string | undefined {
+  const match = value.trim().match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+  if (!match) return undefined;
+  const [, day, month, year] = match;
+  return `${year}-${month}-${day}`;
+}
+
+// Inserta las barras automáticamente a medida que se tipean los dígitos,
+// para no forzarle el formato al usuario a mano.
+function formatBirthdayInput(raw: string): string {
+  const digits = raw.replace(/\D/g, '').slice(0, 8);
+  const day = digits.slice(0, 2);
+  const month = digits.slice(2, 4);
+  const year = digits.slice(4, 8);
+  let result = day;
+  if (month) result += `/${month}`;
+  if (year) result += `/${year}`;
+  return result;
+}
 
 const WhatsAppIcon = ({ className }: { className?: string }) => (
   <svg className={className} viewBox="0 0 24 24" fill="currentColor">
@@ -84,6 +110,37 @@ export default function Index() {
 
   const formSectionRef = useRef<HTMLElement>(null);
   const smootherRef = useRef<ScrollSmoother | null>(null);
+
+  useEffect(() => {
+    // Radix (Select, Dialog) bloquea el scroll del body al abrirse, lo que
+    // hace desaparecer la scrollbar nativa y angosta/ensancha la página unos
+    // px — visible como un salto de layout en toda la landing. Reservamos la
+    // scrollbar siempre para que ese toggle no mueva nada.
+    const html = document.documentElement;
+    const prevOverflowY = html.style.overflowY;
+    html.style.overflowY = 'scroll';
+    return () => {
+      html.style.overflowY = prevOverflowY;
+    };
+  }, []);
+
+  useEffect(() => {
+    // El rebote elástico de Safari/Chrome mobile al final del scroll deja
+    // ver el fondo real de html/body — blanco por defecto, ya que el fondo
+    // de la landing vive en .landing-page (un div hijo), no ahí. Lo pisamos
+    // mientras la landing está montada para que el rebote muestre el mismo
+    // crema en vez de una franja blanca.
+    const { style: htmlStyle } = document.documentElement;
+    const { style: bodyStyle } = document.body;
+    const prevHtmlBg = htmlStyle.backgroundColor;
+    const prevBodyBg = bodyStyle.backgroundColor;
+    htmlStyle.backgroundColor = '#f4efe4';
+    bodyStyle.backgroundColor = '#f4efe4';
+    return () => {
+      htmlStyle.backgroundColor = prevHtmlBg;
+      bodyStyle.backgroundColor = prevBodyBg;
+    };
+  }, []);
 
   useEffect(() => {
     const smoother = ScrollSmoother.create({
@@ -178,7 +235,7 @@ export default function Index() {
       p_last_name: formData.last_name,
       p_email: formData.email || undefined,
       p_phone: formData.phone,
-      p_birthday: formData.birthday || undefined,
+      p_birthday: birthdayToISO(formData.birthday),
       p_schedule_id: formData.schedule_id,
       p_message: formData.message || undefined,
     });
@@ -254,6 +311,7 @@ export default function Index() {
   return (
     <div className="landing-page">
       <CustomCursor />
+      <Noise patternAlpha={10} />
       <Header onCtaClick={() => scrollToSection(formSectionRef)} onHeightChange={setHeaderHeight} />
       <div id="smooth-wrapper">
         <div id="smooth-content">
@@ -358,7 +416,7 @@ export default function Index() {
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div className="space-y-2">
+                <div className="space-y-2 min-w-0">
                   <Label htmlFor="phone" className={fieldLabelClass}>{fields.phone.label} *</Label>
                   <Input
                     id="phone"
@@ -372,14 +430,16 @@ export default function Index() {
                     <p className="text-sm text-destructive mt-1">{formErrors.phone}</p>
                   )}
                 </div>
-                <div className="space-y-2">
+                <div className="space-y-2 min-w-0">
                   <Label htmlFor="birthday" className={fieldLabelClass}>{fields.birthday.label}</Label>
                   <Input
                     id="birthday"
-                    type="date"
+                    type="text"
+                    placeholder="dd/mm/aaaa"
+                    maxLength={10}
                     value={formData.birthday}
-                    onChange={(e) => updateField('birthday', e.target.value)}
-                    className={`${fieldClass} max-w-[200px]`}
+                    onChange={(e) => updateField('birthday', formatBirthdayInput(e.target.value))}
+                    className={`${fieldClass} sm:max-w-[200px]`}
                   />
                 </div>
               </div>
@@ -509,8 +569,7 @@ export default function Index() {
       {/* Footer — cierre-statement protagonista + contacto directo */}
       <footer style={{ backgroundColor: 'var(--landing-bg-alt)', paddingBlock: 'var(--landing-space-7)' }}>
         <div className="landing-container" style={{ textAlign: 'center' }}>
-          <p
-            style={{
+          <AnimatedContent as="p" style={{
               fontFamily: 'var(--landing-font-display)',
               fontWeight: 400,
               fontSize: 'var(--landing-text-h2)',
@@ -522,9 +581,12 @@ export default function Index() {
             }}
           >
             {landingContent.footer.closingStatement}
-          </p>
+          </AnimatedContent>
 
-          <div style={{ display: 'flex', justifyContent: 'center', gap: 'var(--landing-space-2)', flexWrap: 'wrap' }}>
+          <AnimatedContent
+            delay={150}
+            style={{ display: 'flex', justifyContent: 'center', gap: 'var(--landing-space-2)', flexWrap: 'wrap' }}
+          >
             <a
               href="https://wa.me/5493585737156?text=Hola!%20Quiero%20consultar%20por%20las%20clases%20de%20ceramica"
               target="_blank"
@@ -567,7 +629,19 @@ export default function Index() {
             >
               <InstagramIcon className="w-5 h-5" /> {landingContent.footer.contact.instagramLabel}
             </a>
-          </div>
+          </AnimatedContent>
+
+          <p
+            style={{
+              fontFamily: 'var(--landing-font-body)',
+              fontWeight: 300,
+              fontSize: 'var(--landing-text-small)',
+              color: 'var(--landing-muted)',
+              marginTop: 'var(--landing-space-5)',
+            }}
+          >
+            {landingContent.footer.copyright}
+          </p>
 
           <style>{`
             .landing-footer-link:hover {

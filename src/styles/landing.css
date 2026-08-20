@@ -63,6 +63,7 @@
   --landing-primary-hover: #4c2a83;
   --landing-primary-foreground: #f4efe4;
   --landing-secondary: #7f8bd3;
+  --landing-header-top: var(--landing-bg-alt);
   --landing-ink: #221933;
   --landing-muted: #6b6156;
   --landing-border: #ddd2bb;

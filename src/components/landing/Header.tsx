@@ -55,22 +55,37 @@ export default function Header({ onCtaClick, onHeightChange }: HeaderProps) {
             padding: '0.65rem 1.5rem',
             borderRadius: 'var(--landing-radius-form)',
             backgroundColor: scrolled
-              ? 'color-mix(in srgb, var(--landing-bg) 62%, transparent)'
-              : 'color-mix(in srgb, var(--landing-bg) 48%, transparent)',
-            backdropFilter: 'blur(22px) saturate(160%)',
-            WebkitBackdropFilter: 'blur(22px) saturate(160%)',
-            border: '1px solid color-mix(in srgb, var(--landing-ink) 8%, transparent)',
+              ? 'color-mix(in srgb, var(--landing-bg) 88%, transparent)'
+              : 'var(--landing-header-top)',
+            backdropFilter: scrolled ? 'blur(22px) saturate(160%)' : 'none',
+            WebkitBackdropFilter: scrolled ? 'blur(22px) saturate(160%)' : 'none',
+            border: scrolled
+              ? '1px solid color-mix(in srgb, var(--landing-ink) 8%, transparent)'
+              : '1px solid transparent',
             boxShadow: scrolled
               ? '0 2px 5px rgba(20, 14, 30, 0.06), 0 28px 54px -16px rgba(20, 14, 30, 0.3)'
-              : '0 2px 5px rgba(20, 14, 30, 0.04), 0 24px 48px -18px rgba(20, 14, 30, 0.2)',
-            transition: 'background-color 0.3s ease, box-shadow 0.3s ease',
+              : '0 10px 20px -10px rgba(20, 14, 30, 0.25), 0 28px 54px -16px rgba(20, 14, 30, 0.3)',
+            transition: 'background-color 0.4s ease, box-shadow 0.4s ease, border-color 0.4s ease',
           }}
         >
-          <a href="#top" aria-label={header.logoAlt}>
-            <img
-              src="/logo.svg"
-              alt={header.logoAlt}
-              style={{ height: 24, display: 'block' }}
+          <a href="#top" aria-label={header.logoAlt} style={{ display: 'block' }}>
+            <span
+              aria-hidden="true"
+              style={{
+                display: 'block',
+                width: 93,
+                height: 24,
+                backgroundColor: 'var(--landing-primary)',
+                WebkitMaskImage: 'url(/logo.svg)',
+                maskImage: 'url(/logo.svg)',
+                WebkitMaskRepeat: 'no-repeat',
+                maskRepeat: 'no-repeat',
+                WebkitMaskSize: 'contain',
+                maskSize: 'contain',
+                WebkitMaskPosition: 'left center',
+                maskPosition: 'left center',
+                transition: 'background-color 0.4s ease',
+              }}
             />
           </a>
 
@@ -90,6 +105,7 @@ export default function Header({ onCtaClick, onHeightChange }: HeaderProps) {
               display: 'inline-flex',
               alignItems: 'center',
               gap: '0.4rem',
+              transition: 'color 0.4s ease',
             }}
           >
             {header.ctaLabel}
@@ -111,6 +127,14 @@ export default function Header({ onCtaClick, onHeightChange }: HeaderProps) {
           outline: 2px solid var(--landing-primary);
           outline-offset: 4px;
           border-radius: 2px;
+        }
+        @media (max-width: 640px) {
+          .landing-header-cta {
+            display: none !important;
+          }
+          .landing-header-bar {
+            justify-content: center !important;
+          }
         }
       `}</style>
     </header>
