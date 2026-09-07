@@ -33,9 +33,6 @@ const fieldClass =
 const fieldLabelClass = 'text-[var(--landing-ink)] font-[var(--landing-font-body)]';
 const fields = landingContent.enrollment.form.fields;
 
-const WHATSAPP_NUMBER = '5493585737156';
-const WHATSAPP_PREFILLED_MESSAGE = 'Hola! Ya me preinscribí, ¿me pasarías más información?';
-
 // El campo de fecha de nacimiento es un input de texto libre (dd/mm/aaaa) en
 // vez de <input type="date"> — Safari/iOS renderiza el date picker nativo
 // más ancho que su contenedor sin forma de acotarlo por CSS. Acá se convierte
@@ -224,11 +221,6 @@ export default function Index() {
     }
     setFormErrors({});
 
-    // Se abre en blanco en el mismo tick del submit (no después del await) porque
-    // iOS Safari bloquea window.open si no ocurre sincrónicamente sobre el gesto del usuario.
-    // Se completa con la URL de WhatsApp si el envío tiene éxito, o se cierra si falla.
-    const whatsappWindow = window.open('', '_blank');
-
     const { data: rpcResult, error } = await supabase.rpc('submit_enrollment', {
       p_first_name: formData.first_name,
       p_last_name: formData.last_name,
@@ -239,21 +231,21 @@ export default function Index() {
       p_message: formData.message || undefined,
     });
 
-    const result = rpcResult as { success: boolean; message: string } | null;
+    const result = rpcResult as { success: boolean; message: string; enrollment_id?: string } | null;
 
     if (error || !result?.success) {
-      whatsappWindow?.close();
       toast({
         title: 'Error',
         description: result?.message || 'No se pudo enviar la inscripción. Intenta de nuevo.',
         variant: 'destructive',
       });
     } else {
-      const whatsappUrl = `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(WHATSAPP_PREFILLED_MESSAGE)}`;
-      if (whatsappWindow) {
-        whatsappWindow.location.href = whatsappUrl;
-      } else {
-        window.open(whatsappUrl, '_blank');
+      // Confirmación automática por WhatsApp (server-side, vía plantilla aprobada en Meta).
+      // No bloqueamos el éxito del formulario si este envío falla.
+      if (result.enrollment_id) {
+        supabase.functions
+          .invoke('whatsapp-send-enrollment-confirmation', { body: { enrollment_id: result.enrollment_id } })
+          .catch(() => {});
       }
 
       // Show success modal instead of toast

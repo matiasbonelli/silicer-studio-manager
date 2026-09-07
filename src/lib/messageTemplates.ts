@@ -1,11 +1,28 @@
 import { supabase } from '@/integrations/supabase/client';
 
+export type TemplateKey =
+  | 'msg_reminder_pago'
+  | 'msg_pedido_listo'
+  | 'msg_cumpleanos'
+  | 'msg_confirmacion_turno'
+  | 'msg_pago_inscripcion_confirmado'
+  | 'msg_preinscripcion_recibida_adultos_1'
+  | 'msg_preinscripcion_recibida_adultos_2'
+  | 'msg_preinscripcion_recibida_ninos_1'
+  | 'msg_preinscripcion_recibida_ninos_2';
+
 export interface MessageTemplateDef {
-  key: string;
+  key: TemplateKey;
   title: string;
   description: string;
   placeholders: string[];
   defaultMessage: string;
+  /** Nombre exacto de la plantilla aprobada en Meta (WhatsApp Business Platform). */
+  metaTemplateName: string;
+  /** Código de idioma de la plantilla aprobada en Meta, ej. 'es_AR'. */
+  metaTemplateLang: string;
+  /** Orden posicional de las variables tal como fueron aprobadas en Meta ({{1}}, {{2}}, ...). */
+  paramOrder: string[];
 }
 
 export const MESSAGE_TEMPLATES: MessageTemplateDef[] = [
@@ -16,6 +33,9 @@ export const MESSAGE_TEMPLATES: MessageTemplateDef[] = [
     placeholders: ['nombre', 'mes'],
     defaultMessage:
       'Hola {nombre}, te recordamos que tenés la cuota del mes de {mes} pendiente en Silicer. Si ya transferiste o pagaste en efectivo, recordanos o envíanos el comprobante. ¡Cualquier consulta escribinos!\n\n_Esto es un mensaje automático._',
+    metaTemplateName: 'recordatorio_cuota_pendiente',
+    metaTemplateLang: 'es_AR',
+    paramOrder: ['nombre', 'mes'],
   },
   {
     key: 'msg_pedido_listo',
@@ -24,6 +44,9 @@ export const MESSAGE_TEMPLATES: MessageTemplateDef[] = [
     placeholders: ['nombre', 'producto', 'cantidad', 'total'],
     defaultMessage:
       'Hola {nombre}, tu pedido está listo para retirar en Silicer Studio! 🎉\n\n📦 Producto: {producto}\n🔢 Cantidad: {cantidad}\n💰 Total: {total}\n\n¡Cualquier consulta escribinos!',
+    metaTemplateName: 'pedido_listo_retirar',
+    metaTemplateLang: 'es_AR',
+    paramOrder: ['nombre', 'producto', 'cantidad', 'total'],
   },
   {
     key: 'msg_cumpleanos',
@@ -32,6 +55,9 @@ export const MESSAGE_TEMPLATES: MessageTemplateDef[] = [
     placeholders: ['nombre'],
     defaultMessage:
       'Muy feliz cumple años {nombre} 🥳, esperemos que disfrutes en tu hermoso día 💫. Te saluda Caro y todo el equipo de Silicer 💖',
+    metaTemplateName: 'saludo_cumpleanos',
+    metaTemplateLang: 'es_AR',
+    paramOrder: ['nombre'],
   },
   {
     key: 'msg_confirmacion_turno',
@@ -40,6 +66,96 @@ export const MESSAGE_TEMPLATES: MessageTemplateDef[] = [
     placeholders: ['dia', 'horario'],
     defaultMessage:
       'Hola de nuevo!\n\nTe escribimos para confirmar tu turno:\n\nDia: {dia}\nHorario: {horario}\n\nMuchas gracias, te esperamos!',
+    metaTemplateName: 'confirmacion_turno',
+    metaTemplateLang: 'es_AR',
+    paramOrder: ['dia', 'horario'],
+  },
+  {
+    key: 'msg_pago_inscripcion_confirmado',
+    title: 'Pago de inscripción confirmado',
+    description: 'Se envía desde Inscripciones al registrar el pago total de una pre-inscripción.',
+    placeholders: ['nombre'],
+    defaultMessage:
+      'Hola {nombre}! Te confirmamos que registramos tu pago de inscripción en Silicer 🎉. ¡Te esperamos en tu primera clase!',
+    metaTemplateName: 'pago_inscripcion_confirmado',
+    metaTemplateLang: 'es_AR',
+    paramOrder: ['nombre'],
+  },
+  {
+    key: 'msg_preinscripcion_recibida_adultos_1',
+    title: 'Preinscripción recibida — Adultos, 1/2 (landing pública)',
+    description: 'Primer mensaje (info de pago) al recibir una preinscripción en un horario de lunes a viernes.',
+    placeholders: ['nombre'],
+    defaultMessage:
+      '¡Hola {nombre}! Nos alegra mucho que te hayas preinscripto para sumarte a SILICER este año. ✨\n\n' +
+      'Te paso toda la info detallada para concretar tu reserva y que ya tengas un lugar en el taller:\n\n' +
+      '💳 Valor de la cuota mensual: $40.000 (los materiales y las horneadas se abonan aparte).\n\n' +
+      '📅 La cuota se abona del 1 al 10 de cada mes. Pasada esa fecha, se agregarán recargos, sin excepción.\n\n' +
+      '📍 Para reservar tu lugar: Es necesario realizar una seña del 50% ($20.000) o el pago total del mes.\n\n' +
+      'Podés transferir a:\n' +
+      '📌 Alias: silicer\n' +
+      '📌 CVU: 0000003100056515034890\n' +
+      '📌 Nombre: Flavia Carola Del Bel\n' +
+      '📌 Mercado Pago',
+    metaTemplateName: 'preinscripcion_recibida_adultos_1',
+    metaTemplateLang: 'es_AR',
+    paramOrder: ['nombre'],
+  },
+  {
+    key: 'msg_preinscripcion_recibida_adultos_2',
+    title: 'Preinscripción recibida — Adultos, 2/2 (landing pública)',
+    description: 'Segundo mensaje (condiciones y cierre) al recibir una preinscripción en un horario de lunes a viernes.',
+    placeholders: [],
+    defaultMessage:
+      '⚠️ Condiciones importantes:\n\n' +
+      'La seña no posee devolución.\n\n' +
+      'El cupo se guarda únicamente por un mes; pasado el mismo y en caso de no asistir, el lugar queda libre para otra persona.\n\n' +
+      'En caso de no asistir más, avisanos con antelación (mínimo 15 días antes de que termine el mes) para poder organizar los materiales y la lista de espera.\n\n' +
+      'Las clases son recuperables durante el mes en curso, y únicamente durante la primera semana del mes siguiente, según disponibilidad. Los días feriados no se dictan clases, así que no cuentan como clase recuperable.\n\n' +
+      '🙏 Por favor, una vez que hagas la transferencia, enviame el comprobante por acá para confirmar tu turno.\n\n' +
+      '📍 Te esperamos en Amadeo Mozart 169, Banda Norte, Río Cuarto.\n\n' +
+      '¡Cualquier duda avisame! Tenemos muchas ganas de encontrarnos en el taller 🏺🧉',
+    metaTemplateName: 'preinscripcion_recibida_adultos_2',
+    metaTemplateLang: 'es_AR',
+    paramOrder: [],
+  },
+  {
+    key: 'msg_preinscripcion_recibida_ninos_1',
+    title: 'Preinscripción recibida — Niños, sábados, 1/2 (landing pública)',
+    description: 'Primer mensaje (info de pago) al recibir una preinscripción en el horario de sábado (sólo niños).',
+    placeholders: ['nombre'],
+    defaultMessage:
+      '¡Hola {nombre}! Nos alegra mucho que te hayas preinscripto para sumarte a SILICER este año. ✨\n\n' +
+      'Te paso toda la info detallada para concretar tu reserva y que ya tengas un lugar en el taller:\n\n' +
+      '💳 Valor de la cuota mensual: $65.000 (los materiales y las horneadas se abonan aparte).\n\n' +
+      '📅 La cuota se abona del 1 al 10 de cada mes. Pasada esa fecha, se agregarán recargos, sin excepción.\n\n' +
+      '📍 Para reservar tu lugar: Es necesario realizar una seña del 50% ($32.500) o el pago total del mes.\n\n' +
+      'Podés transferir a:\n' +
+      '📌 Alias: silicer\n' +
+      '📌 CVU: 0000003100056515034890\n' +
+      '📌 Nombre: Flavia Carola Del Bel\n' +
+      '📌 Mercado Pago',
+    metaTemplateName: 'preinscripcion_recibida_ninos_1',
+    metaTemplateLang: 'es_AR',
+    paramOrder: ['nombre'],
+  },
+  {
+    key: 'msg_preinscripcion_recibida_ninos_2',
+    title: 'Preinscripción recibida — Niños, sábados, 2/2 (landing pública)',
+    description: 'Segundo mensaje (condiciones y cierre) al recibir una preinscripción en el horario de sábado (sólo niños).',
+    placeholders: [],
+    defaultMessage:
+      '⚠️ Condiciones importantes:\n\n' +
+      'La seña no posee devolución.\n\n' +
+      'El cupo se guarda únicamente por un mes; pasado el mismo y en caso de no asistir, el lugar queda libre para otra persona.\n\n' +
+      'En caso de no asistir más, avisanos con antelación (mínimo 15 días antes de que termine el mes) para poder organizar los materiales y la lista de espera.\n\n' +
+      'Las clases son recuperables durante el mes en curso, y únicamente durante la primera semana del mes siguiente, según disponibilidad. Los días feriados no se dictan clases, así que no cuentan como clase recuperable.\n\n' +
+      '🙏 Por favor, una vez que hagas la transferencia, enviame el comprobante por acá para confirmar tu turno.\n\n' +
+      '📍 Te esperamos en Amadeo Mozart 169, Banda Norte, Río Cuarto.\n\n' +
+      '¡Cualquier duda avisame! Tenemos muchas ganas de encontrarnos en el taller 🏺🧉',
+    metaTemplateName: 'preinscripcion_recibida_ninos_2',
+    metaTemplateLang: 'es_AR',
+    paramOrder: [],
   },
 ];
 
