@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
-import { sendWhatsApp } from '@/lib/whatsapp';
+import { sendWhatsApp, sendTemplateMessage } from '@/lib/whatsapp';
 import { MESSAGE_TEMPLATES, fetchMessageTemplate, renderTemplate } from '@/lib/messageTemplates';
 import { firstOccurrenceInMonth } from '@/lib/utils';
 import { Search, Loader2, MessageCircle, UserPlus, DollarSign, Eye, Trash2, FileText, ExternalLink, Pencil, Plus } from 'lucide-react';
@@ -382,6 +382,20 @@ export default function EnrollmentsManager({ onStudentCreated }: EnrollmentsMana
       } else if (selectedEnrollment.converted_to_student_id) {
         toast({ title: 'Pago actualizado en inscripción y alumno' });
       }
+
+      // Confirmación de turno automática: solo al pasar a señado/pagado (no en cada
+      // edición posterior mientras ya está en ese estado, para no repetir el mensaje).
+      const justConfirmed =
+        (paymentForm.status === 'deposit' || paymentForm.status === 'paid') &&
+        selectedEnrollment.payment_status !== paymentForm.status;
+      if (justConfirmed && selectedEnrollment.phone) {
+        const day = selectedEnrollment.schedule ? DAY_NAMES[selectedEnrollment.schedule.day_of_week] : '[Completar día]';
+        const time = selectedEnrollment.schedule
+          ? `${selectedEnrollment.schedule.start_time.slice(0, 5)} a ${selectedEnrollment.schedule.end_time.slice(0, 5)} hs`
+          : '[Completar hora]';
+        sendTemplateMessage(selectedEnrollment.phone, 'msg_confirmacion_turno', { dia: day, horario: time }, toast);
+      }
+
       setIsPaymentModalOpen(false);
       fetchEnrollments();
       if ((paymentForm.status === 'deposit' || paymentForm.status === 'paid') && !selectedEnrollment.converted_to_student_id) {
