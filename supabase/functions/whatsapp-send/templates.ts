@@ -57,15 +57,21 @@ export const META_TEMPLATES: Record<string, MetaTemplateDef> = {
   },
   msg_preinscripcion_recibida_ninos_1: {
     metaTemplateName: 'preinscripcion_recibida_ninos_1',
-    metaTemplateLang: 'es_AR',
+    // Quedó aprobada por error bajo el idioma "English (en)" en vez de es_AR (el texto
+    // real sigue siendo en español, es solo la etiqueta de idioma con la que Meta la
+    // registró) — confirmado en WhatsApp Manager. Tiene que coincidir exacto o el envío falla.
+    metaTemplateLang: 'en',
     // Mismo texto/estilo que adultos_1 → mismo motivo de clasificación como Marketing.
     category: 'MARKETING',
     paramOrder: ['nombre'],
   },
   msg_preinscripcion_recibida_ninos_2: {
     metaTemplateName: 'preinscripcion_recibida_ninos_2',
-    metaTemplateLang: 'es_AR',
-    category: 'UTILITY',
+    // Mismo caso que ninos_1: aprobada como "en", no es_AR.
+    metaTemplateLang: 'en',
+    // TODO: confirmar en WhatsApp Manager — se asume Marketing por ser texto idéntico a
+    // adultos_2 (que sí se confirmó como Marketing), pero no se verificó puntualmente.
+    category: 'MARKETING',
     paramOrder: [],
   },
 };
