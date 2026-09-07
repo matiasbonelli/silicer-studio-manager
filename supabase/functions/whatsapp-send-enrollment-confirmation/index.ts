@@ -61,7 +61,13 @@ serve(async (req) => {
       : TEMPLATE_KEYS_ADULTOS
 
     const results = []
-    for (const templateKey of templateKeys) {
+    for (const [index, templateKey] of templateKeys.entries()) {
+      // Aunque estos envíos ya se esperan uno a uno, Chatwoot los encola como jobs de
+      // fondo (Sidekiq) y puede procesarlos fuera de orden si hay más de un worker —
+      // esta pausa le da tiempo al primero de salir antes de encolar el segundo.
+      if (index > 0) {
+        await new Promise((resolve) => setTimeout(resolve, 2000))
+      }
       const sendRes = await supabase.functions.invoke('whatsapp-send', {
         body: {
           phone: enrollment.phone,
