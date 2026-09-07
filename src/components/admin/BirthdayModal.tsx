@@ -3,22 +3,16 @@ import { supabase } from '@/integrations/supabase/client';
 import { Student } from '@/types/database';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { MessageCircle } from 'lucide-react';
-import { sendWhatsApp } from '@/lib/whatsapp';
-import { MESSAGE_TEMPLATES, fetchMessageTemplate, renderTemplate } from '@/lib/messageTemplates';
+import { MessageCircle, Check } from 'lucide-react';
+import { sendTemplateMessage } from '@/lib/whatsapp';
 import { useToast } from '@/hooks/use-toast';
 
 export default function BirthdayModal() {
   const [isOpen, setIsOpen] = useState(false);
   const [birthdayStudents, setBirthdayStudents] = useState<Student[]>([]);
-  const [birthdayMsgTemplate, setBirthdayMsgTemplate] = useState<string>(
-    MESSAGE_TEMPLATES.find((t) => t.key === 'msg_cumpleanos')!.defaultMessage,
-  );
+  const [sendingId, setSendingId] = useState<string | null>(null);
+  const [sentIds, setSentIds] = useState<Set<string>>(new Set());
   const { toast } = useToast();
-
-  useEffect(() => {
-    fetchMessageTemplate('msg_cumpleanos').then(setBirthdayMsgTemplate).catch(() => {});
-  }, []);
 
   useEffect(() => {
     const dismissedKey = `birthday-modal-dismissed-${new Date().toISOString().slice(0, 10)}`;
@@ -64,9 +58,13 @@ export default function BirthdayModal() {
     setIsOpen(false);
   };
 
-  const handleSendWhatsApp = (student: Student) => {
-    const message = renderTemplate(birthdayMsgTemplate, { nombre: student.first_name });
-    sendWhatsApp(student.phone!, message, toast);
+  const handleSendWhatsApp = async (student: Student) => {
+    setSendingId(student.id);
+    const ok = await sendTemplateMessage(student.phone!, 'msg_cumpleanos', { nombre: student.first_name }, toast);
+    setSendingId(null);
+    if (ok) {
+      setSentIds((prev) => new Set(prev).add(student.id));
+    }
   };
 
   if (birthdayStudents.length === 0) return null;
@@ -101,11 +99,16 @@ export default function BirthdayModal() {
                 {student.phone && (
                   <Button
                     size="sm"
-                    variant="outline"
+                    variant={sentIds.has(student.id) ? 'secondary' : 'outline'}
                     className="mt-1"
+                    disabled={sendingId === student.id || sentIds.has(student.id)}
                     onClick={() => handleSendWhatsApp(student)}
                   >
-                    <MessageCircle className="w-4 h-4 mr-2" /> Enviar mensaje
+                    {sentIds.has(student.id) ? (
+                      <><Check className="w-4 h-4 mr-2" /> Enviado</>
+                    ) : (
+                      <><MessageCircle className="w-4 h-4 mr-2" /> {sendingId === student.id ? 'Enviando...' : 'Enviar mensaje'}</>
+                    )}
                   </Button>
                 )}
               </div>
