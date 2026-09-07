@@ -38,7 +38,7 @@ serve(async (req) => {
 
     const { data: enrollment, error: fetchError } = await supabase
       .from('enrollments')
-      .select('first_name, phone, schedule:schedules(day_of_week)')
+      .select('first_name, last_name, phone, schedule:schedules(day_of_week)')
       .eq('id', enrollment_id)
       .maybeSingle()
 
@@ -73,6 +73,7 @@ serve(async (req) => {
           phone: enrollment.phone,
           template_key: templateKey,
           variables: { nombre: enrollment.first_name },
+          contact_name: [enrollment.first_name, enrollment.last_name].filter(Boolean).join(' '),
         },
       })
       results.push({ template_key: templateKey, error: sendRes.error?.message, data: sendRes.data })
