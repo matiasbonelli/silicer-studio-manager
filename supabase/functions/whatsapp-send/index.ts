@@ -50,6 +50,7 @@ async function findOrCreateContact(
   accountId: string,
   inboxId: string,
   phone: string,
+  name?: string,
 ): Promise<ChatwootContact> {
   const searchRes = await chatwootFetch(
     baseUrl,
@@ -64,7 +65,7 @@ async function findOrCreateContact(
 
   const createRes = await chatwootFetch(baseUrl, apiToken, `/api/v1/accounts/${accountId}/contacts`, {
     method: 'POST',
-    body: JSON.stringify({ inbox_id: Number(inboxId), phone_number: phone }),
+    body: JSON.stringify({ inbox_id: Number(inboxId), phone_number: phone, name: name || phone }),
   })
   if (!createRes.ok) {
     throw new Error(`No se pudo crear el contacto en Chatwoot: ${await createRes.text()}`)
@@ -163,6 +164,7 @@ serve(async (req) => {
     phone = body.phone ? normalizePhone(body.phone) : body.phone
     template_key = body.template_key
     variables = body.variables ?? {}
+    const contactName: string | undefined = body.contact_name
 
     if (!phone || !template_key) {
       return new Response(
@@ -191,7 +193,7 @@ serve(async (req) => {
       )
     }
 
-    const contact = await findOrCreateContact(baseUrl, apiToken, accountId, inboxId, phone)
+    const contact = await findOrCreateContact(baseUrl, apiToken, accountId, inboxId, phone, contactName)
     const conversation = await findOrCreateConversation(baseUrl, apiToken, accountId, inboxId, contact.id)
     const message = await sendTemplateMessage(baseUrl, apiToken, accountId, conversation.id, template, variables)
 
