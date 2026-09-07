@@ -35,8 +35,11 @@ export const META_TEMPLATES: Record<string, MetaTemplateDef> = {
   },
   msg_cumpleanos: {
     metaTemplateName: 'saludo_cumpleanos',
-    metaTemplateLang: 'es_AR',
-    category: 'UTILITY',
+    // Quedó aprobada en "English (en)" por error de carga (mismo caso que las de niños)
+    // — el texto real sigue en español, es solo la etiqueta de idioma.
+    metaTemplateLang: 'en',
+    // Es un saludo de vínculo, no transaccional — Meta la clasifica como Marketing.
+    category: 'MARKETING',
     paramOrder: ['nombre'],
     bodyTemplate:
       'Muy feliz cumple años {nombre} 🥳, esperemos que disfrutes en tu hermoso día 💫. Te saluda Caro y todo el equipo de Silicer 💖',
