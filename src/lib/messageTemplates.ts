@@ -65,7 +65,7 @@ export const MESSAGE_TEMPLATES: MessageTemplateDef[] = [
     description: 'Se envía desde Inscripciones al confirmar día y horario, a mano o automáticamente al señar/pagar.',
     placeholders: ['dia', 'horario'],
     defaultMessage:
-      'Hola de nuevo!\n\nTe escribimos para confirmar tu turno:\n\nDia: {dia}\nHorario: {horario}\n\nMuchas gracias, te esperamos!',
+      'Hola de nuevo!\nTe escribimos para confirmar tu inscripción:\nDia: {dia}\nHorario: {horario}\nMuchas gracias, te esperamos!',
     metaTemplateName: 'confirmacion_inscripcion',
     metaTemplateLang: 'es_AR',
     paramOrder: ['dia', 'horario'],
