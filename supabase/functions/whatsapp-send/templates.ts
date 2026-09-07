@@ -47,7 +47,7 @@ export const META_TEMPLATES: Record<string, MetaTemplateDef> = {
     category: 'UTILITY',
     paramOrder: ['dia', 'horario'],
     bodyTemplate:
-      'Hola de nuevo!\n\nTe escribimos para confirmar tu turno:\n\nDia: {dia}\nHorario: {horario}\n\nMuchas gracias, te esperamos!',
+      'Hola de nuevo!\nTe escribimos para confirmar tu inscripción:\nDia: {dia}\nHorario: {horario}\nMuchas gracias, te esperamos!',
   },
   msg_pago_inscripcion_confirmado: {
     metaTemplateName: 'pago_inscripcion_confirmado',
