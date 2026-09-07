@@ -106,7 +106,7 @@ export default function EnrollmentsManager({ onStudentCreated }: EnrollmentsMana
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [paymentFilter, setPaymentFilter] = useState<string>('all');
   const [confirmMsgTemplate, setConfirmMsgTemplate] = useState<string>(
-    MESSAGE_TEMPLATES.find((t) => t.key === 'msg_confirmacion_turno')!.defaultMessage,
+    MESSAGE_TEMPLATES.find((t) => t.key === 'msg_confirmacion_inscripcion')!.defaultMessage,
   );
   const { toast } = useToast();
 
@@ -196,7 +196,7 @@ export default function EnrollmentsManager({ onStudentCreated }: EnrollmentsMana
   useEffect(() => {
     fetchEnrollments();
     fetchSchedules();
-    fetchMessageTemplate('msg_confirmacion_turno').then(setConfirmMsgTemplate).catch(() => {});
+    fetchMessageTemplate('msg_confirmacion_inscripcion').then(setConfirmMsgTemplate).catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -393,7 +393,7 @@ export default function EnrollmentsManager({ onStudentCreated }: EnrollmentsMana
         const time = selectedEnrollment.schedule
           ? `${selectedEnrollment.schedule.start_time.slice(0, 5)} a ${selectedEnrollment.schedule.end_time.slice(0, 5)} hs`
           : '[Completar hora]';
-        sendTemplateMessage(selectedEnrollment.phone, 'msg_confirmacion_turno', { dia: day, horario: time }, toast);
+        sendTemplateMessage(selectedEnrollment.phone, 'msg_confirmacion_inscripcion', { dia: day, horario: time }, toast);
       }
 
       setIsPaymentModalOpen(false);

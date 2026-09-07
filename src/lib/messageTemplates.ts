@@ -4,7 +4,7 @@ export type TemplateKey =
   | 'msg_reminder_pago'
   | 'msg_pedido_listo'
   | 'msg_cumpleanos'
-  | 'msg_confirmacion_turno'
+  | 'msg_confirmacion_inscripcion'
   | 'msg_pago_inscripcion_confirmado'
   | 'msg_preinscripcion_recibida_adultos_1'
   | 'msg_preinscripcion_recibida_adultos_2'
@@ -60,13 +60,13 @@ export const MESSAGE_TEMPLATES: MessageTemplateDef[] = [
     paramOrder: ['nombre'],
   },
   {
-    key: 'msg_confirmacion_turno',
-    title: 'Confirmación de turno (pre-inscripción)',
-    description: 'Se envía desde Inscripciones para confirmar día y horario de una pre-inscripción.',
+    key: 'msg_confirmacion_inscripcion',
+    title: 'Confirmación de inscripción',
+    description: 'Se envía desde Inscripciones al confirmar día y horario, a mano o automáticamente al señar/pagar.',
     placeholders: ['dia', 'horario'],
     defaultMessage:
       'Hola de nuevo!\n\nTe escribimos para confirmar tu turno:\n\nDia: {dia}\nHorario: {horario}\n\nMuchas gracias, te esperamos!',
-    metaTemplateName: 'confirmacion_turno',
+    metaTemplateName: 'confirmacion_inscripcion',
     metaTemplateLang: 'es_AR',
     paramOrder: ['dia', 'horario'],
   },
