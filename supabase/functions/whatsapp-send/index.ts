@@ -7,6 +7,23 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
+// Chatwoot exige E.164 estricto ("+549..." para celulares argentinos) para CREAR un
+// contacto nuevo — sin esto, cualquier variante que la gente tipee en un formulario
+// (espacios, sin código de país, con o sin el "9" de celular) falla al crear el contacto.
+// Solo "funcionaba" antes por casualidad, cuando el número ya existía como contacto de
+// una prueba previa y la búsqueda lo encontraba por substring.
+function normalizePhone(phone: string): string {
+  let digits = phone.replace(/\D/g, '')
+  if (!digits.startsWith('54')) {
+    digits = digits.startsWith('9') ? `54${digits}` : `549${digits}`
+  } else if (!digits.startsWith('549')) {
+    // Tiene código de país pero le falta el "9" de celular (ej. limpiado con la
+    // versión vieja del lado del cliente, que no lo agregaba).
+    digits = `549${digits.slice(2)}`
+  }
+  return `+${digits}`
+}
+
 interface ChatwootContact {
   id: number
 }
@@ -143,7 +160,7 @@ serve(async (req) => {
 
   try {
     const body = await req.json()
-    phone = body.phone
+    phone = body.phone ? normalizePhone(body.phone) : body.phone
     template_key = body.template_key
     variables = body.variables ?? {}
 

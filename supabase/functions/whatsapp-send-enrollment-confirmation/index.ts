@@ -66,7 +66,7 @@ serve(async (req) => {
       // fondo (Sidekiq) y puede procesarlos fuera de orden si hay más de un worker —
       // esta pausa le da tiempo al primero de salir antes de encolar el segundo.
       if (index > 0) {
-        await new Promise((resolve) => setTimeout(resolve, 2000))
+        await new Promise((resolve) => setTimeout(resolve, 15000))
       }
       const sendRes = await supabase.functions.invoke('whatsapp-send', {
         body: {
