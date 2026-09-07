@@ -1,6 +1,6 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
-import { META_TEMPLATES } from './templates.ts'
+import { META_TEMPLATES, renderTemplate } from './templates.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -127,6 +127,7 @@ async function sendTemplateMessage(
     {
       method: 'POST',
       body: JSON.stringify({
+        content: renderTemplate(template.bodyTemplate, variables),
         message_type: 'outgoing',
         template_params: {
           name: template.metaTemplateName,
