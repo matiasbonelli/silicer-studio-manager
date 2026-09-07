@@ -41,8 +41,8 @@ export const META_TEMPLATES: Record<string, MetaTemplateDef> = {
     bodyTemplate:
       'Muy feliz cumple años {nombre} 🥳, esperemos que disfrutes en tu hermoso día 💫. Te saluda Caro y todo el equipo de Silicer 💖',
   },
-  msg_confirmacion_turno: {
-    metaTemplateName: 'confirmacion_turno',
+  msg_confirmacion_inscripcion: {
+    metaTemplateName: 'confirmacion_inscripcion',
     metaTemplateLang: 'es_AR',
     category: 'UTILITY',
     paramOrder: ['dia', 'horario'],
