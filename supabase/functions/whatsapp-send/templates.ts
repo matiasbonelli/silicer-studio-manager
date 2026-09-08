@@ -21,9 +21,9 @@ export const META_TEMPLATES: Record<string, MetaTemplateDef> = {
     metaTemplateName: 'recordatorio_cuota_pendiente',
     metaTemplateLang: 'es_AR',
     category: 'UTILITY',
-    paramOrder: ['nombre', 'mes'],
+    paramOrder: ['nombre', 'mes', 'monto'],
     bodyTemplate:
-      'Hola {nombre}, te recordamos que tenés la cuota del mes de {mes} pendiente en Silicer. Si ya transferiste o pagaste en efectivo, recordanos o envíanos el comprobante. ¡Cualquier consulta escribinos!\n\n_Esto es un mensaje automático._',
+      'Hola {nombre}, te recordamos que tenés la cuota del mes de {mes} pendiente en Silicer (valor: ${monto}). Si ya transferiste o pagaste en efectivo, recordanos o envíanos el comprobante. ¡Cualquier consulta escribinos!\n\n_Esto es un mensaje automático._',
   },
   msg_recordatorio_cuota_mora: {
     metaTemplateName: 'recordatorio_cuota_mora',
