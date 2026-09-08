@@ -10,8 +10,8 @@ import {
 } from '@/types/database';
 import { formatCurrency } from '@/lib/format';
 import { isStudentActiveThisMonth } from '@/lib/utils';
-import { sendTemplateMessage, sendTemplateMessageBulk, whatsAppChatUrl } from '@/lib/whatsapp';
-import { MESSAGE_TEMPLATES } from '@/lib/messageTemplates';
+import { sendTemplateMessage, sendTemplateMessageBulk, whatsAppChatUrl, type BulkTemplateTarget } from '@/lib/whatsapp';
+import { MESSAGE_TEMPLATES, type TemplateKey } from '@/lib/messageTemplates';
 import { useToast } from '@/hooks/use-toast';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -466,12 +466,43 @@ export default function Dashboard({ refreshTrigger }: DashboardProps) {
 
   const monthLabel = formatMonth(currentMonth);
 
+  // Mora: a partir del día 11 la cuota sube por tramos. El porcentaje es el mismo para
+  // adultos y niños, pero el monto en pesos depende de la cuota base de cada categoría.
+  const getMoraPercent = (day: number): number | null => {
+    if (day <= 10) return null;
+    if (day <= 15) return 10;
+    if (day <= 20) return 20;
+    return 30;
+  };
+
+  const buildReminderPayload = (student: Student) => {
+    const percent = getMoraPercent(new Date().getDate());
+    const basePrice = student.categoria === 'niño' ? parseFloat(cuotaNino) : parseFloat(cuotaAdulto);
+    if (percent === null || !basePrice) {
+      return {
+        templateKey: 'msg_reminder_pago' as const,
+        variables: { nombre: student.first_name, mes: monthLabel },
+      };
+    }
+    const monto = Math.round(basePrice * (1 + percent / 100));
+    return {
+      templateKey: 'msg_recordatorio_cuota_mora' as const,
+      variables: {
+        nombre: student.first_name,
+        mes: monthLabel,
+        monto: monto.toLocaleString('es-AR'),
+        porcentaje: String(percent),
+      },
+    };
+  };
+
   const handleSendReminder = async (student: Student) => {
     setSendingReminderId(student.id);
+    const { templateKey, variables } = buildReminderPayload(student);
     const ok = await sendTemplateMessage(
       student.phone!,
-      'msg_reminder_pago',
-      { nombre: student.first_name, mes: monthLabel },
+      templateKey,
+      variables,
       toast,
       { type: 'student', id: student.id },
     );
@@ -499,21 +530,32 @@ export default function Dashboard({ refreshTrigger }: DashboardProps) {
   };
 
   const handleSendSelectedReminders = async () => {
-    const targets = allStudentsToRemind
-      .filter(({ student }) => student.phone && selectedReminderIds.has(student.id))
-      .map(({ student }) => ({
-        phone: student.phone!,
-        variables: { nombre: student.first_name, mes: monthLabel },
-        relatedEntityId: student.id,
-      }));
-    if (targets.length === 0) {
+    const selected = allStudentsToRemind.filter(
+      ({ student }) => student.phone && selectedReminderIds.has(student.id)
+    );
+    if (selected.length === 0) {
       toast({ title: 'Seleccioná al menos un alumno', variant: 'destructive' });
       return;
     }
+
+    // Agrupado por plantilla (hoy siempre es la misma para todos, ya que la mora depende
+    // solo de la fecha de envío — pero se agrupa por las dudas de que algún día no sea así).
+    const groups = new Map<TemplateKey, BulkTemplateTarget[]>();
+    for (const { student } of selected) {
+      const { templateKey, variables } = buildReminderPayload(student);
+      const list = groups.get(templateKey) ?? [];
+      list.push({ phone: student.phone!, variables, relatedEntityId: student.id });
+      groups.set(templateKey, list);
+    }
+
     setBulkSendingReminders(true);
-    const succeeded = await sendTemplateMessageBulk('msg_reminder_pago', targets, toast, 'student');
+    const allSucceeded = new Set<string>();
+    for (const [templateKey, targets] of groups) {
+      const succeeded = await sendTemplateMessageBulk(templateKey, targets, toast, 'student');
+      succeeded.forEach((id) => allSucceeded.add(id));
+    }
     setBulkSendingReminders(false);
-    setJustRemindedIds((prev) => new Set([...prev, ...succeeded]));
+    setJustRemindedIds((prev) => new Set([...prev, ...allSucceeded]));
     setSelectedReminderIds(new Set());
   };
 

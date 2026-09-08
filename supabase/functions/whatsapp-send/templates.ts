@@ -25,6 +25,14 @@ export const META_TEMPLATES: Record<string, MetaTemplateDef> = {
     bodyTemplate:
       'Hola {nombre}, te recordamos que tenés la cuota del mes de {mes} pendiente en Silicer. Si ya transferiste o pagaste en efectivo, recordanos o envíanos el comprobante. ¡Cualquier consulta escribinos!\n\n_Esto es un mensaje automático._',
   },
+  msg_recordatorio_cuota_mora: {
+    metaTemplateName: 'recordatorio_cuota_mora',
+    metaTemplateLang: 'es_AR',
+    category: 'UTILITY',
+    paramOrder: ['nombre', 'mes', 'monto', 'porcentaje'],
+    bodyTemplate:
+      'Hola {nombre}, tu cuota de {mes} sigue pendiente. Por la fecha, el valor actual es ${monto} (incluye {porcentaje}% de recargo). Podés pagarla hoy para no seguir acumulando recargo.',
+  },
   msg_pedido_listo: {
     metaTemplateName: 'pedido_listo_retirar',
     metaTemplateLang: 'es_AR',
