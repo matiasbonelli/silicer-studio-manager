@@ -282,6 +282,12 @@ export default function EnrollmentsManager({ onStudentCreated }: EnrollmentsMana
         // deposit → partial, paid → paid
         const studentPaymentStatus = paymentForm.status === 'paid' ? 'paid' : 'partial';
 
+        // El sábado es el único horario "sólo niños" (ver DAY_NAMES en src/types/database.ts)
+        // — el resto son adultos. Sin esto, categoria queda en el default 'adulto' del
+        // schema sin importar el horario real, y todo lo que depende de la categoría
+        // (monto de cuota, recordatorios de WhatsApp) sale mal para alumnos de sábado.
+        const categoria = selectedEnrollment.schedule?.day_of_week === 'saturday' ? 'niño' : 'adulto';
+
         const { data: newStudent, error: studentError } = await supabase
           .from('students')
           .insert({
@@ -291,6 +297,7 @@ export default function EnrollmentsManager({ onStudentCreated }: EnrollmentsMana
             phone: selectedEnrollment.phone,
             birthday: selectedEnrollment.birthday,
             schedule_id: selectedEnrollment.schedule_id,
+            categoria,
             payment_status: studentPaymentStatus,
             paid_amount: paymentForm.amount ? parseFloat(paymentForm.amount) : null,
             payment_date: new Date().toISOString(),
