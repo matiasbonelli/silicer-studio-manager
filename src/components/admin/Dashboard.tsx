@@ -165,8 +165,13 @@ export default function Dashboard({ refreshTrigger }: DashboardProps) {
 
   const CUOTA_KEY_ADULTO = 'cuota_adulto';
   const CUOTA_KEY_NINO   = 'cuota_nino';
+  const RECARGO_KEY = 'recargo_percent';
   const [cuotaAdulto, setCuotaAdulto] = useState<string>('');
   const [cuotaNino, setCuotaNino] = useState<string>('');
+  // cuota_adulto/cuota_nino guardan el precio SIN el recargo por método de pago (se cargan
+  // así a propósito para que el total en Ventas cierre redondo) — para los recordatorios de
+  // WhatsApp necesitamos el precio final real, así que le sumamos este recargo acá.
+  const [recargoPercent, setRecargoPercent] = useState<number>(0);
   const [editingCuota, setEditingCuota] = useState<'adulto' | 'niño' | null>(null);
 
   const handleSaveCuota = async (cat: 'adulto' | 'niño') => {
@@ -211,7 +216,7 @@ export default function Dashboard({ refreshTrigger }: DashboardProps) {
           .gte('payment_date', twelveMonthsAgo)
           .in('status', ['paid', 'partial']),
         supabase.from('mold_orders').select('id', { count: 'exact', head: true }).eq('status', 'pending'),
-        supabase.from('app_settings').select('key, value').in('key', [CUOTA_KEY_ADULTO, CUOTA_KEY_NINO]),
+        supabase.from('app_settings').select('key, value').in('key', [CUOTA_KEY_ADULTO, CUOTA_KEY_NINO, RECARGO_KEY]),
         supabase
           .from('whatsapp_message_log')
           .select('related_entity_id')
@@ -238,6 +243,7 @@ export default function Dashboard({ refreshTrigger }: DashboardProps) {
       const getPrecio = (cat: string) => cat === 'niño' ? precioNino : precioAdulto;
       setCuotaAdulto(cuotaSettings[CUOTA_KEY_ADULTO] ?? '');
       setCuotaNino(cuotaSettings[CUOTA_KEY_NINO] ?? '');
+      setRecargoPercent(parseFloat(cuotaSettings[RECARGO_KEY] ?? '0') || 0);
 
       // Mapa student_id → { status, amount, categoria }
       const categoriaMap: Record<string, string> = {};
@@ -471,7 +477,10 @@ export default function Dashboard({ refreshTrigger }: DashboardProps) {
 
   const buildReminderPayload = (student: Student) => {
     const percent = getMoraPercent(new Date().getDate());
-    const basePrice = (student.categoria === 'niño' ? parseFloat(cuotaNino) : parseFloat(cuotaAdulto)) || 0;
+    const rawPrice = (student.categoria === 'niño' ? parseFloat(cuotaNino) : parseFloat(cuotaAdulto)) || 0;
+    // cuota_adulto/cuota_nino son el precio SIN el recargo por método de pago — el precio
+    // final real (el que ve el alumno) le suma ese recargo.
+    const basePrice = Math.round(rawPrice * (1 + recargoPercent / 100));
 
     if (percent === null) {
       return {
