@@ -30,13 +30,13 @@ export const MESSAGE_TEMPLATES: MessageTemplateDef[] = [
   {
     key: 'msg_reminder_pago',
     title: 'Recordatorio de cuota pendiente',
-    description: 'Se envía desde Resumen y Alumnos para avisar que la cuota mensual está pendiente.',
-    placeholders: ['nombre', 'mes'],
+    description: 'Se envía desde Resumen y Alumnos para avisar que la cuota mensual está pendiente (días 1 al 10, sin recargo).',
+    placeholders: ['nombre', 'mes', 'monto'],
     defaultMessage:
-      'Hola {nombre}, te recordamos que tenés la cuota del mes de {mes} pendiente en Silicer. Si ya transferiste o pagaste en efectivo, recordanos o envíanos el comprobante. ¡Cualquier consulta escribinos!\n\n_Esto es un mensaje automático._',
+      'Hola {nombre}, te recordamos que tenés la cuota del mes de {mes} pendiente en Silicer (valor: ${monto}). Si ya transferiste o pagaste en efectivo, recordanos o envíanos el comprobante. ¡Cualquier consulta escribinos!\n\n_Esto es un mensaje automático._',
     metaTemplateName: 'recordatorio_cuota_pendiente',
     metaTemplateLang: 'es_AR',
-    paramOrder: ['nombre', 'mes'],
+    paramOrder: ['nombre', 'mes', 'monto'],
   },
   {
     key: 'msg_recordatorio_cuota_mora',

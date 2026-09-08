@@ -477,11 +477,12 @@ export default function Dashboard({ refreshTrigger }: DashboardProps) {
 
   const buildReminderPayload = (student: Student) => {
     const percent = getMoraPercent(new Date().getDate());
-    const basePrice = student.categoria === 'niño' ? parseFloat(cuotaNino) : parseFloat(cuotaAdulto);
-    if (percent === null || !basePrice) {
+    const basePrice = (student.categoria === 'niño' ? parseFloat(cuotaNino) : parseFloat(cuotaAdulto)) || 0;
+
+    if (percent === null) {
       return {
         templateKey: 'msg_reminder_pago' as const,
-        variables: { nombre: student.first_name, mes: monthLabel },
+        variables: { nombre: student.first_name, mes: monthLabel, monto: basePrice.toLocaleString('es-AR') },
       };
     }
     const monto = Math.round(basePrice * (1 + percent / 100));
