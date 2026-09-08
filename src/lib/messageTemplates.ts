@@ -2,6 +2,7 @@ import { supabase } from '@/integrations/supabase/client';
 
 export type TemplateKey =
   | 'msg_reminder_pago'
+  | 'msg_recordatorio_cuota_mora'
   | 'msg_pedido_listo'
   | 'msg_cumpleanos'
   | 'msg_confirmacion_inscripcion'
@@ -36,6 +37,17 @@ export const MESSAGE_TEMPLATES: MessageTemplateDef[] = [
     metaTemplateName: 'recordatorio_cuota_pendiente',
     metaTemplateLang: 'es_AR',
     paramOrder: ['nombre', 'mes'],
+  },
+  {
+    key: 'msg_recordatorio_cuota_mora',
+    title: 'Recordatorio de cuota con recargo (mora)',
+    description: 'Igual que el recordatorio de cuota, pero para cuando ya pasó el día 10 — incluye el monto con recargo ya calculado según la fecha de envío.',
+    placeholders: ['nombre', 'mes', 'monto', 'porcentaje'],
+    defaultMessage:
+      'Hola {nombre}, tu cuota de {mes} sigue pendiente. Por la fecha, el valor actual es ${monto} (incluye {porcentaje}% de recargo). Podés pagarla hoy para no seguir acumulando recargo.',
+    metaTemplateName: 'recordatorio_cuota_mora',
+    metaTemplateLang: 'es_AR',
+    paramOrder: ['nombre', 'mes', 'monto', 'porcentaje'],
   },
   {
     key: 'msg_pedido_listo',
