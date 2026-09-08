@@ -31,7 +31,9 @@ export const META_TEMPLATES: Record<string, MetaTemplateDef> = {
     category: 'UTILITY',
     paramOrder: ['nombre', 'mes', 'monto', 'porcentaje'],
     bodyTemplate:
-      'Hola {nombre}, tu cuota de {mes} sigue pendiente. Por la fecha, el valor actual es ${monto} (incluye {porcentaje}% de recargo). Podés pagarla hoy para no seguir acumulando recargo.',
+      'Hola {nombre}, tu cuota de {mes} sigue pendiente. Por la fecha, el valor actual es ${monto} (incluye {porcentaje}% de recargo).\n\n' +
+      'Si ya transferiste o pagaste en efectivo anteriormente, recordanos o envíanos el comprobante. ¡Cualquier consulta escribinos!\n\n' +
+      'Podés pagarla hoy para no seguir acumulando recargo. Gracias.',
   },
   msg_pedido_listo: {
     metaTemplateName: 'pedido_listo_retirar',

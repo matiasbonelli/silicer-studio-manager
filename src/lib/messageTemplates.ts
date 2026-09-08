@@ -44,7 +44,9 @@ export const MESSAGE_TEMPLATES: MessageTemplateDef[] = [
     description: 'Igual que el recordatorio de cuota, pero para cuando ya pasó el día 10 — incluye el monto con recargo ya calculado según la fecha de envío.',
     placeholders: ['nombre', 'mes', 'monto', 'porcentaje'],
     defaultMessage:
-      'Hola {nombre}, tu cuota de {mes} sigue pendiente. Por la fecha, el valor actual es ${monto} (incluye {porcentaje}% de recargo). Podés pagarla hoy para no seguir acumulando recargo.',
+      'Hola {nombre}, tu cuota de {mes} sigue pendiente. Por la fecha, el valor actual es ${monto} (incluye {porcentaje}% de recargo).\n\n' +
+      'Si ya transferiste o pagaste en efectivo anteriormente, recordanos o envíanos el comprobante. ¡Cualquier consulta escribinos!\n\n' +
+      'Podés pagarla hoy para no seguir acumulando recargo. Gracias.',
     metaTemplateName: 'recordatorio_cuota_mora',
     metaTemplateLang: 'es_AR',
     paramOrder: ['nombre', 'mes', 'monto', 'porcentaje'],
