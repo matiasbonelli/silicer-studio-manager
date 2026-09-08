@@ -1,8 +1,7 @@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { MessageCircle, History, MessageSquareText } from 'lucide-react';
+import { MessageCircle, History } from 'lucide-react';
 import WhatsAppGroupVerifier from './WhatsAppGroupVerifier';
 import DeletionHistory from './DeletionHistory';
-import AutoMessagesManager from './AutoMessagesManager';
 
 export default function UtilitiesManager() {
   return (
@@ -23,10 +22,6 @@ export default function UtilitiesManager() {
             <History className="w-4 h-4 shrink-0" />
             Historial de cambios
           </TabsTrigger>
-          <TabsTrigger value="auto-messages" className="flex items-center gap-1.5">
-            <MessageSquareText className="w-4 h-4 shrink-0" />
-            Respuestas automáticas
-          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="whatsapp">
@@ -35,10 +30,6 @@ export default function UtilitiesManager() {
 
         <TabsContent value="history">
           <DeletionHistory />
-        </TabsContent>
-
-        <TabsContent value="auto-messages">
-          <AutoMessagesManager />
         </TabsContent>
       </Tabs>
     </div>

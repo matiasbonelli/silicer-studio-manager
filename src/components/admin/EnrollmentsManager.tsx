@@ -10,8 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
-import { sendWhatsApp, sendTemplateMessage } from '@/lib/whatsapp';
-import { MESSAGE_TEMPLATES, fetchMessageTemplate, renderTemplate } from '@/lib/messageTemplates';
+import { sendTemplateMessage } from '@/lib/whatsapp';
 import { firstOccurrenceInMonth } from '@/lib/utils';
 import { Search, Loader2, MessageCircle, UserPlus, DollarSign, Eye, Trash2, FileText, ExternalLink, Pencil, Plus } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -105,9 +104,6 @@ export default function EnrollmentsManager({ onStudentCreated }: EnrollmentsMana
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [paymentFilter, setPaymentFilter] = useState<string>('all');
-  const [confirmMsgTemplate, setConfirmMsgTemplate] = useState<string>(
-    MESSAGE_TEMPLATES.find((t) => t.key === 'msg_confirmacion_inscripcion')!.defaultMessage,
-  );
   const { toast } = useToast();
 
   // Modal states
@@ -196,7 +192,6 @@ export default function EnrollmentsManager({ onStudentCreated }: EnrollmentsMana
   useEffect(() => {
     fetchEnrollments();
     fetchSchedules();
-    fetchMessageTemplate('msg_confirmacion_inscripcion').then(setConfirmMsgTemplate).catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -393,7 +388,13 @@ export default function EnrollmentsManager({ onStudentCreated }: EnrollmentsMana
         const time = selectedEnrollment.schedule
           ? `${selectedEnrollment.schedule.start_time.slice(0, 5)} a ${selectedEnrollment.schedule.end_time.slice(0, 5)} hs`
           : '[Completar hora]';
-        sendTemplateMessage(selectedEnrollment.phone, 'msg_confirmacion_inscripcion', { dia: day, horario: time }, toast);
+        sendTemplateMessage(
+          selectedEnrollment.phone,
+          'msg_confirmacion_inscripcion',
+          { dia: day, horario: time },
+          toast,
+          { type: 'enrollment', id: selectedEnrollment.id },
+        );
       }
 
       setIsPaymentModalOpen(false);
@@ -816,8 +817,13 @@ export default function EnrollmentsManager({ onStudentCreated }: EnrollmentsMana
                           const time = enrollment.schedule
                             ? `${enrollment.schedule.start_time.slice(0, 5)} a ${enrollment.schedule.end_time.slice(0, 5)} hs`
                             : '[Completar hora]';
-                          const message = renderTemplate(confirmMsgTemplate, { dia: day, horario: time });
-                          await sendWhatsApp(enrollment.phone!, message, toast);
+                          await sendTemplateMessage(
+                            enrollment.phone!,
+                            'msg_confirmacion_inscripcion',
+                            { dia: day, horario: time },
+                            toast,
+                            { type: 'enrollment', id: enrollment.id },
+                          );
                           // Actualizar estado a "contacted" si está pendiente y no convertido
                           if (enrollment.status === 'pending' && !enrollment.converted_to_student_id) {
                             await supabase

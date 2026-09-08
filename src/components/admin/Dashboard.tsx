@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useRef } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import {
   Student,
@@ -11,7 +11,7 @@ import {
 import { formatCurrency } from '@/lib/format';
 import { isStudentActiveThisMonth } from '@/lib/utils';
 import { sendTemplateMessage, sendTemplateMessageBulk, whatsAppChatUrl, type BulkTemplateTarget } from '@/lib/whatsapp';
-import { MESSAGE_TEMPLATES, type TemplateKey } from '@/lib/messageTemplates';
+import type { TemplateKey } from '@/lib/messageTemplates';
 import { useToast } from '@/hooks/use-toast';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -19,7 +19,6 @@ import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Textarea } from '@/components/ui/textarea';
 import {
   BarChart,
   Bar,
@@ -143,8 +142,9 @@ interface DashboardData {
 // Component
 // ---------------------------------------------------------------------------
 
+// Se usa como template_key al consultar/loguear en whatsapp_message_log — no confundir con
+// el nombre de la plantilla de Meta (eso vive en messageTemplates.ts / templates.ts).
 const REMINDER_MSG_KEY = 'msg_reminder_pago';
-const DEFAULT_REMINDER_MSG = MESSAGE_TEMPLATES.find((t) => t.key === REMINDER_MSG_KEY)!.defaultMessage;
 
 interface DashboardProps {
   refreshTrigger?: number;
@@ -155,8 +155,6 @@ export default function Dashboard({ refreshTrigger }: DashboardProps) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [reminderOpen, setReminderOpen] = useState(false);
-  const [reminderMsg, setReminderMsg] = useState(DEFAULT_REMINDER_MSG);
-  const reminderMsgLoadedRef = useRef(false);
   const [pendingSearch, setPendingSearch] = useState('');
   const [selectedReminderIds, setSelectedReminderIds] = useState<Set<string>>(new Set());
   const [sendingReminderId, setSendingReminderId] = useState<string | null>(null);
@@ -213,7 +211,7 @@ export default function Dashboard({ refreshTrigger }: DashboardProps) {
           .gte('payment_date', twelveMonthsAgo)
           .in('status', ['paid', 'partial']),
         supabase.from('mold_orders').select('id', { count: 'exact', head: true }).eq('status', 'pending'),
-        supabase.from('app_settings').select('key, value').in('key', [CUOTA_KEY_ADULTO, CUOTA_KEY_NINO, REMINDER_MSG_KEY]),
+        supabase.from('app_settings').select('key, value').in('key', [CUOTA_KEY_ADULTO, CUOTA_KEY_NINO]),
         supabase
           .from('whatsapp_message_log')
           .select('related_entity_id')
@@ -240,10 +238,6 @@ export default function Dashboard({ refreshTrigger }: DashboardProps) {
       const getPrecio = (cat: string) => cat === 'niño' ? precioNino : precioAdulto;
       setCuotaAdulto(cuotaSettings[CUOTA_KEY_ADULTO] ?? '');
       setCuotaNino(cuotaSettings[CUOTA_KEY_NINO] ?? '');
-      if (!reminderMsgLoadedRef.current && cuotaSettings[REMINDER_MSG_KEY]) {
-        reminderMsgLoadedRef.current = true;
-        setReminderMsg(cuotaSettings[REMINDER_MSG_KEY]);
-      }
 
       // Mapa student_id → { status, amount, categoria }
       const categoriaMap: Record<string, string> = {};
@@ -558,6 +552,7 @@ export default function Dashboard({ refreshTrigger }: DashboardProps) {
     setBulkSendingReminders(false);
     setJustRemindedIds((prev) => new Set([...prev, ...allSucceeded]));
     setSelectedReminderIds(new Set());
+    setReminderOpen(false);
   };
 
   // ---------------------------------------------------------------------------
@@ -750,10 +745,13 @@ export default function Dashboard({ refreshTrigger }: DashboardProps) {
                 size="sm"
                 variant="outline"
                 className="gap-1.5 text-green-600 hover:text-green-700"
+                disabled={selectedReminderIds.size === 0}
                 onClick={() => setReminderOpen(true)}
               >
                 <Bell className="h-4 w-4" />
-                Avisar por WhatsApp
+                {selectedReminderIds.size > 0
+                  ? `Avisar a ${selectedReminderIds.size} seleccionados`
+                  : 'Avisar por WhatsApp'}
               </Button>
             )}
           </CardHeader>
@@ -774,13 +772,25 @@ export default function Dashboard({ refreshTrigger }: DashboardProps) {
                     className="pl-8 h-8 text-sm"
                   />
                 </div>
+                {selectableReminderIds.length > 0 && (
+                  <label className="flex items-center gap-1.5 text-xs text-muted-foreground cursor-pointer w-fit">
+                    <Checkbox checked={allSelectableChecked} onCheckedChange={toggleSelectAllReminders} />
+                    Seleccionar todos
+                  </label>
+                )}
                 <ul className="divide-y max-h-64 overflow-y-auto">
                   {filteredStudentsToRemind.map(({ student, status }) => (
                     <li
                       key={student.id}
-                      className="flex items-center justify-between py-2"
+                      className="flex items-center gap-2 py-2"
                     >
-                      <div className="flex items-center gap-1.5 min-w-0">
+                      {student.phone && (
+                        <Checkbox
+                          checked={selectedReminderIds.has(student.id)}
+                          onCheckedChange={() => toggleReminderSelected(student.id)}
+                        />
+                      )}
+                      <div className="flex items-center gap-1.5 min-w-0 flex-1">
                         <span className="text-sm font-medium truncate">
                           {student.first_name} {student.last_name}
                         </span>
@@ -996,68 +1006,37 @@ export default function Dashboard({ refreshTrigger }: DashboardProps) {
       <Dialog open={reminderOpen} onOpenChange={setReminderOpen}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
-            <DialogTitle>Recordar cuotas pendientes — {monthLabel}</DialogTitle>
+            <DialogTitle>Confirmar envío — {monthLabel}</DialogTitle>
           </DialogHeader>
 
           <div className="space-y-4">
             <div className="space-y-1.5">
-              <p className="text-sm font-medium">Vista previa del mensaje</p>
-              <p className="text-xs text-muted-foreground">
-                El mensaje real se manda con la plantilla aprobada en Meta — editar este texto
-                (desde Utilidades → Respuestas automáticas) no cambia lo que efectivamente se envía.
+              <p className="text-sm font-medium">
+                Le vamos a avisar a {selectedReminderIds.size} {selectedReminderIds.size === 1 ? 'persona' : 'personas'}:
               </p>
-              <Textarea
-                value={reminderMsg}
-                onChange={(e) => setReminderMsg(e.target.value)}
-                rows={3}
-                className="resize-none text-sm"
-                disabled
-              />
-            </div>
-
-            <div className="space-y-1.5">
-              <div className="flex items-center justify-between">
-                <p className="text-sm font-medium">
-                  {pendingStudents.length} pendientes · {partialStudents.length} parciales
-                </p>
-                {selectableReminderIds.length > 0 && (
-                  <label className="flex items-center gap-1.5 text-xs text-muted-foreground cursor-pointer">
-                    <Checkbox checked={allSelectableChecked} onCheckedChange={toggleSelectAllReminders} />
-                    Seleccionar todos
-                  </label>
-                )}
-              </div>
               <ul className="divide-y rounded-lg border max-h-60 overflow-y-auto">
-                {allStudentsToRemind.map(({ student, status }) => (
-                  <li
-                    key={student.id}
-                    className="flex items-center gap-2 px-3 py-2"
-                  >
-                    {student.phone && (
+                {allStudentsToRemind
+                  .filter(({ student }) => selectedReminderIds.has(student.id))
+                  .map(({ student, status }) => (
+                    <li
+                      key={student.id}
+                      className="flex items-center gap-2 px-3 py-2"
+                    >
                       <Checkbox
-                        checked={selectedReminderIds.has(student.id)}
+                        checked
                         onCheckedChange={() => toggleReminderSelected(student.id)}
                       />
-                    )}
-                    <div className="flex items-center gap-1.5 min-w-0 flex-1">
-                      <span className="text-sm font-medium truncate">
-                        {student.first_name} {student.last_name}
-                      </span>
-                      {status === 'partial' && (
-                        <Badge className="text-[10px] bg-yellow-500 hover:bg-yellow-600 shrink-0">Parcial</Badge>
-                      )}
-                      {remindedIds.has(student.id) && (
-                        <Badge className="text-[10px] bg-green-600 hover:bg-green-700 shrink-0">Enviado</Badge>
-                      )}
-                      {student.phone && (
+                      <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                        <span className="text-sm font-medium truncate">
+                          {student.first_name} {student.last_name}
+                        </span>
+                        {status === 'partial' && (
+                          <Badge className="text-[10px] bg-yellow-500 hover:bg-yellow-600 shrink-0">Parcial</Badge>
+                        )}
                         <span className="text-xs text-muted-foreground shrink-0">{student.phone}</span>
-                      )}
-                    </div>
-                    {!student.phone && (
-                      <span className="text-xs text-muted-foreground shrink-0">Sin teléfono</span>
-                    )}
-                  </li>
-                ))}
+                      </div>
+                    </li>
+                  ))}
               </ul>
             </div>
 
@@ -1068,9 +1047,7 @@ export default function Dashboard({ refreshTrigger }: DashboardProps) {
                 disabled={selectedReminderIds.size === 0 || bulkSendingReminders}
               >
                 <MessageCircle className="h-4 w-4" />
-                {bulkSendingReminders
-                  ? 'Enviando...'
-                  : `Enviar a seleccionados${selectedReminderIds.size > 0 ? ` (${selectedReminderIds.size})` : ''}`}
+                {bulkSendingReminders ? 'Enviando...' : `Confirmar y enviar (${selectedReminderIds.size})`}
               </Button>
             </div>
           </div>
