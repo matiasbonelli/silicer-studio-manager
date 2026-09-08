@@ -61,14 +61,26 @@ interface WhatsappSendResponse {
 
 /** Envía un mensaje automático usando una plantilla aprobada en Meta, vía la edge function
  * `whatsapp-send` (que a su vez pasa por Chatwoot para que quede en el historial compartido). */
+export interface RelatedEntity {
+  type: string;
+  id: string;
+}
+
 export async function sendTemplateMessage(
   phone: string,
   templateKey: TemplateKey,
   variables: Record<string, string>,
   toast: ToastFn,
+  related?: RelatedEntity,
 ): Promise<boolean> {
   const { data, error } = await supabase.functions.invoke<WhatsappSendResponse>('whatsapp-send', {
-    body: { phone: cleanPhone(phone), template_key: templateKey, variables },
+    body: {
+      phone: cleanPhone(phone),
+      template_key: templateKey,
+      variables,
+      related_entity_type: related?.type,
+      related_entity_id: related?.id,
+    },
   });
 
   if (error || !data?.success) {
@@ -87,28 +99,42 @@ export async function sendTemplateMessage(
 export interface BulkTemplateTarget {
   phone: string;
   variables: Record<string, string>;
+  /** Id de la entidad relacionada (ej. student.id) — se usa para marcar localmente
+   * cuáles envíos tuvieron éxito, junto con `relatedEntityType` del llamador. */
+  relatedEntityId?: string;
 }
 
 /** Envía el mismo template a varios destinatarios, uno por uno vía la edge function
- * (reemplaza el viejo patrón de abrir muchas ventanas de WhatsApp en loop). */
+ * (reemplaza el viejo patrón de abrir muchas ventanas de WhatsApp en loop). Devuelve los
+ * `relatedEntityId` de los envíos que tuvieron éxito, para que el llamador pueda actualizar
+ * su propio estado (ej. marcar como "enviado" sin tener que recargar todo de nuevo). */
 export async function sendTemplateMessageBulk(
   templateKey: TemplateKey,
   targets: BulkTemplateTarget[],
   toast: ToastFn,
-): Promise<void> {
-  if (targets.length === 0) return;
+  relatedEntityType?: string,
+): Promise<Set<string>> {
+  const succeededIds = new Set<string>();
+  if (targets.length === 0) return succeededIds;
 
   let sent = 0;
   let failed = 0;
 
-  for (const { phone, variables } of targets) {
+  for (const { phone, variables, relatedEntityId } of targets) {
     const { data, error } = await supabase.functions.invoke<WhatsappSendResponse>('whatsapp-send', {
-      body: { phone: cleanPhone(phone), template_key: templateKey, variables },
+      body: {
+        phone: cleanPhone(phone),
+        template_key: templateKey,
+        variables,
+        related_entity_type: relatedEntityType,
+        related_entity_id: relatedEntityId,
+      },
     });
     if (error || !data?.success) {
       failed++;
     } else {
       sent++;
+      if (relatedEntityId) succeededIds.add(relatedEntityId);
     }
   }
 
@@ -116,4 +142,6 @@ export async function sendTemplateMessageBulk(
     title: failed === 0 ? `${sent} mensajes enviados` : `${sent} enviados, ${failed} fallaron`,
     variant: failed > 0 && sent === 0 ? 'destructive' : 'default',
   });
+
+  return succeededIds;
 }

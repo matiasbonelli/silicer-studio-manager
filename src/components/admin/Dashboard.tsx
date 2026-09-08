@@ -10,12 +10,13 @@ import {
 } from '@/types/database';
 import { formatCurrency } from '@/lib/format';
 import { isStudentActiveThisMonth } from '@/lib/utils';
-import { sendWhatsApp, sendWhatsAppBulk, whatsAppChatUrl } from '@/lib/whatsapp';
-import { MESSAGE_TEMPLATES, renderTemplate } from '@/lib/messageTemplates';
+import { sendTemplateMessage, sendTemplateMessageBulk, whatsAppChatUrl } from '@/lib/whatsapp';
+import { MESSAGE_TEMPLATES } from '@/lib/messageTemplates';
 import { useToast } from '@/hooks/use-toast';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
@@ -117,6 +118,8 @@ interface DashboardData {
   totalStudents: number;
   pendingStudents: Student[];
   partialStudents: Student[];
+  /** IDs de alumnos a los que ya se les mandó el recordatorio de cuota este mes. */
+  remindedStudentIds: Set<string>;
   cuotasPaidAmount: number;
   cuotasPartialAmount: number;
   // Ventas
@@ -155,6 +158,11 @@ export default function Dashboard({ refreshTrigger }: DashboardProps) {
   const [reminderMsg, setReminderMsg] = useState(DEFAULT_REMINDER_MSG);
   const reminderMsgLoadedRef = useRef(false);
   const [pendingSearch, setPendingSearch] = useState('');
+  const [selectedReminderIds, setSelectedReminderIds] = useState<Set<string>>(new Set());
+  const [sendingReminderId, setSendingReminderId] = useState<string | null>(null);
+  const [bulkSendingReminders, setBulkSendingReminders] = useState(false);
+  // Optimista: se suma a data.remindedStudentIds sin esperar a recargar todo el dashboard.
+  const [justRemindedIds, setJustRemindedIds] = useState<Set<string>>(new Set());
   const { toast } = useToast();
 
   const CUOTA_KEY_ADULTO = 'cuota_adulto';
@@ -193,7 +201,7 @@ export default function Dashboard({ refreshTrigger }: DashboardProps) {
       // Build last 12 months range for historic query
       const twelveMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 11, 1).toISOString();
 
-      const [salesRes, studentsRes, inventoryRes, paymentsRes, historicRes, ordersRes, cuotaSettingsRes] = await Promise.all([
+      const [salesRes, studentsRes, inventoryRes, paymentsRes, historicRes, ordersRes, cuotaSettingsRes, reminderLogRes] = await Promise.all([
         supabase.from('sales').select('*').gte('created_at', startOfMonth),
         supabase.from('students').select('*'),
         supabase.from('inventory').select('*'),
@@ -206,6 +214,13 @@ export default function Dashboard({ refreshTrigger }: DashboardProps) {
           .in('status', ['paid', 'partial']),
         supabase.from('mold_orders').select('id', { count: 'exact', head: true }).eq('status', 'pending'),
         supabase.from('app_settings').select('key, value').in('key', [CUOTA_KEY_ADULTO, CUOTA_KEY_NINO, REMINDER_MSG_KEY]),
+        supabase
+          .from('whatsapp_message_log')
+          .select('related_entity_id')
+          .eq('template_key', REMINDER_MSG_KEY)
+          .eq('related_entity_type', 'student')
+          .eq('status', 'sent')
+          .gte('created_at', startOfMonth),
       ]);
 
       if (salesRes.error) throw salesRes.error;
@@ -256,6 +271,11 @@ export default function Dashboard({ refreshTrigger }: DashboardProps) {
       );
       const partialStudents = students.filter(
         (s) => paymentsMap[s.id]?.status === 'partial'
+      );
+      const remindedStudentIds = new Set(
+        (reminderLogRes.data ?? [])
+          .map((r) => r.related_entity_id as string | null)
+          .filter((id): id is string => !!id)
       );
 
       // Ingresos por cuotas: si amount es null, usamos el precio configurado según categoría
@@ -327,6 +347,7 @@ export default function Dashboard({ refreshTrigger }: DashboardProps) {
         totalStudents: students.length,
         pendingStudents,
         partialStudents,
+        remindedStudentIds,
         cuotasPaidAmount,
         cuotasPartialAmount,
         totalRevenue,
@@ -404,6 +425,7 @@ export default function Dashboard({ refreshTrigger }: DashboardProps) {
     totalStudents,
     pendingStudents,
     partialStudents,
+    remindedStudentIds,
     cuotasPaidAmount,
     cuotasPartialAmount,
     totalRevenue,
@@ -424,6 +446,9 @@ export default function Dashboard({ refreshTrigger }: DashboardProps) {
     ...partialStudents.map((s) => ({ student: s, status: 'partial' as const })),
   ];
 
+  // De la base (este mes) + los que se acaban de mandar en esta sesión, sin recargar todo.
+  const remindedIds = new Set([...remindedStudentIds, ...justRemindedIds]);
+
   // Filtrado por búsqueda en el card
   const filteredStudentsToRemind = pendingSearch
     ? allStudentsToRemind.filter(({ student }) => {
@@ -441,19 +466,55 @@ export default function Dashboard({ refreshTrigger }: DashboardProps) {
 
   const monthLabel = formatMonth(currentMonth);
 
-  const buildReminderMsg = (student: Student): string => {
-    return renderTemplate(reminderMsg, { nombre: student.first_name, mes: monthLabel });
+  const handleSendReminder = async (student: Student) => {
+    setSendingReminderId(student.id);
+    const ok = await sendTemplateMessage(
+      student.phone!,
+      'msg_reminder_pago',
+      { nombre: student.first_name, mes: monthLabel },
+      toast,
+      { type: 'student', id: student.id },
+    );
+    setSendingReminderId(null);
+    if (ok) setJustRemindedIds((prev) => new Set(prev).add(student.id));
   };
 
-  const handleSendReminder = (student: Student) => {
-    sendWhatsApp(student.phone!, buildReminderMsg(student), toast);
+  const toggleReminderSelected = (studentId: string) => {
+    setSelectedReminderIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(studentId)) next.delete(studentId);
+      else next.add(studentId);
+      return next;
+    });
   };
 
-  const handleOpenAll = () => {
+  const selectableReminderIds = filteredStudentsToRemind
+    .filter(({ student }) => student.phone && !remindedIds.has(student.id))
+    .map(({ student }) => student.id);
+  const allSelectableChecked =
+    selectableReminderIds.length > 0 && selectableReminderIds.every((id) => selectedReminderIds.has(id));
+
+  const toggleSelectAllReminders = () => {
+    setSelectedReminderIds(allSelectableChecked ? new Set() : new Set(selectableReminderIds));
+  };
+
+  const handleSendSelectedReminders = async () => {
     const targets = allStudentsToRemind
-      .filter(({ student }) => student.phone)
-      .map(({ student }) => ({ phone: student.phone!, message: buildReminderMsg(student) }));
-    sendWhatsAppBulk(targets, toast);
+      .filter(({ student }) => student.phone && selectedReminderIds.has(student.id))
+      .map(({ student }) => ({
+        phone: student.phone!,
+        variables: { nombre: student.first_name, mes: monthLabel },
+        relatedEntityId: student.id,
+      }));
+    if (targets.length === 0) {
+      toast({ title: 'Seleccioná al menos un alumno', variant: 'destructive' });
+      return;
+    }
+    setBulkSendingReminders(true);
+    const succeeded = await sendTemplateMessageBulk('msg_reminder_pago', targets, toast, 'student');
+    setBulkSendingReminders(false);
+    setJustRemindedIds((prev) => new Set([...prev, ...succeeded]));
+    setSelectedReminderIds(new Set());
   };
 
   // ---------------------------------------------------------------------------
@@ -637,6 +698,9 @@ export default function Dashboard({ refreshTrigger }: DashboardProps) {
             <div className="flex items-center gap-2">
               <Users className="h-5 w-5 text-primary" />
               <CardTitle className="text-base">Cuotas pendientes</CardTitle>
+              {allStudentsToRemind.length > 0 && (
+                <Badge variant="secondary" className="text-xs">{allStudentsToRemind.length}</Badge>
+              )}
             </div>
             {allStudentsToRemind.length > 0 && (
               <Button
@@ -683,18 +747,23 @@ export default function Dashboard({ refreshTrigger }: DashboardProps) {
                         {student.categoria === 'niño' && (
                           <Badge variant="outline" className="text-[10px] border-blue-400 text-blue-500 shrink-0">Niño</Badge>
                         )}
+                        {remindedIds.has(student.id) && (
+                          <Badge className="text-[10px] bg-green-600 hover:bg-green-700 shrink-0">Enviado</Badge>
+                        )}
                       </div>
                       {student.phone && (
-                        <span onClick={() => sendWhatsApp(student.phone!, buildReminderMsg(student), toast)}>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="h-7 gap-1 text-green-600 hover:text-green-700 shrink-0"
-                          >
-                            <MessageCircle className="h-4 w-4" />
-                            <span className="text-xs">WhatsApp</span>
-                          </Button>
-                        </span>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 gap-1 text-green-600 hover:text-green-700 shrink-0"
+                          disabled={sendingReminderId === student.id}
+                          onClick={() => handleSendReminder(student)}
+                        >
+                          <MessageCircle className="h-4 w-4" />
+                          <span className="text-xs">
+                            {sendingReminderId === student.id ? 'Enviando...' : 'WhatsApp'}
+                          </span>
+                        </Button>
                       )}
                     </li>
                   ))}
@@ -889,50 +958,59 @@ export default function Dashboard({ refreshTrigger }: DashboardProps) {
 
           <div className="space-y-4">
             <div className="space-y-1.5">
-              <p className="text-sm font-medium">Mensaje (editable)</p>
+              <p className="text-sm font-medium">Vista previa del mensaje</p>
               <p className="text-xs text-muted-foreground">
-                Usá <code className="bg-muted px-1 rounded">{'{nombre}'}</code> y{' '}
-                <code className="bg-muted px-1 rounded">{'{mes}'}</code> como variables. Se
-                edita de forma permanente desde Utilidades → Respuestas automáticas.
+                El mensaje real se manda con la plantilla aprobada en Meta — editar este texto
+                (desde Utilidades → Respuestas automáticas) no cambia lo que efectivamente se envía.
               </p>
               <Textarea
                 value={reminderMsg}
                 onChange={(e) => setReminderMsg(e.target.value)}
                 rows={3}
                 className="resize-none text-sm"
+                disabled
               />
             </div>
 
             <div className="space-y-1.5">
-              <p className="text-sm font-medium">
-                {pendingStudents.length} pendientes · {partialStudents.length} parciales
-              </p>
+              <div className="flex items-center justify-between">
+                <p className="text-sm font-medium">
+                  {pendingStudents.length} pendientes · {partialStudents.length} parciales
+                </p>
+                {selectableReminderIds.length > 0 && (
+                  <label className="flex items-center gap-1.5 text-xs text-muted-foreground cursor-pointer">
+                    <Checkbox checked={allSelectableChecked} onCheckedChange={toggleSelectAllReminders} />
+                    Seleccionar todos
+                  </label>
+                )}
+              </div>
               <ul className="divide-y rounded-lg border max-h-60 overflow-y-auto">
                 {allStudentsToRemind.map(({ student, status }) => (
                   <li
                     key={student.id}
-                    className="flex items-center justify-between px-3 py-2"
+                    className="flex items-center gap-2 px-3 py-2"
                   >
-                    <div className="flex items-center gap-1.5 min-w-0">
+                    {student.phone && (
+                      <Checkbox
+                        checked={selectedReminderIds.has(student.id)}
+                        onCheckedChange={() => toggleReminderSelected(student.id)}
+                      />
+                    )}
+                    <div className="flex items-center gap-1.5 min-w-0 flex-1">
                       <span className="text-sm font-medium truncate">
                         {student.first_name} {student.last_name}
                       </span>
                       {status === 'partial' && (
                         <Badge className="text-[10px] bg-yellow-500 hover:bg-yellow-600 shrink-0">Parcial</Badge>
                       )}
+                      {remindedIds.has(student.id) && (
+                        <Badge className="text-[10px] bg-green-600 hover:bg-green-700 shrink-0">Enviado</Badge>
+                      )}
                       {student.phone && (
                         <span className="text-xs text-muted-foreground shrink-0">{student.phone}</span>
                       )}
                     </div>
-                    {student.phone ? (
-                      <button
-                        onClick={() => sendWhatsApp(student.phone!, buildReminderMsg(student), toast)}
-                        className="inline-flex items-center gap-1 text-xs text-green-600 hover:text-green-700"
-                      >
-                        <MessageCircle className="h-4 w-4" />
-                        Abrir
-                      </button>
-                    ) : (
+                    {!student.phone && (
                       <span className="text-xs text-muted-foreground shrink-0">Sin teléfono</span>
                     )}
                   </li>
@@ -940,17 +1018,16 @@ export default function Dashboard({ refreshTrigger }: DashboardProps) {
               </ul>
             </div>
 
-            <div className="flex items-center justify-between gap-3 pt-1">
-              <p className="text-xs text-muted-foreground">
-                El browser puede bloquear popups al abrir todos a la vez.
-              </p>
+            <div className="flex items-center justify-end gap-3 pt-1">
               <Button
                 className="gap-2 shrink-0"
-                onClick={handleOpenAll}
-                disabled={allStudentsToRemind.filter(({ student }) => student.phone).length === 0}
+                onClick={handleSendSelectedReminders}
+                disabled={selectedReminderIds.size === 0 || bulkSendingReminders}
               >
                 <MessageCircle className="h-4 w-4" />
-                Abrir todos
+                {bulkSendingReminders
+                  ? 'Enviando...'
+                  : `Enviar a seleccionados${selectedReminderIds.size > 0 ? ` (${selectedReminderIds.size})` : ''}`}
               </Button>
             </div>
           </div>
