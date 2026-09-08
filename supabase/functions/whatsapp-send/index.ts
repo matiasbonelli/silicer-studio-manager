@@ -159,6 +159,8 @@ serve(async (req) => {
   let phone = ''
   let template_key = ''
   let variables: Record<string, string> = {}
+  let relatedEntityType: string | undefined
+  let relatedEntityId: string | undefined
 
   try {
     const body = await req.json()
@@ -166,6 +168,8 @@ serve(async (req) => {
     template_key = body.template_key
     variables = body.variables ?? {}
     const contactName: string | undefined = body.contact_name
+    relatedEntityType = body.related_entity_type
+    relatedEntityId = body.related_entity_id
 
     if (!phone || !template_key) {
       return new Response(
@@ -203,6 +207,8 @@ serve(async (req) => {
       phone,
       chatwoot_conversation_id: String(conversation.id),
       status: 'sent',
+      related_entity_type: relatedEntityType,
+      related_entity_id: relatedEntityId,
     })
 
     return new Response(
@@ -217,6 +223,8 @@ serve(async (req) => {
       phone: phone || 'unknown',
       status: 'failed',
       error: error.message,
+      related_entity_type: relatedEntityType,
+      related_entity_id: relatedEntityId,
     })
 
     return new Response(
