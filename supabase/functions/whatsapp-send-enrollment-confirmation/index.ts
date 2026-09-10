@@ -87,6 +87,8 @@ serve(async (req) => {
       )
     }
 
+    await supabase.from('enrollments').update({ status: 'contacted' }).eq('id', enrollment_id)
+
     return new Response(
       JSON.stringify({ success: true, results }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
