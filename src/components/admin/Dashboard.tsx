@@ -260,16 +260,17 @@ export default function Dashboard({ refreshTrigger }: DashboardProps) {
         }
       }
 
-      // Cuotas
-      const cuotasPaid = students.filter((s) => paymentsMap[s.id]?.status === 'paid').length;
-      const cuotasPartial = students.filter((s) => paymentsMap[s.id]?.status === 'partial').length;
-      const cuotasPending = students.filter(
+      // Cuotas: solo alumnos con horario asignado deben cuota (sin horario, no cursa).
+      const studentsWithSchedule = students.filter((s) => s.schedule_id);
+      const cuotasPaid = studentsWithSchedule.filter((s) => paymentsMap[s.id]?.status === 'paid').length;
+      const cuotasPartial = studentsWithSchedule.filter((s) => paymentsMap[s.id]?.status === 'partial').length;
+      const cuotasPending = studentsWithSchedule.filter(
         (s) => !paymentsMap[s.id] || paymentsMap[s.id].status === 'pending'
       ).length;
-      const pendingStudents = students.filter(
+      const pendingStudents = studentsWithSchedule.filter(
         (s) => !paymentsMap[s.id] || paymentsMap[s.id].status === 'pending'
       );
-      const partialStudents = students.filter(
+      const partialStudents = studentsWithSchedule.filter(
         (s) => paymentsMap[s.id]?.status === 'partial'
       );
       const remindedStudentIds = new Set(
@@ -344,7 +345,7 @@ export default function Dashboard({ refreshTrigger }: DashboardProps) {
         cuotasPaid,
         cuotasPartial,
         cuotasPending,
-        totalStudents: students.length,
+        totalStudents: studentsWithSchedule.length,
         pendingStudents,
         partialStudents,
         remindedStudentIds,
