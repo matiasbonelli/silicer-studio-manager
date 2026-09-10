@@ -12,7 +12,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
 import { sendTemplateMessage } from '@/lib/whatsapp';
 import { firstOccurrenceInMonth } from '@/lib/utils';
-import { Search, Loader2, MessageCircle, UserPlus, DollarSign, Eye, Trash2, FileText, ExternalLink, Pencil, Plus } from 'lucide-react';
+import { Search, Loader2, UserPlus, DollarSign, Eye, Trash2, FileText, ExternalLink, Pencil, Plus } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
@@ -395,7 +395,7 @@ export default function EnrollmentsManager({ onStudentCreated }: EnrollmentsMana
         const time = selectedEnrollment.schedule
           ? `${selectedEnrollment.schedule.start_time.slice(0, 5)} a ${selectedEnrollment.schedule.end_time.slice(0, 5)} hs`
           : '[Completar hora]';
-        sendTemplateMessage(
+        await sendTemplateMessage(
           selectedEnrollment.phone,
           'msg_confirmacion_inscripcion',
           { dia: day, horario: time },
@@ -811,39 +811,6 @@ export default function EnrollmentsManager({ onStudentCreated }: EnrollmentsMana
                     >
                       <Pencil className="w-4 h-4" />
                     </Button>
-
-                    {/* WhatsApp - siempre visible si tiene teléfono */}
-                    {enrollment.phone && (
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        className="text-green-600 hover:text-green-700"
-                        aria-label="Enviar WhatsApp"
-                        onClick={async () => {
-                          const day = enrollment.schedule ? DAY_NAMES[enrollment.schedule.day_of_week] : '[Completar día]';
-                          const time = enrollment.schedule
-                            ? `${enrollment.schedule.start_time.slice(0, 5)} a ${enrollment.schedule.end_time.slice(0, 5)} hs`
-                            : '[Completar hora]';
-                          await sendTemplateMessage(
-                            enrollment.phone!,
-                            'msg_confirmacion_inscripcion',
-                            { dia: day, horario: time },
-                            toast,
-                            { type: 'enrollment', id: enrollment.id },
-                          );
-                          // Actualizar estado a "contacted" si está pendiente y no convertido
-                          if (enrollment.status === 'pending' && !enrollment.converted_to_student_id) {
-                            await supabase
-                              .from('enrollments')
-                              .update({ status: 'contacted' })
-                              .eq('id', enrollment.id);
-                            fetchEnrollments();
-                          }
-                        }}
-                      >
-                        <MessageCircle className="w-4 h-4" />
-                      </Button>
-                    )}
 
                     {/* Register payment - siempre visible para poder editar */}
                     <Button
