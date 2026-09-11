@@ -208,7 +208,7 @@ export default function Dashboard({ refreshTrigger }: DashboardProps) {
         supabase.from('sales').select('*').gte('created_at', startOfMonth),
         supabase.from('students').select('*'),
         supabase.from('inventory').select('*'),
-        supabase.from('payments').select('student_id, status, amount, is_exception').eq('month', currentMonth),
+        supabase.from('payments').select('student_id, status, amount').eq('month', currentMonth),
         supabase
           .from('payments')
           .select('month, status, amount, student_id')
@@ -249,22 +249,22 @@ export default function Dashboard({ refreshTrigger }: DashboardProps) {
       const categoriaMap: Record<string, string> = {};
       for (const s of students) categoriaMap[s.id] = s.categoria ?? 'adulto';
 
-      const paymentsMap: Record<string, { status: string; amount: number | null; categoria: string; isException: boolean }> = {};
+      const paymentsMap: Record<string, { status: string; amount: number | null; categoria: string }> = {};
       if (paymentsRes.data) {
         for (const p of paymentsRes.data) {
           paymentsMap[p.student_id] = {
             status: p.status,
             amount: p.amount,
             categoria: categoriaMap[p.student_id] ?? 'adulto',
-            isException: p.is_exception ?? false,
           };
         }
       }
 
       // Cuotas: solo alumnos con horario asignado deben cuota (sin horario, no cursa).
       // El registro de pago (pagado/parcial/pendiente) sigue existiendo normalmente para
-      // los marcados como excepción — la excepción solo los saca de la lista de avisos
-      // de WhatsApp (pendingStudents/partialStudents), no de los contadores del Dashboard.
+      // los marcados como excepción (alumno.is_exception, persistente hasta que se sac) —
+      // la excepción solo los saca de la lista de avisos de WhatsApp (pendingStudents/
+      // partialStudents), no de los contadores del Dashboard.
       const studentsWithSchedule = students.filter((s) => s.schedule_id);
       const cuotasPaid = studentsWithSchedule.filter((s) => paymentsMap[s.id]?.status === 'paid').length;
       const cuotasPartial = studentsWithSchedule.filter((s) => paymentsMap[s.id]?.status === 'partial').length;
@@ -272,10 +272,10 @@ export default function Dashboard({ refreshTrigger }: DashboardProps) {
         (s) => !paymentsMap[s.id] || paymentsMap[s.id].status === 'pending'
       ).length;
       const pendingStudents = studentsWithSchedule.filter(
-        (s) => (!paymentsMap[s.id] || paymentsMap[s.id].status === 'pending') && !paymentsMap[s.id]?.isException
+        (s) => (!paymentsMap[s.id] || paymentsMap[s.id].status === 'pending') && !s.is_exception
       );
       const partialStudents = studentsWithSchedule.filter(
-        (s) => paymentsMap[s.id]?.status === 'partial' && !paymentsMap[s.id]?.isException
+        (s) => paymentsMap[s.id]?.status === 'partial' && !s.is_exception
       );
       const remindedStudentIds = new Set(
         (reminderLogRes.data ?? [])
