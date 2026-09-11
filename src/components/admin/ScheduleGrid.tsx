@@ -215,22 +215,31 @@ export default function ScheduleGrid({ onStudentClick, refreshTrigger }: Schedul
                                     Exc.
                                   </Badge>
                                 )}
-                                <Badge
-                                  variant={
-                                    paymentMap[student.id] === 'paid'
-                                      ? 'default'
+                                {student.pays_per_class ? (
+                                  <Badge
+                                    variant="outline"
+                                    className={`text-[10px] border-blue-500 text-blue-500 ${student.is_exception ? '' : 'ml-auto'}`}
+                                  >
+                                    Clase
+                                  </Badge>
+                                ) : (
+                                  <Badge
+                                    variant={
+                                      paymentMap[student.id] === 'paid'
+                                        ? 'default'
+                                        : paymentMap[student.id] === 'partial'
+                                        ? 'secondary'
+                                        : 'destructive'
+                                    }
+                                    className={`text-[10px] ${student.is_exception ? '' : 'ml-auto'} ${paymentMap[student.id] === 'partial' ? 'bg-yellow-500 hover:bg-yellow-600 text-white' : ''}`}
+                                  >
+                                    {paymentMap[student.id] === 'paid'
+                                      ? '✓'
                                       : paymentMap[student.id] === 'partial'
-                                      ? 'secondary'
-                                      : 'destructive'
-                                  }
-                                  className={`text-[10px] ${student.is_exception ? '' : 'ml-auto'} ${paymentMap[student.id] === 'partial' ? 'bg-yellow-500 hover:bg-yellow-600 text-white' : ''}`}
-                                >
-                                  {paymentMap[student.id] === 'paid'
-                                    ? '✓'
-                                    : paymentMap[student.id] === 'partial'
-                                    ? '½'
-                                    : '$'}
-                                </Badge>
+                                      ? '½'
+                                      : '$'}
+                                  </Badge>
+                                )}
                               </div>
                             )}
                           </Draggable>
