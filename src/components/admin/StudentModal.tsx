@@ -56,6 +56,7 @@ export default function StudentModal({ student, isOpen, onClose, onSave, isNew =
   const [partialAmount, setPartialAmount] = useState('');
   const [paymentNotes, setPaymentNotes] = useState('');
   const [savingPayment, setSavingPayment] = useState(false);
+  const [savingException, setSavingException] = useState(false);
 
   const CUOTA_KEY_ADULTO = 'silicer_cuota_adulto';
   const CUOTA_KEY_NINO   = 'silicer_cuota_niño';
@@ -242,6 +243,40 @@ export default function StudentModal({ student, isOpen, onClose, onSave, isNew =
       onSave(); // propaga refreshTrigger → actualiza ScheduleGrid, StudentsList y Dashboard
     }
     setSavingPayment(false);
+  };
+
+  const handleToggleException = async () => {
+    if (!student) return;
+    const newException = !currentPayment?.is_exception;
+
+    setSavingException(true);
+    const { error } = await supabase
+      .from('payments')
+      .upsert(
+        {
+          student_id: student.id,
+          month: currentMonth,
+          status: currentPayment?.status ?? 'pending',
+          amount: currentPayment?.amount ?? null,
+          payment_date: currentPayment?.payment_date ?? null,
+          notes: currentPayment?.notes ?? null,
+          is_exception: newException,
+        },
+        { onConflict: 'student_id,month' }
+      );
+
+    if (error) {
+      toast({ title: 'Error al guardar excepción', variant: 'destructive' });
+    } else {
+      toast({
+        title: newException
+          ? 'Cuota marcada como excepción este mes'
+          : 'Excepción quitada',
+      });
+      await loadPayments(student.id);
+      onSave();
+    }
+    setSavingException(false);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -488,14 +523,39 @@ export default function StudentModal({ student, isOpen, onClose, onSave, isNew =
 
               {!editingPayment ? (
                 <div className="space-y-1.5 pt-1">
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 flex-wrap">
                     {paymentStatusBadge(currentPayment)}
                     {currentPayment?.payment_date && (
                       <span className="text-xs text-muted-foreground">
                         {formatDate(currentPayment.payment_date)}
                       </span>
                     )}
+                    {currentPayment?.is_exception ? (
+                      <Badge
+                        variant="outline"
+                        className="cursor-pointer border-amber-500 text-amber-500 hover:bg-amber-500/10"
+                        onClick={savingException ? undefined : handleToggleException}
+                      >
+                        {savingException ? <Loader2 className="w-3 h-3 animate-spin" /> : 'Excepción ✕'}
+                      </Badge>
+                    ) : (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="h-6 text-xs text-muted-foreground"
+                        disabled={savingException}
+                        onClick={handleToggleException}
+                      >
+                        {savingException ? <Loader2 className="w-3 h-3 animate-spin" /> : '+ Marcar excepción'}
+                      </Button>
+                    )}
                   </div>
+                  {currentPayment?.is_exception && (
+                    <p className="text-xs text-muted-foreground">
+                      No se le va a recordar la cuota ni aplicar mora este mes.
+                    </p>
+                  )}
                   {paymentNotes && (
                     <p className="text-xs text-muted-foreground italic">"{paymentNotes}"</p>
                   )}
