@@ -592,9 +592,9 @@ export default function StudentModal({ student, isOpen, onClose, onSave, isNew =
               <span className="text-muted-foreground">Modalidad de pago: {isClass ? 'Por clase' : 'Cuota mensual'}</span>
               <Button
                 type="button"
-                variant="ghost"
+                variant="outline"
                 size="sm"
-                className="h-6 text-xs text-muted-foreground"
+                className="h-7 text-xs border-2 border-muted-foreground/40"
                 disabled={savingClassToggle}
                 onClick={handleToggleClass}
               >
