@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
-import { Student, Payment, PaymentStatus, Schedule, Categoria, DAY_NAMES, DAY_ORDER, MONTH_NAMES } from '@/types/database';
+import { Student, Payment, ClassPayment, PaymentStatus, Schedule, Categoria, DAY_NAMES, DAY_ORDER, MONTH_NAMES } from '@/types/database';
 import { formatDate } from '@/lib/format';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -31,6 +31,12 @@ const formatMonth = (monthStr: string | null) => {
   return `${MONTH_NAMES[month]} ${year}`;
 };
 
+// Evita el corrimiento de un día que da `new Date('YYYY-MM-DD')` en zonas UTC-N
+const formatDateOnly = (dateStr: string) => {
+  const [year, month, day] = dateStr.split('-');
+  return `${day}/${month}/${year}`;
+};
+
 export default function StudentModal({ student, isOpen, onClose, onSave, isNew = false }: StudentModalProps) {
   const [formData, setFormData] = useState({
     first_name: '',
@@ -59,6 +65,15 @@ export default function StudentModal({ student, isOpen, onClose, onSave, isNew =
   const [isException, setIsException] = useState(false);
   const [savingException, setSavingException] = useState(false);
 
+  // Alumno que paga por clase (no cuota mensual)
+  const [isClass, setIsClass] = useState(false);
+  const [savingClassToggle, setSavingClassToggle] = useState(false);
+  const [classPayments, setClassPayments] = useState<ClassPayment[]>([]);
+  const [newClassDate, setNewClassDate] = useState('');
+  const [newClassAmount, setNewClassAmount] = useState('');
+  const [newClassNotes, setNewClassNotes] = useState('');
+  const [savingClassPayment, setSavingClassPayment] = useState(false);
+
   const CUOTA_KEY_ADULTO = 'silicer_cuota_adulto';
   const CUOTA_KEY_NINO   = 'silicer_cuota_niño';
   const getCuotaKey = (cat: Categoria) => cat === 'niño' ? CUOTA_KEY_NINO : CUOTA_KEY_ADULTO;
@@ -81,7 +96,9 @@ export default function StudentModal({ student, isOpen, onClose, onSave, isNew =
         categoria: student.categoria ?? 'adulto',
       });
       setIsException(student.is_exception ?? false);
+      setIsClass(student.pays_per_class ?? false);
       loadPayments(student.id, student.categoria ?? 'adulto');
+      loadClassPayments(student.id);
     } else {
       setFormData({
         first_name: '',
@@ -185,6 +202,80 @@ export default function StudentModal({ student, isOpen, onClose, onSave, isNew =
     }
   };
 
+  const loadClassPayments = async (studentId: string) => {
+    const { data } = await supabase
+      .from('class_payments')
+      .select('*')
+      .eq('student_id', studentId)
+      .order('class_date', { ascending: false });
+    if (data) setClassPayments(data as ClassPayment[]);
+  };
+
+  const handleToggleClass = async () => {
+    if (!student) return;
+    const newIsClass = !isClass;
+
+    setSavingClassToggle(true);
+    const { error } = await supabase
+      .from('students')
+      .update({ pays_per_class: newIsClass })
+      .eq('id', student.id);
+
+    if (error) {
+      toast({ title: 'Error al guardar', variant: 'destructive' });
+    } else {
+      setIsClass(newIsClass);
+      toast({
+        title: newIsClass ? 'Alumno marcado como "por clase"' : 'Alumno vuelve a cuota mensual',
+      });
+      onSave();
+    }
+    setSavingClassToggle(false);
+  };
+
+  const handleAddClassPayment = async () => {
+    if (!student) return;
+    const amount = parseFloat(newClassAmount);
+    if (!newClassDate) {
+      toast({ title: 'Elegí la fecha de la clase', variant: 'destructive' });
+      return;
+    }
+    if (!amount || amount <= 0) {
+      toast({ title: 'El monto debe ser mayor a 0', variant: 'destructive' });
+      return;
+    }
+
+    setSavingClassPayment(true);
+    const { error } = await supabase.from('class_payments').insert({
+      student_id: student.id,
+      class_date: newClassDate,
+      amount,
+      notes: newClassNotes || null,
+    });
+
+    if (error) {
+      toast({ title: 'Error al registrar la clase', variant: 'destructive' });
+    } else {
+      toast({ title: 'Clase registrada' });
+      setNewClassDate('');
+      setNewClassAmount('');
+      setNewClassNotes('');
+      await loadClassPayments(student.id);
+    }
+    setSavingClassPayment(false);
+  };
+
+  const handleDeleteClassPayment = async (id: string) => {
+    if (!student) return;
+    if (!confirm('¿Eliminar este registro de clase?')) return;
+
+    const { error } = await supabase.from('class_payments').delete().eq('id', id);
+    if (error) {
+      toast({ title: 'Error al eliminar', variant: 'destructive' });
+    } else {
+      await loadClassPayments(student.id);
+    }
+  };
 
   const handleViewReceipt = async (path: string) => {
     const filePath = path.startsWith('receipts/') ? path.replace('receipts/', '') : path;
@@ -495,8 +586,64 @@ export default function StudentModal({ student, isOpen, onClose, onSave, isNew =
             />
           </div>
 
-          {/* ── Cuota del mes actual — solo al editar ── */}
+          {/* ── Modalidad de pago — solo al editar ── */}
           {!isNew && (
+            <div className="flex items-center justify-between text-xs">
+              <span className="text-muted-foreground">Modalidad de pago: {isClass ? 'Por clase' : 'Cuota mensual'}</span>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="h-6 text-xs text-muted-foreground"
+                disabled={savingClassToggle}
+                onClick={handleToggleClass}
+              >
+                {savingClassToggle
+                  ? <Loader2 className="w-3 h-3 animate-spin" />
+                  : isClass ? 'Volver a cuota mensual' : '+ Marcar como "por clase"'}
+              </Button>
+            </div>
+          )}
+
+          {/* ── Clases del mes — alumno "por clase" ── */}
+          {!isNew && isClass && (
+            <div className="space-y-3 rounded-lg border p-3">
+              <Label>Clases de {formatMonth(currentMonth)}</Label>
+              <div className="grid grid-cols-2 gap-2">
+                <Input
+                  type="date"
+                  value={newClassDate}
+                  onChange={(e) => setNewClassDate(e.target.value)}
+                />
+                <Input
+                  type="number"
+                  placeholder="Monto"
+                  value={newClassAmount}
+                  onChange={(e) => setNewClassAmount(e.target.value)}
+                />
+              </div>
+              <Input
+                placeholder="Nota (opcional)"
+                value={newClassNotes}
+                onChange={(e) => setNewClassNotes(e.target.value)}
+              />
+              <Button
+                type="button"
+                size="sm"
+                className="w-full"
+                onClick={handleAddClassPayment}
+                disabled={savingClassPayment}
+              >
+                {savingClassPayment
+                  ? <Loader2 className="w-4 h-4 animate-spin" />
+                  : <><Check className="w-4 h-4 mr-1" /> Agregar clase</>
+                }
+              </Button>
+            </div>
+          )}
+
+          {/* ── Cuota del mes actual — alumno mensual ── */}
+          {!isNew && !isClass && (
             <div className="space-y-2 rounded-lg border p-3">
               <div className="flex items-center justify-between">
                 <Label>Cuota de {formatMonth(currentMonth)}</Label>
@@ -629,8 +776,43 @@ export default function StudentModal({ student, isOpen, onClose, onSave, isNew =
             </div>
           )}
 
-          {/* Historial de pagos — solo al editar */}
-          {!isNew && (
+          {/* Historial de clases — alumno "por clase" */}
+          {!isNew && isClass && (
+            <div className="space-y-2">
+              <Label>Historial de clases</Label>
+              {classPayments.length === 0 ? (
+                <p className="text-sm text-muted-foreground py-2">Sin clases registradas.</p>
+              ) : (
+                <div className="max-h-44 overflow-y-auto rounded-lg border divide-y">
+                  {classPayments.map((cp) => (
+                    <div key={cp.id} className="flex items-center justify-between px-3 py-2 text-sm">
+                      <span className="font-medium">{formatDateOnly(cp.class_date)}</span>
+                      <div className="flex items-center gap-2">
+                        <Badge className="bg-green-500 hover:bg-green-600">
+                          ${cp.amount.toLocaleString()}
+                        </Badge>
+                        {cp.notes && (
+                          <span className="text-muted-foreground text-xs italic">"{cp.notes}"</span>
+                        )}
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="h-6 px-2 text-destructive"
+                          onClick={() => handleDeleteClassPayment(cp.id)}
+                        >
+                          <Trash2 className="w-3 h-3" />
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Historial de pagos — alumno mensual */}
+          {!isNew && !isClass && (
             <div className="space-y-2">
               <Label>Historial de pagos</Label>
               {paymentHistory.length === 0 ? (

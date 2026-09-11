@@ -34,6 +34,7 @@ export interface Student {
   start_date: string | null;
   categoria: Categoria;
   is_exception: boolean;      // excluye de recordatorios de cuota/mora por WhatsApp hasta que se saque a mano
+  pays_per_class: boolean;    // no tiene cuota mensual: cada clase se cobra y registra por separado
   created_at: string;
   updated_at: string;
   schedule?: Schedule;
@@ -51,6 +52,15 @@ export interface Payment {
   sale_id?: string | null;    // venta de Ventas que generó/actualizó este pago
   created_at: string;
   student?: Student;          // para queries con join
+}
+
+export interface ClassPayment {
+  id: string;
+  student_id: string;
+  class_date: string;         // formato YYYY-MM-DD
+  amount: number;
+  notes: string | null;
+  created_at: string;
 }
 
 export type ProductCategory = 'insumos' | 'servicios' | 'moldes' | 'bizcochado' | 'final' | 'cuota';
