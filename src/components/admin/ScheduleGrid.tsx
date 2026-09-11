@@ -27,7 +27,7 @@ interface ScheduleGridProps {
 export default function ScheduleGrid({ onStudentClick, refreshTrigger }: ScheduleGridProps) {
   const [schedules, setSchedules] = useState<Schedule[]>([]);
   const [students, setStudents] = useState<Student[]>([]);
-  const [paymentMap, setPaymentMap] = useState<Record<string, { status: string; isException: boolean }>>({});
+  const [paymentMap, setPaymentMap] = useState<Record<string, string>>({});
   const [currentMonth, setCurrentMonth] = useState(getCurrentMonth());
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -41,7 +41,7 @@ export default function ScheduleGrid({ onStudentClick, refreshTrigger }: Schedul
     const [schedulesRes, studentsRes, paymentsRes] = await Promise.all([
       supabase.from('schedules').select('*').order('day_of_week').order('start_time'),
       supabase.from('students').select('*, schedule:schedules(*)'),
-      supabase.from('payments').select('student_id, status, is_exception').eq('month', month),
+      supabase.from('payments').select('student_id, status').eq('month', month),
     ]);
 
     if (schedulesRes.data) setSchedules(schedulesRes.data as Schedule[]);
@@ -51,10 +51,10 @@ export default function ScheduleGrid({ onStudentClick, refreshTrigger }: Schedul
       setStudents(activeStudents);
     }
 
-    const map: Record<string, { status: string; isException: boolean }> = {};
+    const map: Record<string, string> = {};
     if (paymentsRes.data) {
       for (const p of paymentsRes.data) {
-        map[p.student_id] = { status: p.status, isException: p.is_exception };
+        map[p.student_id] = p.status;
       }
     }
     setPaymentMap(map);
@@ -207,7 +207,7 @@ export default function ScheduleGrid({ onStudentClick, refreshTrigger }: Schedul
                                     Nuevo
                                   </Badge>
                                 )}
-                                {paymentMap[student.id]?.isException && (
+                                {student.is_exception && (
                                   <Badge
                                     variant="outline"
                                     className="text-[10px] ml-auto border-amber-500 text-amber-500"
@@ -217,17 +217,17 @@ export default function ScheduleGrid({ onStudentClick, refreshTrigger }: Schedul
                                 )}
                                 <Badge
                                   variant={
-                                    paymentMap[student.id]?.status === 'paid'
+                                    paymentMap[student.id] === 'paid'
                                       ? 'default'
-                                      : paymentMap[student.id]?.status === 'partial'
+                                      : paymentMap[student.id] === 'partial'
                                       ? 'secondary'
                                       : 'destructive'
                                   }
-                                  className={`text-[10px] ${paymentMap[student.id]?.isException ? '' : 'ml-auto'} ${paymentMap[student.id]?.status === 'partial' ? 'bg-yellow-500 hover:bg-yellow-600 text-white' : ''}`}
+                                  className={`text-[10px] ${student.is_exception ? '' : 'ml-auto'} ${paymentMap[student.id] === 'partial' ? 'bg-yellow-500 hover:bg-yellow-600 text-white' : ''}`}
                                 >
-                                  {paymentMap[student.id]?.status === 'paid'
+                                  {paymentMap[student.id] === 'paid'
                                     ? '✓'
-                                    : paymentMap[student.id]?.status === 'partial'
+                                    : paymentMap[student.id] === 'partial'
                                     ? '½'
                                     : '$'}
                                 </Badge>

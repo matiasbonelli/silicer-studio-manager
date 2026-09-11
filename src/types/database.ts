@@ -33,6 +33,7 @@ export interface Student {
   notes: string | null;
   start_date: string | null;
   categoria: Categoria;
+  is_exception: boolean;      // excluye de recordatorios de cuota/mora por WhatsApp hasta que se saque a mano
   created_at: string;
   updated_at: string;
   schedule?: Schedule;
@@ -47,7 +48,6 @@ export interface Payment {
   payment_date: string | null;
   receipt_url: string | null;
   notes: string | null;
-  is_exception: boolean;      // excluye este mes de recordatorios de cuota/mora, sin registrar pago
   sale_id?: string | null;    // venta de Ventas que generó/actualizó este pago
   created_at: string;
   student?: Student;          // para queries con join

@@ -56,6 +56,7 @@ export default function StudentModal({ student, isOpen, onClose, onSave, isNew =
   const [partialAmount, setPartialAmount] = useState('');
   const [paymentNotes, setPaymentNotes] = useState('');
   const [savingPayment, setSavingPayment] = useState(false);
+  const [isException, setIsException] = useState(false);
   const [savingException, setSavingException] = useState(false);
 
   const CUOTA_KEY_ADULTO = 'silicer_cuota_adulto';
@@ -79,6 +80,7 @@ export default function StudentModal({ student, isOpen, onClose, onSave, isNew =
         start_date: student.start_date || '',
         categoria: student.categoria ?? 'adulto',
       });
+      setIsException(student.is_exception ?? false);
       loadPayments(student.id, student.categoria ?? 'adulto');
     } else {
       setFormData({
@@ -247,33 +249,23 @@ export default function StudentModal({ student, isOpen, onClose, onSave, isNew =
 
   const handleToggleException = async () => {
     if (!student) return;
-    const newException = !currentPayment?.is_exception;
+    const newException = !isException;
 
     setSavingException(true);
     const { error } = await supabase
-      .from('payments')
-      .upsert(
-        {
-          student_id: student.id,
-          month: currentMonth,
-          status: currentPayment?.status ?? 'pending',
-          amount: currentPayment?.amount ?? null,
-          payment_date: currentPayment?.payment_date ?? null,
-          notes: currentPayment?.notes ?? null,
-          is_exception: newException,
-        },
-        { onConflict: 'student_id,month' }
-      );
+      .from('students')
+      .update({ is_exception: newException })
+      .eq('id', student.id);
 
     if (error) {
       toast({ title: 'Error al guardar excepción', variant: 'destructive' });
     } else {
+      setIsException(newException);
       toast({
         title: newException
-          ? 'Cuota marcada como excepción este mes'
+          ? 'Alumno marcado como excepción de cuota'
           : 'Excepción quitada',
       });
-      await loadPayments(student.id);
       onSave();
     }
     setSavingException(false);
@@ -530,7 +522,7 @@ export default function StudentModal({ student, isOpen, onClose, onSave, isNew =
                         {formatDate(currentPayment.payment_date)}
                       </span>
                     )}
-                    {currentPayment?.is_exception ? (
+                    {isException ? (
                       <Badge
                         variant="outline"
                         className="cursor-pointer border-amber-500 text-amber-500 hover:bg-amber-500/10"
@@ -551,9 +543,9 @@ export default function StudentModal({ student, isOpen, onClose, onSave, isNew =
                       </Button>
                     )}
                   </div>
-                  {currentPayment?.is_exception && (
+                  {isException && (
                     <p className="text-xs text-muted-foreground">
-                      No se le va a recordar la cuota ni aplicar mora este mes.
+                      No se le va a recordar la cuota ni aplicar mora hasta que se quite la excepción.
                     </p>
                   )}
                   {paymentNotes && (
