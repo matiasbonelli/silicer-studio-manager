@@ -12,9 +12,9 @@ import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
 import { sendTemplateMessage } from '@/lib/whatsapp';
 import { firstOccurrenceInMonth } from '@/lib/utils';
-import { Search, Loader2, UserPlus, DollarSign, Eye, Trash2, FileText, ExternalLink, Pencil, Plus } from 'lucide-react';
+import { Search, Loader2, UserPlus, DollarSign, Eye, Trash2, FileText, ExternalLink, Pencil, Plus, MessageCircle } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
-import { format } from 'date-fns';
+import { format, differenceInCalendarDays } from 'date-fns';
 import { es } from 'date-fns/locale';
 
 function getCurrentMonth(): string {
@@ -739,7 +739,25 @@ export default function EnrollmentsManager({ onStudentCreated }: EnrollmentsMana
                 className={enrollment.converted_to_student_id ? 'opacity-50 bg-muted/30' : ''}
               >
                 <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
-                  {format(new Date(enrollment.created_at), 'dd/MM/yy', { locale: es })}
+                  <div className="flex items-center gap-1.5">
+                    <span>{format(new Date(enrollment.created_at), 'dd/MM/yy', { locale: es })}</span>
+                    {!enrollment.converted_to_student_id && (() => {
+                      const days = differenceInCalendarDays(new Date(), new Date(enrollment.created_at));
+                      if (days <= 0) return null;
+                      return (
+                        <Badge
+                          variant="outline"
+                          className={`text-[10px] ${
+                            days >= 7 ? 'border-destructive text-destructive'
+                            : days >= 3 ? 'border-orange-500 text-orange-500'
+                            : 'border-muted-foreground/40 text-muted-foreground'
+                          }`}
+                        >
+                          hace {days}d
+                        </Badge>
+                      );
+                    })()}
+                  </div>
                 </TableCell>
                 <TableCell>
                   <div>
@@ -821,6 +839,30 @@ export default function EnrollmentsManager({ onStudentCreated }: EnrollmentsMana
                     >
                       <DollarSign className="w-4 h-4" />
                     </Button>
+
+                    {/* Seguimiento - contactado pero sigue sin señar/pagar */}
+                    {enrollment.status === 'contacted' &&
+                      enrollment.payment_status === 'pending' &&
+                      !enrollment.converted_to_student_id &&
+                      enrollment.phone && (
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="text-green-600 hover:text-green-700"
+                        aria-label="Enviar seguimiento"
+                        onClick={() =>
+                          sendTemplateMessage(
+                            enrollment.phone!,
+                            'msg_seguimiento_preinscripcion',
+                            { nombre: enrollment.first_name },
+                            toast,
+                            { type: 'enrollment', id: enrollment.id },
+                          )
+                        }
+                      >
+                        <MessageCircle className="w-4 h-4" />
+                      </Button>
+                    )}
 
                     {/* Convert to student - solo si ya tiene pago señado o total */}
                     {!enrollment.converted_to_student_id &&

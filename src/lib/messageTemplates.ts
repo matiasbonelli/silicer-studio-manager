@@ -7,6 +7,7 @@ export type TemplateKey =
   | 'msg_cumpleanos'
   | 'msg_confirmacion_inscripcion'
   | 'msg_pago_inscripcion_confirmado'
+  | 'msg_seguimiento_preinscripcion'
   | 'msg_preinscripcion_recibida_adultos_1'
   | 'msg_preinscripcion_recibida_adultos_2'
   | 'msg_preinscripcion_recibida_ninos_1'
@@ -92,6 +93,17 @@ export const MESSAGE_TEMPLATES: MessageTemplateDef[] = [
     defaultMessage:
       'Hola {nombre}! Te confirmamos que registramos tu pago de inscripción en Silicer 🎉. ¡Te esperamos en tu primera clase!',
     metaTemplateName: 'pago_inscripcion_confirmado',
+    metaTemplateLang: 'es_AR',
+    paramOrder: ['nombre'],
+  },
+  {
+    key: 'msg_seguimiento_preinscripcion',
+    title: 'Seguimiento de preinscripción sin pago',
+    description: 'Se envía a mano desde Inscripciones cuando ya se contactó al alumno pero sigue sin señar/pagar, para saber si sigue interesado.',
+    placeholders: ['nombre'],
+    defaultMessage:
+      '¡Hola {nombre}! Vimos que te preinscribiste en Silicer pero todavía no nos llegó la seña ni el comprobante de pago. Recordá que el cupo se confirma con la seña del 50% (o el pago total) — sin eso no podemos garantizarte el lugar. ¿Seguís interesado/a? Contanos si tenés alguna duda o si necesitás más tiempo, ¡así te ayudamos! 🏺',
+    metaTemplateName: 'seguimiento_preinscripcion',
     metaTemplateLang: 'es_AR',
     paramOrder: ['nombre'],
   },
