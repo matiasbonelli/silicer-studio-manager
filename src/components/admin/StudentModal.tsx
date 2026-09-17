@@ -32,6 +32,14 @@ const formatMonth = (monthStr: string | null) => {
   return `${MONTH_NAMES[month]} ${year}`;
 };
 
+const getNextMonth = (monthStr: string): string => {
+  const [year, month] = monthStr.split('-').map(Number);
+  // El mes es 1-indexado en monthStr; pasarlo tal cual como parámetro 0-indexado
+  // de Date ya da el mes siguiente (y hace rollover de año automático).
+  const d = new Date(year, month, 1);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+};
+
 // Evita el corrimiento de un día que da `new Date('YYYY-MM-DD')` en zonas UTC-N
 const formatDateOnly = (dateStr: string) => {
   const [year, month, day] = dateStr.split('-');
@@ -57,6 +65,7 @@ export default function StudentModal({ student, isOpen, onClose, onSave, isNew =
 
   // Cuota del mes actual
   const currentMonth = getCurrentMonth();
+  const nextMonth = getNextMonth(currentMonth);
   const [currentPayment, setCurrentPayment] = useState<Payment | null>(null);
   const [editingPayment, setEditingPayment] = useState(false);
   const [paymentType, setPaymentType] = useState<'total' | 'partial' | 'pending'>('pending');
@@ -81,6 +90,9 @@ export default function StudentModal({ student, isOpen, onClose, onSave, isNew =
   const [reservedMonth, setReservedMonth] = useState<string | null>(null);
   const [savingReserve, setSavingReserve] = useState(false);
   const isReservedThisMonth = reservedMonth === currentMonth;
+  // Si reservó el cupo, la cuota que corresponde gestionar es la del mes que viene
+  // (no debe nada este mes) — la seña se registra contra ese mes, no el actual.
+  const effectiveCuotaMonth = isReservedThisMonth ? nextMonth : currentMonth;
 
   const CUOTA_KEY_ADULTO = 'silicer_cuota_adulto';
   const CUOTA_KEY_NINO   = 'silicer_cuota_niño';
@@ -106,7 +118,14 @@ export default function StudentModal({ student, isOpen, onClose, onSave, isNew =
       setIsException(student.is_exception ?? false);
       setIsClass(student.pays_per_class ?? false);
       setReservedMonth(student.reserved_month ?? null);
-      loadPayments(student.id, student.categoria ?? 'adulto');
+      // No usar el estado `reservedMonth`/`isReservedThisMonth` acá: todavía tienen el
+      // valor del alumno anterior (el setState de arriba recién se aplica el próximo
+      // render). Se calcula directo desde la prop `student` para no cargar el mes que no es.
+      loadPayments(
+        student.id,
+        student.categoria ?? 'adulto',
+        student.reserved_month === currentMonth ? nextMonth : currentMonth,
+      );
       loadClassPayments(student.id);
       setChatwootUrl(null);
       if (student.phone) {
@@ -162,14 +181,15 @@ export default function StudentModal({ student, isOpen, onClose, onSave, isNew =
     fetchOccupancy();
   }, []);
 
-  /** Carga el pago del mes actual y el historial en secuencia para evitar race conditions */
-  const loadPayments = async (studentId: string, categoria: Categoria = 'adulto') => {
-    // 1. Pago del mes actual
+  /** Carga el pago del mes objetivo (el actual, o el que viene si reservó cupo) y el
+   * historial, en secuencia para evitar race conditions. */
+  const loadPayments = async (studentId: string, categoria: Categoria = 'adulto', targetMonth: string = currentMonth) => {
+    // 1. Pago del mes objetivo
     const { data: current } = await supabase
       .from('payments')
       .select('*')
       .eq('student_id', studentId)
-      .eq('month', currentMonth)
+      .eq('month', targetMonth)
       .maybeSingle();
 
     if (current) {
@@ -206,7 +226,7 @@ export default function StudentModal({ student, isOpen, onClose, onSave, isNew =
         // El precio base del Dashboard (seteado manualmente) siempre tiene prioridad
         const cuotaBase = getSuggestedAmount(categoria);
         const lastWithAmount = (history as Payment[]).find(
-          (p) => p.amount && p.amount > 0 && p.month !== currentMonth
+          (p) => p.amount && p.amount > 0 && p.month !== targetMonth
         );
         // Prioridad: cuota base configurada > último pago del alumno
         if (cuotaBase) {
@@ -268,6 +288,8 @@ export default function StudentModal({ student, isOpen, onClose, onSave, isNew =
           ? 'Cupo reservado — se salta la cuota de este mes'
           : 'Reserva de cupo quitada',
       });
+      // La cuota a gestionar pasa a ser la del mes que corresponda con la nueva reserva.
+      await loadPayments(student.id, student.categoria ?? 'adulto', newReservedMonth ? nextMonth : currentMonth);
       onSave();
     }
     setSavingReserve(false);
@@ -351,7 +373,7 @@ export default function StudentModal({ student, isOpen, onClose, onSave, isNew =
       .upsert(
         {
           student_id: student.id,
-          month: currentMonth,
+          month: effectiveCuotaMonth,
           status: newStatus,
           amount: paidAmount,
           payment_date: paymentDate,
@@ -372,7 +394,7 @@ export default function StudentModal({ student, isOpen, onClose, onSave, isNew =
             : 'Cuota marcada como pendiente',
       });
       setEditingPayment(false);
-      await loadPayments(student.id);
+      await loadPayments(student.id, student.categoria ?? 'adulto', effectiveCuotaMonth);
       onSave(); // propaga refreshTrigger → actualiza ScheduleGrid, StudentsList y Dashboard
     }
     setSavingPayment(false);
@@ -717,7 +739,7 @@ export default function StudentModal({ student, isOpen, onClose, onSave, isNew =
           {!isNew && !isClass && (
             <div className="space-y-2 rounded-lg border p-3">
               <div className="flex items-center justify-between">
-                <Label>Cuota de {formatMonth(currentMonth)}</Label>
+                <Label>Cuota de {formatMonth(effectiveCuotaMonth)}</Label>
                 {!editingPayment && (
                   <Button
                     type="button"
