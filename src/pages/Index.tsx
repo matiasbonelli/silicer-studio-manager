@@ -657,10 +657,10 @@ export default function Index() {
               <CheckCircle2 className="w-10 h-10 text-green-600" />
             </div>
             <h2 className="text-2xl text-[var(--landing-ink)] mb-3">
-              ¡Listo! Te llevamos a WhatsApp
+              ¡Listo! Ya recibimos tu preinscripción
             </h2>
             <p className="text-[var(--landing-muted)] leading-relaxed max-w-sm">
-              Agilizá tu preinscripción enviando el mensaje que te dejamos precargado en WhatsApp.
+              En breve te vamos a enviar toda la información por WhatsApp para que puedas confirmar tu lugar. ¡Gracias por elegir Silicer!
             </p>
             <Button
               onClick={() => setShowSuccessModal(false)}
