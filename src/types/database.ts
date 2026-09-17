@@ -35,6 +35,7 @@ export interface Student {
   categoria: Categoria;
   is_exception: boolean;      // excluye de recordatorios de cuota/mora por WhatsApp hasta que se saque a mano
   pays_per_class: boolean;    // no tiene cuota mensual: cada clase se cobra y registra por separado
+  reserved_month: string | null; // formato YYYY-MM: mes que se salta (pagó seña, empieza el mes siguiente)
   created_at: string;
   updated_at: string;
   schedule?: Schedule;

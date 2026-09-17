@@ -77,6 +77,11 @@ export default function StudentModal({ student, isOpen, onClose, onSave, isNew =
   const [chatwootUrl, setChatwootUrl] = useState<string | null>(null);
   const [chatwootUrlLoading, setChatwootUrlLoading] = useState(false);
 
+  // Reserva de cupo: pagó seña, se salta la cuota de currentMonth y empieza el mes siguiente
+  const [reservedMonth, setReservedMonth] = useState<string | null>(null);
+  const [savingReserve, setSavingReserve] = useState(false);
+  const isReservedThisMonth = reservedMonth === currentMonth;
+
   const CUOTA_KEY_ADULTO = 'silicer_cuota_adulto';
   const CUOTA_KEY_NINO   = 'silicer_cuota_niño';
   const getCuotaKey = (cat: Categoria) => cat === 'niño' ? CUOTA_KEY_NINO : CUOTA_KEY_ADULTO;
@@ -100,6 +105,7 @@ export default function StudentModal({ student, isOpen, onClose, onSave, isNew =
       });
       setIsException(student.is_exception ?? false);
       setIsClass(student.pays_per_class ?? false);
+      setReservedMonth(student.reserved_month ?? null);
       loadPayments(student.id, student.categoria ?? 'adulto');
       loadClassPayments(student.id);
       setChatwootUrl(null);
@@ -241,6 +247,30 @@ export default function StudentModal({ student, isOpen, onClose, onSave, isNew =
       onSave();
     }
     setSavingClassToggle(false);
+  };
+
+  const handleToggleReserve = async () => {
+    if (!student) return;
+    const newReservedMonth = isReservedThisMonth ? null : currentMonth;
+
+    setSavingReserve(true);
+    const { error } = await supabase
+      .from('students')
+      .update({ reserved_month: newReservedMonth })
+      .eq('id', student.id);
+
+    if (error) {
+      toast({ title: 'Error al guardar', variant: 'destructive' });
+    } else {
+      setReservedMonth(newReservedMonth);
+      toast({
+        title: newReservedMonth
+          ? 'Cupo reservado — se salta la cuota de este mes'
+          : 'Reserva de cupo quitada',
+      });
+      onSave();
+    }
+    setSavingReserve(false);
   };
 
   const handleAddClassPayment = async () => {
@@ -615,6 +645,34 @@ export default function StudentModal({ student, isOpen, onClose, onSave, isNew =
                   ? <Loader2 className="w-3 h-3 animate-spin" />
                   : isClass ? 'Volver a cuota mensual' : '+ Marcar como "por clase"'}
               </Button>
+            </div>
+          )}
+
+          {/* ── Reserva de cupo — solo al editar, solo si paga cuota mensual ── */}
+          {!isNew && !isClass && (
+            <div className="space-y-1">
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-muted-foreground">
+                  {isReservedThisMonth ? `Reservó el cupo de ${formatMonth(currentMonth)}` : 'Reserva de cupo'}
+                </span>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className={`h-7 text-xs border-2 ${isReservedThisMonth ? 'border-purple-500 text-purple-600' : 'border-muted-foreground/40'}`}
+                  disabled={savingReserve}
+                  onClick={handleToggleReserve}
+                >
+                  {savingReserve
+                    ? <Loader2 className="w-3 h-3 animate-spin" />
+                    : isReservedThisMonth ? 'Quitar reserva' : '+ Reservar cupo (paga seña, empieza el mes que viene)'}
+                </Button>
+              </div>
+              {isReservedThisMonth && (
+                <p className="text-xs text-muted-foreground">
+                  No se le va a pedir ni recordar la cuota de {formatMonth(currentMonth)}. Se desactiva sola el mes que viene.
+                </p>
+              )}
             </div>
           )}
 
