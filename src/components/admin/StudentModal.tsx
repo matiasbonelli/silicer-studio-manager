@@ -10,6 +10,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
+import { getChatwootConversationUrl, whatsAppChatUrl } from '@/lib/whatsapp';
 import { Trash2, ExternalLink, Check, Loader2, MessageCircle, ShoppingCart } from 'lucide-react';
 
 interface StudentModalProps {
@@ -73,6 +74,7 @@ export default function StudentModal({ student, isOpen, onClose, onSave, isNew =
   const [newClassAmount, setNewClassAmount] = useState('');
   const [newClassNotes, setNewClassNotes] = useState('');
   const [savingClassPayment, setSavingClassPayment] = useState(false);
+  const [chatwootUrl, setChatwootUrl] = useState<string | null>(null);
 
   const CUOTA_KEY_ADULTO = 'silicer_cuota_adulto';
   const CUOTA_KEY_NINO   = 'silicer_cuota_niño';
@@ -99,6 +101,8 @@ export default function StudentModal({ student, isOpen, onClose, onSave, isNew =
       setIsClass(student.pays_per_class ?? false);
       loadPayments(student.id, student.categoria ?? 'adulto');
       loadClassPayments(student.id);
+      setChatwootUrl(null);
+      if (student.phone) getChatwootConversationUrl(student.phone).then(setChatwootUrl);
     } else {
       setFormData({
         first_name: '',
@@ -453,13 +457,13 @@ export default function StudentModal({ student, isOpen, onClose, onSave, isNew =
             <DialogTitle>{isNew ? 'Agregar Alumno' : 'Editar Alumno'}</DialogTitle>
             {!isNew && student?.phone && (
               <a
-                href={`https://wa.me/54${student.phone.replace(/\D/g, '')}`}
+                href={chatwootUrl ?? whatsAppChatUrl(student.phone)}
                 target="_blank"
                 rel="noopener noreferrer"
               >
                 <Button type="button" variant="outline" size="sm" className="gap-1.5 text-green-600 hover:text-green-700">
                   <MessageCircle className="w-4 h-4" />
-                  WhatsApp
+                  {chatwootUrl ? 'Abrir en Chatwoot' : 'WhatsApp'}
                 </Button>
               </a>
             )}
