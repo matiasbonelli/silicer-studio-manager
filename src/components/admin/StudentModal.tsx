@@ -10,7 +10,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
-import { getChatwootConversationUrl, whatsAppChatUrl } from '@/lib/whatsapp';
+import { getChatwootLink } from '@/lib/whatsapp';
 import { Trash2, ExternalLink, Check, Loader2, MessageCircle, ShoppingCart } from 'lucide-react';
 
 interface StudentModalProps {
@@ -75,6 +75,7 @@ export default function StudentModal({ student, isOpen, onClose, onSave, isNew =
   const [newClassNotes, setNewClassNotes] = useState('');
   const [savingClassPayment, setSavingClassPayment] = useState(false);
   const [chatwootUrl, setChatwootUrl] = useState<string | null>(null);
+  const [chatwootUrlLoading, setChatwootUrlLoading] = useState(false);
 
   const CUOTA_KEY_ADULTO = 'silicer_cuota_adulto';
   const CUOTA_KEY_NINO   = 'silicer_cuota_niño';
@@ -102,7 +103,12 @@ export default function StudentModal({ student, isOpen, onClose, onSave, isNew =
       loadPayments(student.id, student.categoria ?? 'adulto');
       loadClassPayments(student.id);
       setChatwootUrl(null);
-      if (student.phone) getChatwootConversationUrl(student.phone).then(setChatwootUrl);
+      if (student.phone) {
+        setChatwootUrlLoading(true);
+        getChatwootLink(student.phone, `${student.first_name} ${student.last_name}`)
+          .then(setChatwootUrl)
+          .finally(() => setChatwootUrlLoading(false));
+      }
     } else {
       setFormData({
         first_name: '',
@@ -456,16 +462,19 @@ export default function StudentModal({ student, isOpen, onClose, onSave, isNew =
           <div className="flex items-center justify-between">
             <DialogTitle>{isNew ? 'Agregar Alumno' : 'Editar Alumno'}</DialogTitle>
             {!isNew && student?.phone && (
-              <a
-                href={chatwootUrl ?? whatsAppChatUrl(student.phone)}
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                <Button type="button" variant="outline" size="sm" className="gap-1.5 text-green-600 hover:text-green-700">
-                  <MessageCircle className="w-4 h-4" />
-                  {chatwootUrl ? 'Abrir en Chatwoot' : 'WhatsApp'}
+              chatwootUrl ? (
+                <a href={chatwootUrl} target="_blank" rel="noopener noreferrer">
+                  <Button type="button" variant="outline" size="sm" className="gap-1.5 text-green-600 hover:text-green-700">
+                    <MessageCircle className="w-4 h-4" />
+                    Abrir en Chatwoot
+                  </Button>
+                </a>
+              ) : (
+                <Button type="button" variant="outline" size="sm" className="gap-1.5 text-muted-foreground" disabled>
+                  {chatwootUrlLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <MessageCircle className="w-4 h-4" />}
+                  {chatwootUrlLoading ? 'Buscando...' : 'No disponible'}
                 </Button>
-              </a>
+              )
             )}
           </div>
         </DialogHeader>

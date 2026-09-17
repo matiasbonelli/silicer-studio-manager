@@ -26,38 +26,21 @@ export function whatsAppChatUrl(phone: string): string {
   return `https://wa.me/${cleanPhone(phone)}`;
 }
 
-const CHATWOOT_BASE_URL = 'https://chat.silicer.com.ar';
-const CHATWOOT_ACCOUNT_ID = 1;
-
-/** Espejo de `normalizePhone` en supabase/functions/whatsapp-send/index.ts — mismo
- * formato (+549...) que queda guardado como `phone` en whatsapp_message_log, para
- * poder buscar por ese valor exacto desde el frontend. */
-export function normalizeWhatsAppPhone(phone: string): string {
-  let digits = phone.replace(/\D/g, '');
-  if (!digits.startsWith('54')) {
-    digits = digits.startsWith('9') ? `54${digits}` : `549${digits}`;
-  } else if (!digits.startsWith('549')) {
-    digits = `549${digits.slice(2)}`;
-  }
-  return `+${digits}`;
+interface ChatwootContactLinkResponse {
+  success: boolean;
+  url?: string;
+  error?: string;
 }
 
-/** Busca la última conversación de Chatwoot registrada para este teléfono
- * (vía whatsapp_message_log) y devuelve el link directo a esa conversación,
- * o null si todavía no se le mandó ningún mensaje desde la app. */
-export async function getChatwootConversationUrl(phone: string): Promise<string | null> {
-  const normalized = normalizeWhatsAppPhone(phone);
-  const { data } = await supabase
-    .from('whatsapp_message_log')
-    .select('chatwoot_conversation_id')
-    .eq('phone', normalized)
-    .not('chatwoot_conversation_id', 'is', null)
-    .order('created_at', { ascending: false })
-    .limit(1)
-    .maybeSingle();
-
-  if (!data?.chatwoot_conversation_id) return null;
-  return `${CHATWOOT_BASE_URL}/app/accounts/${CHATWOOT_ACCOUNT_ID}/conversations/${data.chatwoot_conversation_id}`;
+/** Busca (o crea, sin mandar ningún mensaje) el contacto de Chatwoot para este teléfono
+ * y devuelve un link directo: a su conversación más reciente si ya tiene alguna, o a su
+ * ficha de contacto si no — desde ahí se puede iniciar una charla a mano con "Mensaje". */
+export async function getChatwootLink(phone: string, contactName?: string): Promise<string | null> {
+  const { data, error } = await supabase.functions.invoke<ChatwootContactLinkResponse>('chatwoot-contact-link', {
+    body: { phone: cleanPhone(phone), contact_name: contactName },
+  });
+  if (error || !data?.success || !data.url) return null;
+  return data.url;
 }
 
 /** @deprecated Migrar a `sendTemplateMessage` (API oficial vía Chatwoot) — este método
