@@ -102,7 +102,7 @@ export const MESSAGE_TEMPLATES: MessageTemplateDef[] = [
     description: 'Se envía a mano desde Inscripciones cuando ya se contactó al alumno pero sigue sin señar/pagar, para saber si sigue interesado.',
     placeholders: ['nombre'],
     defaultMessage:
-      '¡Hola {nombre}! Queríamos saber qué te pareció la información que te mandamos sobre Silicer. ¿Seguís interesado/a en sumarte? Si tenés alguna duda o consulta, no dudes en escribirnos — ¡estamos para ayudarte! 🏺',
+      '¡Hola {nombre}! Queríamos saber qué te pareció la información que te mandamos sobre nuestro taller en Silicer. ¿Seguís interesado/a en sumarte? Si tenés alguna duda o consulta, no dudes en escribirnos🏺',
     metaTemplateName: 'seguimiento_preinscripcion',
     metaTemplateLang: 'es_AR',
     paramOrder: ['nombre'],

@@ -78,7 +78,7 @@ export const META_TEMPLATES: Record<string, MetaTemplateDef> = {
     category: 'MARKETING',
     paramOrder: ['nombre'],
     bodyTemplate:
-      '¡Hola {nombre}! Queríamos saber qué te pareció la información que te mandamos sobre Silicer. ¿Seguís interesado/a en sumarte? Si tenés alguna duda o consulta, no dudes en escribirnos — ¡estamos para ayudarte! 🏺',
+      '¡Hola {nombre}! Queríamos saber qué te pareció la información que te mandamos sobre nuestro taller en Silicer. ¿Seguís interesado/a en sumarte? Si tenés alguna duda o consulta, no dudes en escribirnos🏺',
   },
   msg_preinscripcion_recibida_adultos_1: {
     metaTemplateName: 'preinscripcion_recibida_adultos_1',
