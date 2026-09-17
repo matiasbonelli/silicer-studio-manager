@@ -93,6 +93,9 @@ export default function StudentModal({ student, isOpen, onClose, onSave, isNew =
   // Si reservó el cupo, la cuota que corresponde gestionar es la del mes que viene
   // (no debe nada este mes) — la seña se registra contra ese mes, no el actual.
   const effectiveCuotaMonth = isReservedThisMonth ? nextMonth : currentMonth;
+  const [editingSena, setEditingSena] = useState(false);
+  const [senaAmount, setSenaAmount] = useState('');
+  const [savingSena, setSavingSena] = useState(false);
 
   const CUOTA_KEY_ADULTO = 'silicer_cuota_adulto';
   const CUOTA_KEY_NINO   = 'silicer_cuota_niño';
@@ -293,6 +296,39 @@ export default function StudentModal({ student, isOpen, onClose, onSave, isNew =
       onSave();
     }
     setSavingReserve(false);
+  };
+
+  const handleSaveSena = async () => {
+    if (!student) return;
+    const amount = parseFloat(senaAmount);
+    if (!amount || amount <= 0) {
+      toast({ title: 'El monto debe ser mayor a 0', variant: 'destructive' });
+      return;
+    }
+
+    setSavingSena(true);
+    const { error } = await supabase
+      .from('payments')
+      .upsert(
+        {
+          student_id: student.id,
+          month: effectiveCuotaMonth,
+          status: 'partial',
+          amount,
+          payment_date: new Date().toISOString(),
+        },
+        { onConflict: 'student_id,month' }
+      );
+
+    if (error) {
+      toast({ title: 'Error al guardar la seña', variant: 'destructive' });
+    } else {
+      toast({ title: 'Seña registrada' });
+      setEditingSena(false);
+      await loadPayments(student.id, student.categoria ?? 'adulto', effectiveCuotaMonth);
+      onSave();
+    }
+    setSavingSena(false);
   };
 
   const handleAddClassPayment = async () => {
@@ -687,7 +723,7 @@ export default function StudentModal({ student, isOpen, onClose, onSave, isNew =
                 >
                   {savingReserve
                     ? <Loader2 className="w-3 h-3 animate-spin" />
-                    : isReservedThisMonth ? 'Quitar reserva' : '+ Reservar cupo (paga seña, empieza el mes que viene)'}
+                    : isReservedThisMonth ? 'Quitar reserva' : '+ Reservar cupo'}
                 </Button>
               </div>
               {isReservedThisMonth && (
@@ -735,8 +771,83 @@ export default function StudentModal({ student, isOpen, onClose, onSave, isNew =
             </div>
           )}
 
-          {/* ── Cuota del mes actual — alumno mensual ── */}
-          {!isNew && !isClass && (
+          {/* ── Seña de reserva — reemplaza la cuota normal mientras está reservado ── */}
+          {!isNew && !isClass && isReservedThisMonth && (
+            <div className="space-y-2 rounded-lg border p-3">
+              <div className="flex items-center justify-between">
+                <Label>Seña para {formatMonth(effectiveCuotaMonth)}</Label>
+                {!editingSena && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="h-7 text-xs"
+                    onClick={() => {
+                      setSenaAmount(currentPayment?.amount?.toString() ?? '');
+                      setEditingSena(true);
+                    }}
+                  >
+                    {currentPayment?.amount ? 'Editar' : 'Anotar'}
+                  </Button>
+                )}
+              </div>
+
+              {!editingSena ? (
+                <div className="pt-1">
+                  {currentPayment?.amount ? (
+                    <p className="text-sm flex items-center gap-2 flex-wrap">
+                      <Badge className="bg-yellow-500 hover:bg-yellow-600">
+                        ${currentPayment.amount.toLocaleString()}
+                      </Badge>
+                      {currentPayment.payment_date && (
+                        <span className="text-xs text-muted-foreground">
+                          {formatDate(currentPayment.payment_date)}
+                        </span>
+                      )}
+                    </p>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">Todavía no anotaste el monto de la seña.</p>
+                  )}
+                </div>
+              ) : (
+                <div className="space-y-2 pt-1">
+                  <Input
+                    type="number"
+                    placeholder="Monto de la seña"
+                    value={senaAmount}
+                    onChange={(e) => setSenaAmount(e.target.value)}
+                  />
+                  <div className="flex gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="flex-1"
+                      onClick={() => setEditingSena(false)}
+                      disabled={savingSena}
+                    >
+                      Cancelar
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      className="flex-1"
+                      onClick={handleSaveSena}
+                      disabled={savingSena}
+                    >
+                      {savingSena
+                        ? <Loader2 className="w-4 h-4 animate-spin" />
+                        : <><Check className="w-4 h-4 mr-1" /> Guardar</>
+                      }
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ── Cuota del mes actual — alumno mensual, no reservado ── */}
+          {!isNew && !isClass && !isReservedThisMonth && (
             <div className="space-y-2 rounded-lg border p-3">
               <div className="flex items-center justify-between">
                 <Label>Cuota de {formatMonth(effectiveCuotaMonth)}</Label>
