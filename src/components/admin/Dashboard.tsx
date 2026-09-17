@@ -261,12 +261,18 @@ export default function Dashboard({ refreshTrigger }: DashboardProps) {
       }
 
       // Cuotas: solo alumnos con horario asignado y que pagan cuota mensual (no "por clase",
-      // que se cobra y registra aparte en class_payments) entran a este sistema.
+      // que se cobra y registra aparte en class_payments) entran a este sistema. Tampoco
+      // entran los que reservaron el cupo este mes (pagaron seña, empiezan el mes que
+      // viene) — reserved_month se compara con el mes actual y se "desactiva" solo al
+      // pasar de mes, sin depender de que alguien lo saque a mano. Siguen contando para
+      // el cupo del horario en ScheduleGrid, ahí no se filtran.
       // El registro de pago (pagado/parcial/pendiente) sigue existiendo normalmente para
       // los marcados como excepción (alumno.is_exception, persistente hasta que se sac) —
       // la excepción solo los saca de la lista de avisos de WhatsApp (pendingStudents/
       // partialStudents), no de los contadores del Dashboard.
-      const studentsWithSchedule = students.filter((s) => s.schedule_id && !s.pays_per_class);
+      const studentsWithSchedule = students.filter(
+        (s) => s.schedule_id && !s.pays_per_class && s.reserved_month !== currentMonth
+      );
       const cuotasPaid = studentsWithSchedule.filter((s) => paymentsMap[s.id]?.status === 'paid').length;
       const cuotasPartial = studentsWithSchedule.filter((s) => paymentsMap[s.id]?.status === 'partial').length;
       const cuotasPending = studentsWithSchedule.filter(

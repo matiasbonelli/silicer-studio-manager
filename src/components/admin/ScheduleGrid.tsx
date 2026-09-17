@@ -222,6 +222,13 @@ export default function ScheduleGrid({ onStudentClick, refreshTrigger }: Schedul
                                   >
                                     Clase
                                   </Badge>
+                                ) : student.reserved_month === currentMonth ? (
+                                  <Badge
+                                    variant="outline"
+                                    className={`text-[10px] border-purple-500 text-purple-500 ${student.is_exception ? '' : 'ml-auto'}`}
+                                  >
+                                    Reserva
+                                  </Badge>
                                 ) : (
                                   <Badge
                                     variant={
