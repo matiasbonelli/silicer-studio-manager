@@ -102,7 +102,7 @@ export const MESSAGE_TEMPLATES: MessageTemplateDef[] = [
     description: 'Se envía a mano desde Inscripciones cuando ya se contactó al alumno pero sigue sin señar/pagar, para saber si sigue interesado.',
     placeholders: ['nombre'],
     defaultMessage:
-      '¡Hola {nombre}! Vimos que te preinscribiste en Silicer pero todavía no nos llegó la seña ni el comprobante de pago. Recordá que el cupo se confirma con la seña del 50% (o el pago total) — sin eso no podemos garantizarte el lugar. ¿Seguís interesado/a? Contanos si tenés alguna duda o si necesitás más tiempo, ¡así te ayudamos! 🏺',
+      '¡Hola {nombre}! Queríamos saber qué te pareció la información que te mandamos sobre Silicer. ¿Seguís interesado/a en sumarte? Si tenés alguna duda o consulta, no dudes en escribirnos — ¡estamos para ayudarte! 🏺',
     metaTemplateName: 'seguimiento_preinscripcion',
     metaTemplateLang: 'es_AR',
     paramOrder: ['nombre'],

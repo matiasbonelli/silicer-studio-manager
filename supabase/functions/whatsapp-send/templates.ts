@@ -78,7 +78,7 @@ export const META_TEMPLATES: Record<string, MetaTemplateDef> = {
     category: 'MARKETING',
     paramOrder: ['nombre'],
     bodyTemplate:
-      '¡Hola {nombre}! Vimos que te preinscribiste en Silicer pero todavía no nos llegó la seña ni el comprobante de pago. Recordá que el cupo se confirma con la seña del 50% (o el pago total) — sin eso no podemos garantizarte el lugar. ¿Seguís interesado/a? Contanos si tenés alguna duda o si necesitás más tiempo, ¡así te ayudamos! 🏺',
+      '¡Hola {nombre}! Queríamos saber qué te pareció la información que te mandamos sobre Silicer. ¿Seguís interesado/a en sumarte? Si tenés alguna duda o consulta, no dudes en escribirnos — ¡estamos para ayudarte! 🏺',
   },
   msg_preinscripcion_recibida_adultos_1: {
     metaTemplateName: 'preinscripcion_recibida_adultos_1',
