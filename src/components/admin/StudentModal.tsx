@@ -711,7 +711,7 @@ export default function StudentModal({ student, isOpen, onClose, onSave, isNew =
             <div className="space-y-1">
               <div className="flex items-center justify-between text-xs">
                 <span className="text-muted-foreground">
-                  {isReservedThisMonth ? `Reservó el cupo de ${formatMonth(currentMonth)}` : 'Reserva de cupo'}
+                  {isReservedThisMonth ? `Reservó el cupo de ${formatMonth(nextMonth)}` : 'Reserva de cupo'}
                 </span>
                 <Button
                   type="button"
