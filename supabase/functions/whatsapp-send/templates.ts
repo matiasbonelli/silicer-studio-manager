@@ -70,6 +70,16 @@ export const META_TEMPLATES: Record<string, MetaTemplateDef> = {
     bodyTemplate:
       'Hola {nombre}! Te confirmamos que registramos tu pago de inscripción en Silicer 🎉. ¡Te esperamos en tu primera clase!',
   },
+  msg_seguimiento_preinscripcion: {
+    metaTemplateName: 'seguimiento_preinscripcion',
+    metaTemplateLang: 'es_AR',
+    // Es un recontacto sin evento transaccional reciente, como preinscripcion_recibida
+    // — mismo motivo por el que Meta las clasifica como Marketing, no Utilidad.
+    category: 'MARKETING',
+    paramOrder: ['nombre'],
+    bodyTemplate:
+      '¡Hola {nombre}! Vimos que te preinscribiste en Silicer pero todavía no nos llegó la seña ni el comprobante de pago. Recordá que el cupo se confirma con la seña del 50% (o el pago total) — sin eso no podemos garantizarte el lugar. ¿Seguís interesado/a? Contanos si tenés alguna duda o si necesitás más tiempo, ¡así te ayudamos! 🏺',
+  },
   msg_preinscripcion_recibida_adultos_1: {
     metaTemplateName: 'preinscripcion_recibida_adultos_1',
     metaTemplateLang: 'es_AR',
