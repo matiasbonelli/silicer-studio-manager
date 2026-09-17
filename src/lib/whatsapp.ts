@@ -26,6 +26,40 @@ export function whatsAppChatUrl(phone: string): string {
   return `https://wa.me/${cleanPhone(phone)}`;
 }
 
+const CHATWOOT_BASE_URL = 'https://chat.silicer.com.ar';
+const CHATWOOT_ACCOUNT_ID = 1;
+
+/** Espejo de `normalizePhone` en supabase/functions/whatsapp-send/index.ts — mismo
+ * formato (+549...) que queda guardado como `phone` en whatsapp_message_log, para
+ * poder buscar por ese valor exacto desde el frontend. */
+export function normalizeWhatsAppPhone(phone: string): string {
+  let digits = phone.replace(/\D/g, '');
+  if (!digits.startsWith('54')) {
+    digits = digits.startsWith('9') ? `54${digits}` : `549${digits}`;
+  } else if (!digits.startsWith('549')) {
+    digits = `549${digits.slice(2)}`;
+  }
+  return `+${digits}`;
+}
+
+/** Busca la última conversación de Chatwoot registrada para este teléfono
+ * (vía whatsapp_message_log) y devuelve el link directo a esa conversación,
+ * o null si todavía no se le mandó ningún mensaje desde la app. */
+export async function getChatwootConversationUrl(phone: string): Promise<string | null> {
+  const normalized = normalizeWhatsAppPhone(phone);
+  const { data } = await supabase
+    .from('whatsapp_message_log')
+    .select('chatwoot_conversation_id')
+    .eq('phone', normalized)
+    .not('chatwoot_conversation_id', 'is', null)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (!data?.chatwoot_conversation_id) return null;
+  return `${CHATWOOT_BASE_URL}/app/accounts/${CHATWOOT_ACCOUNT_ID}/conversations/${data.chatwoot_conversation_id}`;
+}
+
 /** @deprecated Migrar a `sendTemplateMessage` (API oficial vía Chatwoot) — este método
  * abre una ventana con el mensaje prellenado y arriesga que WhatsApp banee el número por
  * comportamiento de spam. Se mantiene solo hasta terminar de migrar todos los flujos. */
