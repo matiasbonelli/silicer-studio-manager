@@ -4,6 +4,7 @@ export type TemplateKey =
   | 'msg_reminder_pago'
   | 'msg_recordatorio_cuota_mora'
   | 'msg_pedido_listo'
+  | 'msg_pedido_listo_pagado'
   | 'msg_cumpleanos'
   | 'msg_confirmacion_inscripcion_senia'
   | 'msg_confirmacion_inscripcion_pago_total'
@@ -54,14 +55,25 @@ export const MESSAGE_TEMPLATES: MessageTemplateDef[] = [
   },
   {
     key: 'msg_pedido_listo',
-    title: 'Pedido listo para retirar',
-    description: 'Se envía desde Pedidos cuando un pedido pasa a estado "Listo".',
-    placeholders: ['nombre', 'producto', 'cantidad', 'total'],
+    title: 'Pedido listo para retirar — con saldo pendiente',
+    description: 'Se envía desde Pedidos cuando un pedido pasa a "Listo" y todavía queda un saldo por pagar (sin pagar o señado). Muestra el saldo restante, no el precio total.',
+    placeholders: ['nombre', 'producto', 'cantidad', 'saldo'],
     defaultMessage:
-      'Hola {nombre}, tu pedido está listo para retirar en Silicer!\n\n📦 Producto: {producto}\n🔢 Cantidad: {cantidad}\n💰 Total: {total}\n\n¡Cualquier consulta escribinos!',
+      'Hola {nombre}, tu pedido está listo para retirar en Silicer!\n\n📦 Producto: {producto}\n🔢 Cantidad: {cantidad}\n💰 Saldo pendiente: {saldo}\n\n¡Cualquier consulta escribinos!',
     metaTemplateName: 'pedido_listo_retirar',
     metaTemplateLang: 'es_AR',
-    paramOrder: ['nombre', 'producto', 'cantidad', 'total'],
+    paramOrder: ['nombre', 'producto', 'cantidad', 'saldo'],
+  },
+  {
+    key: 'msg_pedido_listo_pagado',
+    title: 'Pedido listo para retirar — ya pagado',
+    description: 'Se envía desde Pedidos cuando un pedido pasa a "Listo" y ya está pagado en su totalidad (sin saldo pendiente).',
+    placeholders: ['nombre', 'producto', 'cantidad'],
+    defaultMessage:
+      'Hola {nombre}, tu pedido está listo para retirar en Silicer!\n\n📦 Producto: {producto}\n🔢 Cantidad: {cantidad}\n\n¡Cualquier consulta escribinos!',
+    metaTemplateName: 'pedido_listo_retirar_pagado',
+    metaTemplateLang: 'es_AR',
+    paramOrder: ['nombre', 'producto', 'cantidad'],
   },
   {
     key: 'msg_cumpleanos',
