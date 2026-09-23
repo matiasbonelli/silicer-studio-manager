@@ -41,7 +41,7 @@ export const META_TEMPLATES: Record<string, MetaTemplateDef> = {
     category: 'UTILITY',
     paramOrder: ['nombre', 'producto', 'cantidad', 'total'],
     bodyTemplate:
-      'Hola {nombre}, tu pedido está listo para retirar en Silicer Studio! 🎉\n\n📦 Producto: {producto}\n🔢 Cantidad: {cantidad}\n💰 Total: {total}\n\n¡Cualquier consulta escribinos!',
+      'Hola {nombre}, tu pedido está listo para retirar en Silicer!\n\n📦 Producto: {producto}\n🔢 Cantidad: {cantidad}\n💰 Total: {total}\n\n¡Cualquier consulta escribinos!',
   },
   msg_cumpleanos: {
     metaTemplateName: 'saludo_cumpleanos',
@@ -54,21 +54,23 @@ export const META_TEMPLATES: Record<string, MetaTemplateDef> = {
     bodyTemplate:
       'Muy feliz cumple años {nombre} 🥳, esperemos que disfrutes en tu hermoso día 💫. Te saluda Caro y todo el equipo de Silicer 💖',
   },
-  msg_confirmacion_inscripcion: {
-    metaTemplateName: 'confirmacion_inscripcion',
+  msg_confirmacion_inscripcion_senia: {
+    metaTemplateName: 'confirmacion_inscripcion_senia',
+    metaTemplateLang: 'es_AR',
+    category: 'UTILITY',
+    paramOrder: ['monto', 'dia', 'horario'],
+    bodyTemplate:
+      'Hola de nuevo!\n\nRegistramos tu pago de inscripción por un valor de ${monto} en Silicer 🎉. Podés abonar el saldo restante el día de tu primera clase.\n\n' +
+      'Te recordamos tu turno:\nDía: {dia}\nHorario: {horario}\n\n¡Te esperamos en tu primera clase!',
+  },
+  msg_confirmacion_inscripcion_pago_total: {
+    metaTemplateName: 'confirmacion_inscripcion_pago_total',
     metaTemplateLang: 'es_AR',
     category: 'UTILITY',
     paramOrder: ['dia', 'horario'],
     bodyTemplate:
-      'Hola de nuevo!\nTe escribimos para confirmar tu inscripción:\nDia: {dia}\nHorario: {horario}\nMuchas gracias, te esperamos!',
-  },
-  msg_pago_inscripcion_confirmado: {
-    metaTemplateName: 'pago_inscripcion_confirmado',
-    metaTemplateLang: 'es_AR',
-    category: 'UTILITY',
-    paramOrder: ['nombre'],
-    bodyTemplate:
-      'Hola {nombre}! Te confirmamos que registramos tu pago de inscripción en Silicer 🎉. ¡Te esperamos en tu primera clase!',
+      'Hola de nuevo!\n\nRegistramos el pago total de tu inscripción en Silicer 🎉\n\n' +
+      'Te recordamos tu turno:\nDía: {dia}\nHorario: {horario}\n\n¡Te esperamos en tu primera clase!',
   },
   msg_seguimiento_preinscripcion: {
     metaTemplateName: 'seguimiento_preinscripcion',

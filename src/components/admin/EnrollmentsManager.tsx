@@ -387,6 +387,8 @@ export default function EnrollmentsManager({ onStudentCreated }: EnrollmentsMana
 
       // Confirmación de turno automática: solo al pasar a señado/pagado (no en cada
       // edición posterior mientras ya está en ese estado, para no repetir el mensaje).
+      // Seña y pago total mandan plantillas distintas: la de seña incluye el monto
+      // recibido (queda saldo pendiente), la de pago total no.
       const justConfirmed =
         (paymentForm.status === 'deposit' || paymentForm.status === 'paid') &&
         selectedEnrollment.payment_status !== paymentForm.status;
@@ -395,13 +397,24 @@ export default function EnrollmentsManager({ onStudentCreated }: EnrollmentsMana
         const time = selectedEnrollment.schedule
           ? `${selectedEnrollment.schedule.start_time.slice(0, 5)} a ${selectedEnrollment.schedule.end_time.slice(0, 5)} hs`
           : '[Completar hora]';
-        await sendTemplateMessage(
-          selectedEnrollment.phone,
-          'msg_confirmacion_inscripcion',
-          { dia: day, horario: time },
-          toast,
-          { type: 'enrollment', id: selectedEnrollment.id },
-        );
+        if (paymentForm.status === 'paid') {
+          await sendTemplateMessage(
+            selectedEnrollment.phone,
+            'msg_confirmacion_inscripcion_pago_total',
+            { dia: day, horario: time },
+            toast,
+            { type: 'enrollment', id: selectedEnrollment.id },
+          );
+        } else {
+          const monto = (parseFloat(paymentForm.amount) || 0).toLocaleString('es-AR');
+          await sendTemplateMessage(
+            selectedEnrollment.phone,
+            'msg_confirmacion_inscripcion_senia',
+            { monto, dia: day, horario: time },
+            toast,
+            { type: 'enrollment', id: selectedEnrollment.id },
+          );
+        }
       }
 
       setIsPaymentModalOpen(false);

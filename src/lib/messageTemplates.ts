@@ -5,8 +5,8 @@ export type TemplateKey =
   | 'msg_recordatorio_cuota_mora'
   | 'msg_pedido_listo'
   | 'msg_cumpleanos'
-  | 'msg_confirmacion_inscripcion'
-  | 'msg_pago_inscripcion_confirmado'
+  | 'msg_confirmacion_inscripcion_senia'
+  | 'msg_confirmacion_inscripcion_pago_total'
   | 'msg_seguimiento_preinscripcion'
   | 'msg_preinscripcion_recibida_adultos_1'
   | 'msg_preinscripcion_recibida_adultos_2'
@@ -58,7 +58,7 @@ export const MESSAGE_TEMPLATES: MessageTemplateDef[] = [
     description: 'Se envía desde Pedidos cuando un pedido pasa a estado "Listo".',
     placeholders: ['nombre', 'producto', 'cantidad', 'total'],
     defaultMessage:
-      'Hola {nombre}, tu pedido está listo para retirar en Silicer Studio! 🎉\n\n📦 Producto: {producto}\n🔢 Cantidad: {cantidad}\n💰 Total: {total}\n\n¡Cualquier consulta escribinos!',
+      'Hola {nombre}, tu pedido está listo para retirar en Silicer!\n\n📦 Producto: {producto}\n🔢 Cantidad: {cantidad}\n💰 Total: {total}\n\n¡Cualquier consulta escribinos!',
     metaTemplateName: 'pedido_listo_retirar',
     metaTemplateLang: 'es_AR',
     paramOrder: ['nombre', 'producto', 'cantidad', 'total'],
@@ -75,26 +75,28 @@ export const MESSAGE_TEMPLATES: MessageTemplateDef[] = [
     paramOrder: ['nombre'],
   },
   {
-    key: 'msg_confirmacion_inscripcion',
-    title: 'Confirmación de inscripción',
-    description: 'Se envía desde Inscripciones al confirmar día y horario, a mano o automáticamente al señar/pagar.',
-    placeholders: ['dia', 'horario'],
+    key: 'msg_confirmacion_inscripcion_senia',
+    title: 'Confirmación de inscripción — con seña',
+    description: 'Se envía desde Inscripciones cuando se registra una seña (pago parcial): confirma el monto recibido y el turno.',
+    placeholders: ['monto', 'dia', 'horario'],
     defaultMessage:
-      'Hola de nuevo!\nTe escribimos para confirmar tu inscripción:\nDia: {dia}\nHorario: {horario}\nMuchas gracias, te esperamos!',
-    metaTemplateName: 'confirmacion_inscripcion',
+      'Hola de nuevo!\n\nRegistramos tu pago de inscripción por un valor de ${monto} en Silicer 🎉. Podés abonar el saldo restante el día de tu primera clase.\n\n' +
+      'Te recordamos tu turno:\nDía: {dia}\nHorario: {horario}\n\n¡Te esperamos en tu primera clase!',
+    metaTemplateName: 'confirmacion_inscripcion_senia',
     metaTemplateLang: 'es_AR',
-    paramOrder: ['dia', 'horario'],
+    paramOrder: ['monto', 'dia', 'horario'],
   },
   {
-    key: 'msg_pago_inscripcion_confirmado',
-    title: 'Pago de inscripción confirmado',
-    description: 'Se envía desde Inscripciones al registrar el pago total de una pre-inscripción.',
-    placeholders: ['nombre'],
+    key: 'msg_confirmacion_inscripcion_pago_total',
+    title: 'Confirmación de inscripción — pago total',
+    description: 'Se envía desde Inscripciones cuando se registra el pago total (sin seña previa, o al completar una seña anterior): confirma el pago y el turno.',
+    placeholders: ['dia', 'horario'],
     defaultMessage:
-      'Hola {nombre}! Te confirmamos que registramos tu pago de inscripción en Silicer 🎉. ¡Te esperamos en tu primera clase!',
-    metaTemplateName: 'pago_inscripcion_confirmado',
+      'Hola de nuevo!\n\nRegistramos el pago total de tu inscripción en Silicer 🎉\n\n' +
+      'Te recordamos tu turno:\nDía: {dia}\nHorario: {horario}\n\n¡Te esperamos en tu primera clase!',
+    metaTemplateName: 'confirmacion_inscripcion_pago_total',
     metaTemplateLang: 'es_AR',
-    paramOrder: ['nombre'],
+    paramOrder: ['dia', 'horario'],
   },
   {
     key: 'msg_seguimiento_preinscripcion',

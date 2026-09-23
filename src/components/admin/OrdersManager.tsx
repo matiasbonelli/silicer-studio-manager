@@ -30,8 +30,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Textarea } from '@/components/ui/textarea';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/hooks/use-toast';
-import { sendWhatsApp } from '@/lib/whatsapp';
-import { MESSAGE_TEMPLATES, fetchMessageTemplate, renderTemplate } from '@/lib/messageTemplates';
+import { sendTemplateMessage } from '@/lib/whatsapp';
 import { QRCodeSVG } from 'qrcode.react';
 import {
   Plus,
@@ -51,6 +50,7 @@ import {
   Smartphone,
   QrCode,
   XCircle,
+  Check,
 } from 'lucide-react';
 
 // ---------------------------------------------------------------------------
@@ -83,10 +83,9 @@ export default function OrdersManager() {
   // Recargo global (mismo que aplica Ventas, cargado desde app_settings)
   const [recargo, setRecargo] = useState<number>(1);
 
-  // Mensaje de "pedido listo" (editable en Utilidades > Respuestas automáticas)
-  const [readyMsgTemplate, setReadyMsgTemplate] = useState<string>(
-    MESSAGE_TEMPLATES.find((t) => t.key === 'msg_pedido_listo')!.defaultMessage,
-  );
+  // Aviso de "pedido listo" por WhatsApp (template aprobado en Meta, vía Chatwoot)
+  const [sendingReadyId, setSendingReadyId] = useState<string | null>(null);
+  const [sentReadyIds, setSentReadyIds] = useState<Set<string>>(new Set());
 
   // Modal state
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -176,7 +175,6 @@ export default function OrdersManager() {
     fetchStudents();
     fetchMoldProducts();
     fetchRecargo();
-    fetchMessageTemplate('msg_pedido_listo').then(setReadyMsgTemplate).catch(() => {});
   }, [fetchOrders, fetchStudents, fetchMoldProducts, fetchRecargo]);
 
   // ---------------------------------------------------------------------------
@@ -302,6 +300,25 @@ export default function OrdersManager() {
       toast({ title: `Estado: ${ORDER_STATUS_LABELS[next]}` });
       fetchOrders();
     }
+  };
+
+  const handleSendReady = async (order: MoldOrder) => {
+    if (!order.student?.phone) return;
+    setSendingReadyId(order.id);
+    const ok = await sendTemplateMessage(
+      order.student.phone,
+      'msg_pedido_listo',
+      {
+        nombre: order.student.first_name,
+        producto: order.product_name,
+        cantidad: String(order.quantity ?? 1),
+        total: formatCurrency(orderTotal(order)),
+      },
+      toast,
+      { type: 'mold_order', id: order.id },
+    );
+    setSendingReadyId(null);
+    if (ok) setSentReadyIds((prev) => new Set(prev).add(order.id));
   };
 
   // ---------------------------------------------------------------------------
@@ -670,12 +687,8 @@ export default function OrdersManager() {
                 const qty = order.quantity ?? 1;
                 const total = orderTotal(order);
                 const canWhatsApp = order.status === 'ready' && student?.phone;
-                const whatsAppMsg = renderTemplate(readyMsgTemplate, {
-                  nombre: student?.first_name ?? '',
-                  producto: order.product_name,
-                  cantidad: String(qty),
-                  total: formatCurrency(total),
-                });
+                const isSendingReady = sendingReadyId === order.id;
+                const hasSentReady = sentReadyIds.has(order.id);
 
                 return (
                   <TableRow key={order.id}>
@@ -722,10 +735,17 @@ export default function OrdersManager() {
                           variant="ghost"
                           size="sm"
                           className="h-7 gap-1 text-green-600 hover:text-green-700"
-                          onClick={() => sendWhatsApp(student!.phone!, whatsAppMsg, toast)}
+                          disabled={isSendingReady || hasSentReady}
+                          onClick={() => handleSendReady(order)}
                         >
-                          <MessageCircle className="h-4 w-4" />
-                          <span className="text-xs">Avisar</span>
+                          {isSendingReady ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : hasSentReady ? (
+                            <Check className="h-4 w-4" />
+                          ) : (
+                            <MessageCircle className="h-4 w-4" />
+                          )}
+                          <span className="text-xs">{hasSentReady ? 'Avisado' : 'Avisar'}</span>
                         </Button>
                       ) : (
                         <span className="text-muted-foreground text-xs">-</span>
