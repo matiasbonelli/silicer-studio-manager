@@ -3,7 +3,8 @@ import { supabase } from '@/integrations/supabase/client';
 import { Student, Payment, Schedule, DAY_NAMES, DAY_ORDER, PAYMENT_STATUS_LABELS, PaymentStatus, MONTH_NAMES } from '@/types/database';
 import { isNewStudent, isStudentActiveThisMonth } from '@/lib/utils';
 import { formatDate } from '@/lib/format';
-import { MESSAGE_TEMPLATES, fetchMessageTemplate, renderTemplate } from '@/lib/messageTemplates';
+import { sendTemplateMessage, getChatwootLink } from '@/lib/whatsapp';
+import { buildPaymentReminderPayload } from '@/lib/reminders';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -58,13 +59,26 @@ export default function StudentsList({ onStudentClick, refreshTrigger, onStudent
   const [paymentNotes, setPaymentNotes] = useState<string>('');
   const [uploading, setUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [reminderTemplate, setReminderTemplate] = useState<string>(
-    MESSAGE_TEMPLATES.find((t) => t.key === 'msg_reminder_pago')!.defaultMessage,
-  );
+  const [cuotaAdulto, setCuotaAdulto] = useState<string>('');
+  const [cuotaNino, setCuotaNino] = useState<string>('');
+  const [recargoPercent, setRecargoPercent] = useState<number>(0);
+  const [sendingReminderId, setSendingReminderId] = useState<string | null>(null);
+  const [sentReminderIds, setSentReminderIds] = useState<Set<string>>(new Set());
+  const [openingChatId, setOpeningChatId] = useState<string | null>(null);
   const { toast } = useToast();
 
   useEffect(() => {
-    fetchMessageTemplate('msg_reminder_pago').then(setReminderTemplate).catch(() => {});
+    supabase
+      .from('app_settings')
+      .select('key, value')
+      .in('key', ['cuota_adulto', 'cuota_nino', 'recargo_percent'])
+      .then(({ data }) => {
+        const settings: Record<string, string> = {};
+        for (const s of data ?? []) settings[s.key] = s.value;
+        setCuotaAdulto(settings.cuota_adulto ?? '');
+        setCuotaNino(settings.cuota_nino ?? '');
+        setRecargoPercent(parseFloat(settings.recargo_percent ?? '0') || 0);
+      });
   }, []);
 
   const fetchStudents = async () => {
@@ -190,6 +204,35 @@ export default function StudentsList({ onStudentClick, refreshTrigger, onStudent
     const filePath = path.startsWith('receipts/') ? path.replace('receipts/', '') : path;
     const { data } = await supabase.storage.from('receipts').createSignedUrl(filePath, 3600);
     if (data?.signedUrl) window.open(data.signedUrl, '_blank', 'noopener,noreferrer');
+  };
+
+  const handleSendReminder = async (student: Student) => {
+    if (!student.phone) return;
+    setSendingReminderId(student.id);
+    const monthLabel = formatMonth(selectedMonth !== 'all' ? selectedMonth : getCurrentMonth());
+    const { templateKey, variables } = buildPaymentReminderPayload(student, monthLabel, {
+      cuotaAdulto: parseFloat(cuotaAdulto) || 0,
+      cuotaNino: parseFloat(cuotaNino) || 0,
+      recargoPercent,
+    });
+    const ok = await sendTemplateMessage(student.phone, templateKey, variables, toast, {
+      type: 'student',
+      id: student.id,
+    });
+    setSendingReminderId(null);
+    if (ok) setSentReminderIds((prev) => new Set(prev).add(student.id));
+  };
+
+  const handleOpenChat = async (student: Student) => {
+    if (!student.phone) return;
+    setOpeningChatId(student.id);
+    const url = await getChatwootLink(student.phone, `${student.first_name} ${student.last_name}`);
+    setOpeningChatId(null);
+    if (url) {
+      window.open(url, '_blank', 'noopener,noreferrer');
+    } else {
+      toast({ title: 'No se pudo abrir Chatwoot', variant: 'destructive' });
+    }
   };
 
   const handlePaymentSubmit = async () => {
@@ -579,6 +622,10 @@ export default function StudentsList({ onStudentClick, refreshTrigger, onStudent
               const paymentMonth = payment?.month ?? null;
               const paymentDate = payment?.payment_date ?? null;
               const receiptUrl = payment?.receipt_url ?? null;
+              const isPendingPayment = !payment || payment.status === 'pending';
+              const isSendingReminder = sendingReminderId === student.id;
+              const hasSentReminder = sentReminderIds.has(student.id);
+              const isOpeningChat = openingChatId === student.id;
               return (
                 <TableRow
                   key={student.id}
@@ -617,27 +664,41 @@ export default function StudentsList({ onStudentClick, refreshTrigger, onStudent
                   </TableCell>
                   <TableCell className="text-center">
                     {student.phone ? (
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="text-green-600 hover:text-green-700"
-                        aria-label="Abrir WhatsApp"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          const phone = student.phone?.replace(/\D/g, '');
-                          const isPending = !payment || payment.status === 'pending';
-                          const monthLabel = formatMonth(selectedMonth !== 'all' ? selectedMonth : getCurrentMonth());
-                          const msg = isPending
-                            ? renderTemplate(reminderTemplate, { nombre: student.first_name, mes: monthLabel })
-                            : '';
-                          const url = msg
-                            ? `https://wa.me/54${phone}?text=${encodeURIComponent(msg)}`
-                            : `https://wa.me/54${phone}`;
-                          window.open(url, '_blank', 'noopener,noreferrer');
-                        }}
-                      >
-                        <MessageCircle className="w-4 h-4" />
-                      </Button>
+                      isPendingPayment ? (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="text-green-600 hover:text-green-700"
+                          aria-label="Enviar recordatorio de cuota"
+                          disabled={isSendingReminder || hasSentReminder}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleSendReminder(student);
+                          }}
+                        >
+                          {isSendingReminder ? (
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                          ) : hasSentReminder ? (
+                            <Check className="w-4 h-4" />
+                          ) : (
+                            <MessageCircle className="w-4 h-4" />
+                          )}
+                        </Button>
+                      ) : (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="text-green-600 hover:text-green-700"
+                          aria-label="Abrir chat en Chatwoot"
+                          disabled={isOpeningChat}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleOpenChat(student);
+                          }}
+                        >
+                          {isOpeningChat ? <Loader2 className="w-4 h-4 animate-spin" /> : <MessageCircle className="w-4 h-4" />}
+                        </Button>
+                      )
                     ) : (
                       <span className="text-muted-foreground">-</span>
                     )}

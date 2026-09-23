@@ -12,6 +12,7 @@ import { formatCurrency } from '@/lib/format';
 import { isStudentActiveThisMonth } from '@/lib/utils';
 import { sendTemplateMessage, sendTemplateMessageBulk, whatsAppChatUrl, type BulkTemplateTarget } from '@/lib/whatsapp';
 import type { TemplateKey } from '@/lib/messageTemplates';
+import { buildPaymentReminderPayload } from '@/lib/reminders';
 import { useToast } from '@/hooks/use-toast';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -478,39 +479,12 @@ export default function Dashboard({ refreshTrigger }: DashboardProps) {
 
   const monthLabel = formatMonth(currentMonth);
 
-  // Mora: a partir del día 11 la cuota sube por tramos. El porcentaje es el mismo para
-  // adultos y niños, pero el monto en pesos depende de la cuota base de cada categoría.
-  const getMoraPercent = (day: number): number | null => {
-    if (day <= 10) return null;
-    if (day <= 15) return 10;
-    if (day <= 20) return 20;
-    return 30;
-  };
-
-  const buildReminderPayload = (student: Student) => {
-    const percent = getMoraPercent(new Date().getDate());
-    const rawPrice = (student.categoria === 'niño' ? parseFloat(cuotaNino) : parseFloat(cuotaAdulto)) || 0;
-    // cuota_adulto/cuota_nino son el precio SIN el recargo por método de pago — el precio
-    // final real (el que ve el alumno) le suma ese recargo.
-    const basePrice = Math.round(rawPrice * (1 + recargoPercent / 100));
-
-    if (percent === null) {
-      return {
-        templateKey: 'msg_reminder_pago' as const,
-        variables: { nombre: student.first_name, mes: monthLabel, monto: basePrice.toLocaleString('es-AR') },
-      };
-    }
-    const monto = Math.round(basePrice * (1 + percent / 100));
-    return {
-      templateKey: 'msg_recordatorio_cuota_mora' as const,
-      variables: {
-        nombre: student.first_name,
-        mes: monthLabel,
-        monto: monto.toLocaleString('es-AR'),
-        porcentaje: String(percent),
-      },
-    };
-  };
+  const buildReminderPayload = (student: Student) =>
+    buildPaymentReminderPayload(student, monthLabel, {
+      cuotaAdulto: parseFloat(cuotaAdulto) || 0,
+      cuotaNino: parseFloat(cuotaNino) || 0,
+      recargoPercent,
+    });
 
   const handleSendReminder = async (student: Student) => {
     setSendingReminderId(student.id);
