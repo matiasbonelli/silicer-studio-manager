@@ -182,7 +182,7 @@ export const PRODUCT_CATEGORY_LABELS: Record<ProductCategory, string> = {
 };
 
 export type OrderStatus = 'pending' | 'ready' | 'delivered';
-export type OrderPaymentStatus = 'pending' | 'paid';
+export type OrderPaymentStatus = 'pending' | 'partial' | 'paid';
 
 export interface MoldOrder {
   id: string;
@@ -200,6 +200,8 @@ export interface MoldOrder {
   created_at: string;
   updated_at: string;
   student?: Student;
+  /** Solo paid_amount de la venta vinculada — para calcular el saldo pendiente. */
+  sale?: { paid_amount: number | null } | null;
 }
 
 export const ORDER_STATUS_LABELS: Record<OrderStatus, string> = {
@@ -210,6 +212,7 @@ export const ORDER_STATUS_LABELS: Record<OrderStatus, string> = {
 
 export const ORDER_PAYMENT_STATUS_LABELS: Record<OrderPaymentStatus, string> = {
   pending: 'No pagado',
+  partial: 'Parcial',
   paid: 'Pagado',
 };
 

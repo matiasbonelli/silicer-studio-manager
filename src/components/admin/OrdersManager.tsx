@@ -132,7 +132,7 @@ export default function OrdersManager() {
     setLoading(true);
     const { data, error } = await supabase
       .from('mold_orders')
-      .select('*, student:students(id, first_name, last_name, phone)')
+      .select('*, student:students(id, first_name, last_name, phone), sale:sales(paid_amount)')
       .order('created_at', { ascending: false });
 
     if (error) {
@@ -305,18 +305,26 @@ export default function OrdersManager() {
   const handleSendReady = async (order: MoldOrder) => {
     if (!order.student?.phone) return;
     setSendingReadyId(order.id);
-    const ok = await sendTemplateMessage(
-      order.student.phone,
-      'msg_pedido_listo',
-      {
-        nombre: order.student.first_name,
-        producto: order.product_name,
-        cantidad: String(order.quantity ?? 1),
-        total: formatCurrency(orderTotal(order)),
-      },
-      toast,
-      { type: 'mold_order', id: order.id },
-    );
+    const baseVariables = {
+      nombre: order.student.first_name,
+      producto: order.product_name,
+      cantidad: String(order.quantity ?? 1),
+    };
+    const ok = order.payment_status === 'paid'
+      ? await sendTemplateMessage(
+          order.student.phone,
+          'msg_pedido_listo_pagado',
+          baseVariables,
+          toast,
+          { type: 'mold_order', id: order.id },
+        )
+      : await sendTemplateMessage(
+          order.student.phone,
+          'msg_pedido_listo',
+          { ...baseVariables, saldo: formatCurrency(remainingBalance(order)) },
+          toast,
+          { type: 'mold_order', id: order.id },
+        );
     setSendingReadyId(null);
     if (ok) setSentReadyIds((prev) => new Set(prev).add(order.id));
   };
@@ -403,6 +411,12 @@ export default function OrdersManager() {
   const applyRecargo = (subtotal: number) => subtotal + Math.round(subtotal * recargo / 100);
 
   const orderTotal = (order: MoldOrder) => applyRecargo(order.product_price * (order.quantity ?? 1));
+
+  const remainingBalance = (order: MoldOrder) => {
+    if (order.payment_status === 'paid') return 0;
+    const paid = order.sale?.paid_amount ?? 0;
+    return Math.max(0, orderTotal(order) - paid);
+  };
 
   const startMpWaitingFlow = (order: MoldOrder, saleId: string) => {
     setPmWaiting(true);
@@ -550,6 +564,9 @@ export default function OrdersManager() {
     if (order.payment_status === 'pending') {
       return <Badge variant="outline">No pagado</Badge>;
     }
+    if (order.payment_status === 'partial') {
+      return <Badge className="bg-yellow-500 hover:bg-yellow-600 text-white">Parcial</Badge>;
+    }
     if (!order.sale_id) {
       return (
         <Badge className="bg-green-500/70 hover:bg-green-600/70" title="Pagado antes de vincularse con Ventas">
@@ -606,6 +623,7 @@ export default function OrdersManager() {
             <SelectContent>
               <SelectItem value="all">Todos los pagos</SelectItem>
               <SelectItem value="pending">No pagado</SelectItem>
+              <SelectItem value="partial">Parcial</SelectItem>
               <SelectItem value="paid">Pagado</SelectItem>
             </SelectContent>
           </Select>

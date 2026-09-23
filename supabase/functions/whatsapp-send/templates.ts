@@ -39,9 +39,17 @@ export const META_TEMPLATES: Record<string, MetaTemplateDef> = {
     metaTemplateName: 'pedido_listo_retirar',
     metaTemplateLang: 'es_AR',
     category: 'UTILITY',
-    paramOrder: ['nombre', 'producto', 'cantidad', 'total'],
+    paramOrder: ['nombre', 'producto', 'cantidad', 'saldo'],
     bodyTemplate:
-      'Hola {nombre}, tu pedido está listo para retirar en Silicer!\n\n📦 Producto: {producto}\n🔢 Cantidad: {cantidad}\n💰 Total: {total}\n\n¡Cualquier consulta escribinos!',
+      'Hola {nombre}, tu pedido está listo para retirar en Silicer!\n\n📦 Producto: {producto}\n🔢 Cantidad: {cantidad}\n💰 Saldo pendiente: {saldo}\n\n¡Cualquier consulta escribinos!',
+  },
+  msg_pedido_listo_pagado: {
+    metaTemplateName: 'pedido_listo_retirar_pagado',
+    metaTemplateLang: 'es_AR',
+    category: 'UTILITY',
+    paramOrder: ['nombre', 'producto', 'cantidad'],
+    bodyTemplate:
+      'Hola {nombre}, tu pedido está listo para retirar en Silicer!\n\n📦 Producto: {producto}\n🔢 Cantidad: {cantidad}\n\n¡Cualquier consulta escribinos!',
   },
   msg_cumpleanos: {
     metaTemplateName: 'saludo_cumpleanos',
