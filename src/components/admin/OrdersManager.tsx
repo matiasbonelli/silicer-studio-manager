@@ -112,6 +112,10 @@ export default function OrdersManager() {
   const [pmMethod, setPmMethod] = useState<PaymentMethod>('cash');
   const [pmCreating, setPmCreating] = useState(false);
   const [pmSaleId, setPmSaleId] = useState<string | null>(null);
+  // Venta anterior (seña) que este cobro completa — cuando el pedido ya estaba "Parcial".
+  // Se usa para "cerrarla" una vez que el nuevo cobro se confirma, en vez de dejarla
+  // huérfana contando de más en los reportes de Ventas.
+  const [pmPreviousSaleId, setPmPreviousSaleId] = useState<string | null>(null);
   const [pmManualStep, setPmManualStep] = useState(false);
   const [pmPaymentType, setPmPaymentType] = useState<'total' | 'partial'>('total');
   const [pmPartialAmount, setPmPartialAmount] = useState('');
@@ -381,6 +385,7 @@ export default function OrdersManager() {
     setPmMethod('cash');
     setPmCreating(false);
     setPmSaleId(null);
+    setPmPreviousSaleId(null);
     setPmManualStep(false);
     setPmPaymentType('total');
     setPmPartialAmount('');
@@ -398,10 +403,14 @@ export default function OrdersManager() {
     cleanupPaymentFlow();
     if (pmSaleId && paymentOrder) {
       await deletePendingSale(pmSaleId);
-      await supabase.from('mold_orders').update({ sale_id: null }).eq('id', paymentOrder.id);
+      // Si esto era el cobro del saldo de un pedido ya señado, devolver el pedido a
+      // apuntar a la venta de la seña (no dejarlo sin sale_id, o pierde el vínculo
+      // con el pago que sí quedó registrado).
+      await supabase.from('mold_orders').update({ sale_id: pmPreviousSaleId }).eq('id', paymentOrder.id);
     }
     setPmWaiting(false);
     setPmSaleId(null);
+    setPmPreviousSaleId(null);
     setPmManualStep(false);
     setPmError(null);
     setPmQrData(null);
@@ -418,13 +427,34 @@ export default function OrdersManager() {
     return Math.max(0, orderTotal(order) - paid);
   };
 
-  const startMpWaitingFlow = (order: MoldOrder, saleId: string) => {
+  /** Monto a cobrar EN ESTE cobro: si el pedido ya tenía una seña (parcial), es el
+   * saldo restante — no el total del pedido de nuevo (eso era lo que duplicaba el
+   * monto en Ventas al completar un pedido señado). */
+  const chargeAmountFor = (order: MoldOrder) =>
+    order.payment_status === 'partial' ? remainingBalance(order) : orderTotal(order);
+
+  /** Cierra la venta de la seña una vez que el cobro del saldo restante se confirmó:
+   * baja su total_amount nominal a lo que realmente juntó (ya no "falta" nada de esa
+   * venta) para que no siga contando como ingreso pendiente en Resumen. */
+  const closeOutPreviousSale = async (previousSaleId: string | null) => {
+    if (!previousSaleId) return;
+    const { data } = await supabase.from('sales').select('paid_amount').eq('id', previousSaleId).maybeSingle();
+    if (data) {
+      await supabase
+        .from('sales')
+        .update({ total_amount: data.paid_amount ?? 0, payment_status: 'paid' })
+        .eq('id', previousSaleId);
+    }
+  };
+
+  const startMpWaitingFlow = (order: MoldOrder, saleId: string, amount: number, previousSaleId: string | null) => {
     setPmWaiting(true);
     setPmError(null);
 
     const unsubscribe = subscribeToSalePayment(saleId, async () => {
       cleanupPaymentFlow();
-      toast({ title: '¡Pago confirmado!', description: `Total cobrado: ${formatCurrency(orderTotal(order))}` });
+      await closeOutPreviousSale(previousSaleId);
+      toast({ title: '¡Pago confirmado!', description: `Cobrado: ${formatCurrency(amount)}` });
       closePaymentModal();
       fetchOrders();
     });
@@ -439,7 +469,12 @@ export default function OrdersManager() {
     if (!paymentOrder || !paymentOrder.inventory_id) return;
     setPmCreating(true);
 
-    const total = orderTotal(paymentOrder);
+    // Si el pedido ya tenía una seña (parcial), este cobro es solo por el saldo
+    // restante — no por el total del pedido de nuevo (eso duplicaba el monto en
+    // Ventas al completar un pedido señado).
+    const isCompletingPartial = paymentOrder.payment_status === 'partial';
+    const previousSaleId = isCompletingPartial ? paymentOrder.sale_id : null;
+    const total = chargeAmountFor(paymentOrder);
     const isPointMethod = pmMethod === 'debit_card' || pmMethod === 'credit_card';
     const isQrMethod = pmMethod === 'mercadopago';
     const isTransferMethod = pmMethod === 'transfer';
@@ -466,9 +501,10 @@ export default function OrdersManager() {
 
     await supabase.from('mold_orders').update({ sale_id: sale.id }).eq('id', paymentOrder.id);
     setPmSaleId(sale.id);
+    setPmPreviousSaleId(previousSaleId);
 
     if (isPointMethod) {
-      startMpWaitingFlow(paymentOrder, sale.id);
+      startMpWaitingFlow(paymentOrder, sale.id, total, previousSaleId);
       try {
         const { error: fnError } = await invokeMpPointCharge(sale.id, total);
         if (fnError) {
@@ -481,7 +517,7 @@ export default function OrdersManager() {
         checkMpPointStatus(sale.id);
       }, 4000);
     } else if (isQrMethod) {
-      startMpWaitingFlow(paymentOrder, sale.id);
+      startMpWaitingFlow(paymentOrder, sale.id, total, previousSaleId);
       let orderId: string | null = null;
       try {
         const { data: fnData, error: fnError } = await invokeMpQrCharge(sale.id, total);
@@ -499,7 +535,7 @@ export default function OrdersManager() {
         checkMpQrStatus(sale.id, orderId as string);
       }, 4000);
     } else if (isTransferMethod) {
-      startMpWaitingFlow(paymentOrder, sale.id);
+      startMpWaitingFlow(paymentOrder, sale.id, total, previousSaleId);
       pmPollRef.current = setInterval(() => {
         checkMpTransferStatus(sale.id);
       }, 4000);
@@ -511,11 +547,11 @@ export default function OrdersManager() {
 
   const handleConfirmManualPayment = async () => {
     if (!pmSaleId || !paymentOrder) return;
-    const total = orderTotal(paymentOrder);
+    const total = chargeAmountFor(paymentOrder);
     const paidAmount = pmPaymentType === 'total' ? total : parseFloat(pmPartialAmount) || 0;
 
     if (pmPaymentType === 'partial' && (paidAmount <= 0 || paidAmount >= total)) {
-      toast({ title: 'Monto inválido', description: 'El pago parcial debe ser mayor a 0 y menor al total', variant: 'destructive' });
+      toast({ title: 'Monto inválido', description: 'El pago parcial debe ser mayor a 0 y menor al saldo', variant: 'destructive' });
       return;
     }
 
@@ -523,6 +559,10 @@ export default function OrdersManager() {
     if (error) {
       toast({ title: 'Error', description: 'No se pudo registrar el pago', variant: 'destructive' });
       return;
+    }
+
+    if (pmPaymentType === 'total') {
+      await closeOutPreviousSale(pmPreviousSaleId);
     }
 
     toast({ title: 'Pago registrado' });
@@ -1012,7 +1052,12 @@ export default function OrdersManager() {
             <div className="space-y-4">
               <div className="p-3 bg-muted rounded-lg text-center">
                 <p className="text-sm text-muted-foreground">{paymentOrder.product_name}</p>
-                <p className="text-2xl font-bold text-primary">{formatCurrency(orderTotal(paymentOrder))}</p>
+                <p className="text-2xl font-bold text-primary">{formatCurrency(chargeAmountFor(paymentOrder))}</p>
+                {paymentOrder.payment_status === 'partial' && (
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Saldo a cobrar — total del pedido {formatCurrency(orderTotal(paymentOrder))}, ya abonado {formatCurrency(orderTotal(paymentOrder) - remainingBalance(paymentOrder))}
+                  </p>
+                )}
                 {recargo > 0 && (
                   <p className="text-xs text-muted-foreground mt-1">
                     Incluye recargo del {recargo}% ({formatCurrency(orderTotal(paymentOrder) - paymentOrder.product_price * (paymentOrder.quantity ?? 1))})
@@ -1097,7 +1142,7 @@ export default function OrdersManager() {
 
                   {pmPaymentType === 'total' ? (
                     <p className="text-sm text-muted-foreground text-center">
-                      Se registrará el pago completo de {formatCurrency(orderTotal(paymentOrder))}
+                      Se registrará el pago completo de {formatCurrency(chargeAmountFor(paymentOrder))}
                     </p>
                   ) : (
                     <div className="space-y-2">
@@ -1110,7 +1155,7 @@ export default function OrdersManager() {
                         onChange={(e) => setPmPartialAmount(e.target.value)}
                       />
                       <p className="text-xs text-muted-foreground">
-                        Total del pedido: {formatCurrency(orderTotal(paymentOrder))}
+                        {paymentOrder.payment_status === 'partial' ? 'Saldo a cobrar' : 'Total del pedido'}: {formatCurrency(chargeAmountFor(paymentOrder))}
                       </p>
                     </div>
                   )}
@@ -1142,7 +1187,7 @@ export default function OrdersManager() {
           <div className="space-y-5 py-2">
             <div className="text-center">
               <p className="text-4xl font-bold text-primary">
-                {formatCurrency(paymentOrder ? orderTotal(paymentOrder) : 0)}
+                {formatCurrency(paymentOrder ? chargeAmountFor(paymentOrder) : 0)}
               </p>
               {pmMethod === 'mercadopago' && (
                 <p className="text-sm text-muted-foreground mt-1">
