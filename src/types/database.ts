@@ -110,6 +110,7 @@ export interface SaleItem {
   quantity: number;
   unit_price: number;
   is_customer_piece: boolean;
+  customer_piece_discount: number; // descuento por unidad (precio del molde)
   cuota_student_id?: string | null;
   cuota_month?: string | null; // formato YYYY-MM, solo para items de categoría 'cuota'
   created_at: string;

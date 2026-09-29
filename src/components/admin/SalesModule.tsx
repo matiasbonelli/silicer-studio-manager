@@ -311,17 +311,27 @@ export default function SalesModule() {
       ? item.customerPiecePrice
       : item.inventory.price;
 
-  // Recalcula el precio "pieza del cliente" para un item de inventario.
+  // Descuento por unidad de "Pieza o Molde del cliente" (0 si no aplica)
+  const getCustomerPieceDiscount = (item: CartItem): number =>
+    item.isCustomerPiece && item.customerPiecePrice !== null
+      ? item.inventory.price - item.customerPiecePrice
+      : 0;
+
+  // Precio "Pieza o Molde del cliente" para un item de inventario: el precio
+  // del producto menos el de su Molde. Si el Molde no está en inventario, cae
+  // a la fórmula de la calculadora (mismo resultado, sin redondeo).
   // Retorna null si no puede resolverse (falta producto de pricing o config).
   const computeCustomerPiecePrice = (inv: InventoryItem): number | null => {
-    if (!pricingConfig) return null;
     if (!CUSTOMER_PIECE_CATEGORIES.has(inv.category ?? '')) return null;
     const productId = extractPricingProductId(inv.description);
     if (!productId) return null;
+    const molde = inventory.find(i => i.description === `molde-${productId}`);
+    if (molde) return Math.max(inv.price - molde.price, 0);
+    if (!pricingConfig) return null;
     const product = pricingProducts.get(productId);
     if (!product) return null;
     const targetStage = inv.category === 'final' ? 'final' : 'bizcochado';
-    return calculateCustomerPiecePrice({ product, config: pricingConfig, targetStage });
+    return Math.round(calculateCustomerPiecePrice({ product, config: pricingConfig, targetStage }));
   };
 
   const toggleCustomerPiece = (itemId: string) => {
@@ -488,9 +498,23 @@ export default function SalesModule() {
     return true;
   };
 
-  const subtotal = cart.reduce((sum, c) => sum + getEffectivePrice(c) * c.quantity, 0);
+  // Subtotal a precio de lista; el descuento "Pieza o Molde del cliente" se
+  // muestra aparte y el recargo se aplica sobre el neto.
+  const grossSubtotal = cart.reduce((sum, c) => sum + c.inventory.price * c.quantity, 0);
+  const customerPieceDiscountTotal = cart.reduce((sum, c) => sum + getCustomerPieceDiscount(c) * c.quantity, 0);
+  const subtotal = grossSubtotal - customerPieceDiscountTotal;
   const recargoAmount = Math.round(subtotal * recargo / 100);
   const total = subtotal + recargoAmount;
+
+  const toSaleItemInput = (c: CartItem) => ({
+    inventory_id: c.inventory.id,
+    quantity: c.quantity,
+    unit_price: getEffectivePrice(c),
+    is_customer_piece: c.isCustomerPiece,
+    customer_piece_discount: getCustomerPieceDiscount(c),
+    cuota_student_id: c.cuotaStudentId ?? null,
+    cuota_month: c.cuotaMonth ?? null,
+  });
 
   const handleSale = async () => {
     if (cart.length === 0) {
@@ -510,14 +534,7 @@ export default function SalesModule() {
       studentId: selectedStudent || null,
       totalAmount: total,
       paymentMethod,
-      items: cart.map(c => ({
-        inventory_id: c.inventory.id,
-        quantity: c.quantity,
-        unit_price: getEffectivePrice(c),
-        is_customer_piece: c.isCustomerPiece,
-        cuota_student_id: c.cuotaStudentId ?? null,
-        cuota_month: c.cuotaMonth ?? null,
-      })),
+      items: cart.map(toSaleItemInput),
     });
 
     if (!saleData) {
@@ -827,14 +844,7 @@ export default function SalesModule() {
       studentId: selectedStudent || null,
       totalAmount: total,
       paymentMethod: 'mercadopago',
-      items: cart.map(c => ({
-        inventory_id: c.inventory.id,
-        quantity: c.quantity,
-        unit_price: getEffectivePrice(c),
-        is_customer_piece: c.isCustomerPiece,
-        cuota_student_id: c.cuotaStudentId ?? null,
-        cuota_month: c.cuotaMonth ?? null,
-      })),
+      items: cart.map(toSaleItemInput),
     });
 
     if (!saleData) {
@@ -931,14 +941,7 @@ export default function SalesModule() {
       studentId: selectedStudent || null,
       totalAmount: total,
       paymentMethod: 'mercadopago',
-      items: cart.map(c => ({
-        inventory_id: c.inventory.id,
-        quantity: c.quantity,
-        unit_price: getEffectivePrice(c),
-        is_customer_piece: c.isCustomerPiece,
-        cuota_student_id: c.cuotaStudentId ?? null,
-        cuota_month: c.cuotaMonth ?? null,
-      })),
+      items: cart.map(toSaleItemInput),
     });
 
     if (!saleData) {
@@ -1043,14 +1046,7 @@ export default function SalesModule() {
       studentId: selectedStudent || null,
       totalAmount: total,
       paymentMethod: 'transfer',
-      items: cart.map(c => ({
-        inventory_id: c.inventory.id,
-        quantity: c.quantity,
-        unit_price: getEffectivePrice(c),
-        is_customer_piece: c.isCustomerPiece,
-        cuota_student_id: c.cuotaStudentId ?? null,
-        cuota_month: c.cuotaMonth ?? null,
-      })),
+      items: cart.map(toSaleItemInput),
     });
 
     if (!saleData) {
@@ -1300,8 +1296,11 @@ export default function SalesModule() {
                     const isCuota = !!item.cartItemId;
                     const cartKey = getCartKey(item);
                     const supportsCustomerPiece = !isCuota && CUSTOMER_PIECE_CATEGORIES.has(item.inventory.category ?? '');
-                    const customerPiecePreview = supportsCustomerPiece && !item.isCustomerPiece
+                    const customerPiecePrice = supportsCustomerPiece
                       ? (item.customerPiecePrice ?? computeCustomerPiecePrice(item.inventory))
+                      : null;
+                    const customerPieceDiscount = customerPiecePrice !== null
+                      ? (item.inventory.price - customerPiecePrice) * item.quantity
                       : null;
                     const effectivePrice = getEffectivePrice(item);
                     return (
@@ -1320,14 +1319,8 @@ export default function SalesModule() {
                                   {' · '}
                                   {MONTH_NAMES[item.cuotaMonth!.split('-')[1]]} {item.cuotaMonth!.split('-')[0]}
                                 </>
-                              ) : item.isCustomerPiece ? (
-                                <>
-                                  <span className="line-through mr-1 opacity-70">{formatCurrency(item.inventory.price)}</span>
-                                  <span className="font-medium text-foreground">{formatCurrency(effectivePrice)}</span>
-                                  {' '}x {item.quantity}
-                                </>
                               ) : (
-                                <>{formatCurrency(effectivePrice)} x {item.quantity}</>
+                                <>{formatCurrency(item.inventory.price)} x {item.quantity}</>
                               )}
                             </p>
                           </div>
@@ -1350,19 +1343,19 @@ export default function SalesModule() {
                         </div>
                         {supportsCustomerPiece && (
                           <label
-                            className={`flex items-center gap-2 text-xs ${customerPiecePreview === null && !item.isCustomerPiece ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
-                            title={customerPiecePreview === null && !item.isCustomerPiece ? 'Falta información de pricing para este producto' : ''}
+                            className={`flex items-center gap-2 text-xs ${customerPiecePrice === null && !item.isCustomerPiece ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
+                            title={customerPiecePrice === null && !item.isCustomerPiece ? 'Falta información de pricing para este producto' : 'Descuenta el precio del Molde'}
                           >
                             <Checkbox
                               checked={item.isCustomerPiece}
-                              disabled={customerPiecePreview === null && !item.isCustomerPiece}
+                              disabled={customerPiecePrice === null && !item.isCustomerPiece}
                               onCheckedChange={() => toggleCustomerPiece(item.inventory.id)}
                             />
                             <UserSquare className="w-3 h-3" />
-                            <span>Pieza del cliente</span>
-                            {customerPiecePreview !== null && !item.isCustomerPiece && (
-                              <span className="ml-auto text-muted-foreground">
-                                → {formatCurrency(customerPiecePreview)}
+                            <span>Pieza o Molde del cliente</span>
+                            {customerPieceDiscount !== null && (
+                              <span className={`ml-auto ${item.isCustomerPiece ? 'font-medium text-green-600' : 'text-muted-foreground'}`}>
+                                −{formatCurrency(customerPieceDiscount)}
                               </span>
                             )}
                           </label>
@@ -1462,8 +1455,14 @@ export default function SalesModule() {
                 <div className="rounded-md bg-muted/50 p-3 space-y-1.5 text-sm">
                   <div className="flex justify-between text-muted-foreground">
                     <span>Subtotal</span>
-                    <span>{formatCurrency(subtotal)}</span>
+                    <span>{formatCurrency(grossSubtotal)}</span>
                   </div>
+                  {customerPieceDiscountTotal > 0 && (
+                    <div className="flex justify-between text-green-600">
+                      <span>Descuento Pieza o Molde del cliente</span>
+                      <span>−{formatCurrency(customerPieceDiscountTotal)}</span>
+                    </div>
+                  )}
                   <div className="flex justify-between text-muted-foreground">
                     <span>Recargo ({recargo}%)</span>
                     <span>{formatCurrency(recargoAmount)}</span>
@@ -1606,8 +1605,9 @@ export default function SalesModule() {
                           <div key={item.id} className="text-sm font-medium flex items-center gap-1">
                             <span>{item.inventory?.name || 'Producto eliminado'}</span>
                             {item.is_customer_piece && (
-                              <Badge variant="secondary" className="text-[10px] px-1 py-0 h-4">
-                                pieza cliente
+                              <Badge variant="secondary" className="text-[10px] px-1 py-0 h-4" title="Descuento Pieza o Molde del cliente">
+                                pieza/molde cliente
+                                {item.customer_piece_discount > 0 && ` −${formatCurrency(item.customer_piece_discount * item.quantity)}`}
                               </Badge>
                             )}
                           </div>
@@ -2356,6 +2356,12 @@ export default function SalesModule() {
                     <td className="text-right py-2">{formatCurrency(item.inventory.price * item.quantity)}</td>
                   </tr>
                 ))}
+                {receiptSaleData?.items.filter(item => getCustomerPieceDiscount(item) > 0).map(item => (
+                  <tr key={`desc-${item.inventory.id}`} className="border-b border-muted text-green-700">
+                    <td className="text-left py-2" colSpan={2}>Descuento Pieza o Molde del cliente ({item.inventory.name})</td>
+                    <td className="text-right py-2">−{formatCurrency(getCustomerPieceDiscount(item) * item.quantity)}</td>
+                  </tr>
+                ))}
               </tbody>
             </table>
 
@@ -2439,7 +2445,13 @@ export default function SalesModule() {
                     <tr key={item.id} className="border-b border-muted">
                       <td className="text-left py-2">{item.inventory?.name || 'Producto eliminado'}</td>
                       <td className="text-center py-2">{item.quantity}</td>
-                      <td className="text-right py-2">{formatCurrency(item.unit_price * item.quantity)}</td>
+                      <td className="text-right py-2">{formatCurrency((item.unit_price + item.customer_piece_discount) * item.quantity)}</td>
+                    </tr>
+                  ))}
+                  {historyReceiptSale.sale_items?.filter(item => item.customer_piece_discount > 0).map(item => (
+                    <tr key={`desc-${item.id}`} className="border-b border-muted text-green-700">
+                      <td className="text-left py-2" colSpan={2}>Descuento Pieza o Molde del cliente ({item.inventory?.name || 'Producto eliminado'})</td>
+                      <td className="text-right py-2">−{formatCurrency(item.customer_piece_discount * item.quantity)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -2477,7 +2489,13 @@ export default function SalesModule() {
                       <tr>
                         <td style="text-align: left; padding: 8px 4px; border-bottom: 1px solid #eee;">${escapeHtml(item.inventory?.name || 'Producto eliminado')}</td>
                         <td style="text-align: center; padding: 8px 4px; border-bottom: 1px solid #eee;">${item.quantity}</td>
-                        <td style="text-align: right; padding: 8px 4px; border-bottom: 1px solid #eee;">${formatCurrency(item.unit_price * item.quantity)}</td>
+                        <td style="text-align: right; padding: 8px 4px; border-bottom: 1px solid #eee;">${formatCurrency((item.unit_price + item.customer_piece_discount) * item.quantity)}</td>
+                      </tr>
+                    `).join('') || '';
+                    const discountsHtml = historyReceiptSale.sale_items?.filter(item => item.customer_piece_discount > 0).map(item => `
+                      <tr style="color: #15803d;">
+                        <td colspan="2" style="text-align: left; padding: 8px 4px; border-bottom: 1px solid #eee;">Descuento Pieza o Molde del cliente (${escapeHtml(item.inventory?.name || 'Producto eliminado')})</td>
+                        <td style="text-align: right; padding: 8px 4px; border-bottom: 1px solid #eee;">−${formatCurrency(item.customer_piece_discount * item.quantity)}</td>
                       </tr>
                     `).join('') || '';
 
@@ -2513,6 +2531,7 @@ export default function SalesModule() {
                             </thead>
                             <tbody>
                               ${itemsHtml}
+                              ${discountsHtml}
                             </tbody>
                           </table>
                           <p class="total">Total: ${formatCurrency(historyReceiptSale.total_amount)}</p>
