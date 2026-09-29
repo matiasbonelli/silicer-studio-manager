@@ -6,6 +6,7 @@ export interface SaleItemInput {
   quantity: number;
   unit_price: number;
   is_customer_piece?: boolean;
+  customer_piece_discount?: number;
   cuota_student_id?: string | null;
   cuota_month?: string | null;
 }
@@ -46,6 +47,7 @@ export async function createPendingSale(
         quantity: item.quantity,
         unit_price: item.unit_price,
         is_customer_piece: item.is_customer_piece ?? false,
+        customer_piece_discount: item.customer_piece_discount ?? 0,
         cuota_student_id: item.cuota_student_id ?? null,
         cuota_month: item.cuota_month ?? null,
       }))
