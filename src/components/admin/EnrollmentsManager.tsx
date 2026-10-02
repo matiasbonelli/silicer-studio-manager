@@ -452,6 +452,7 @@ export default function EnrollmentsManager({ onStudentCreated }: EnrollmentsMana
         phone: selectedEnrollment.phone,
         birthday: selectedEnrollment.birthday,
         schedule_id: convertScheduleId,
+        categoria: convertSchedule?.day_of_week === 'saturday' ? 'niño' : 'adulto',
         payment_status: studentPaymentStatus,
         notes: selectedEnrollment.message,
         start_date: convertSchedule ? getNextOccurrence(convertSchedule.day_of_week) : null,
