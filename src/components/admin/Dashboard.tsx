@@ -168,30 +168,30 @@ export default function Dashboard({ refreshTrigger }: DashboardProps) {
   const CUOTA_KEY_NINO   = 'cuota_nino';
   const RECARGO_KEY = 'recargo_percent';
   const [cuotaAdulto, setCuotaAdulto] = useState<string>('');
+  // Los niños ya pagan por clase y cuota_nino no se edita más, pero se sigue leyendo
+  // para valuar los pagos mensuales históricos de niños que quedaron sin monto.
   const [cuotaNino, setCuotaNino] = useState<string>('');
   // cuota_adulto/cuota_nino guardan el precio SIN el recargo por método de pago (se cargan
   // así a propósito para que el total en Ventas cierre redondo) — para los recordatorios de
   // WhatsApp necesitamos el precio final real, así que le sumamos este recargo acá.
   const [recargoPercent, setRecargoPercent] = useState<number>(0);
-  const [editingCuota, setEditingCuota] = useState<'adulto' | 'niño' | null>(null);
+  const [editingCuota, setEditingCuota] = useState<'adulto' | null>(null);
 
-  const handleSaveCuota = async (cat: 'adulto' | 'niño') => {
-    const raw = cat === 'adulto' ? cuotaAdulto : cuotaNino;
-    const key = cat === 'adulto' ? CUOTA_KEY_ADULTO : CUOTA_KEY_NINO;
-    const val = parseFloat(raw);
-    if (!raw || isNaN(val) || val <= 0) {
+  const handleSaveCuota = async () => {
+    const val = parseFloat(cuotaAdulto);
+    if (!cuotaAdulto || isNaN(val) || val <= 0) {
       toast({ title: 'Ingresá un precio válido', variant: 'destructive' });
       return;
     }
     const { error } = await supabase
       .from('app_settings')
-      .upsert({ key, value: val.toString(), updated_at: new Date().toISOString() });
+      .upsert({ key: CUOTA_KEY_ADULTO, value: val.toString(), updated_at: new Date().toISOString() });
     if (error) {
       toast({ title: 'Error al guardar la cuota', variant: 'destructive' });
       return;
     }
     setEditingCuota(null);
-    toast({ title: `Cuota ${cat} actualizada a ${formatCurrency(val)}` });
+    toast({ title: `Cuota adulto actualizada a ${formatCurrency(val)}` });
   };
 
   const fetchData = useCallback(async () => {
@@ -658,31 +658,15 @@ export default function Dashboard({ refreshTrigger }: DashboardProps) {
                 <div className="flex items-center gap-1.5">
                   <Input type="number" className="h-7 text-xs" placeholder="Cuota adulto"
                     value={cuotaAdulto} onChange={(e) => setCuotaAdulto(e.target.value)}
-                    onKeyDown={(e) => { if (e.key === 'Enter') handleSaveCuota('adulto'); if (e.key === 'Escape') setEditingCuota(null); }}
+                    onKeyDown={(e) => { if (e.key === 'Enter') handleSaveCuota(); if (e.key === 'Escape') setEditingCuota(null); }}
                     autoFocus />
-                  <Button size="sm" className="h-7 text-xs px-2" onClick={() => handleSaveCuota('adulto')}>Guardar</Button>
+                  <Button size="sm" className="h-7 text-xs px-2" onClick={handleSaveCuota}>Guardar</Button>
                 </div>
               ) : (
                 <button className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors w-full text-left"
                   onClick={() => setEditingCuota('adulto')}>
                   <Pencil className="w-3 h-3 shrink-0" />
                   {cuotaAdulto ? `Adulto: ${formatCurrency(parseFloat(cuotaAdulto))}` : 'Fijar cuota adulto'}
-                </button>
-              )}
-              {/* Niño */}
-              {editingCuota === 'niño' ? (
-                <div className="flex items-center gap-1.5">
-                  <Input type="number" className="h-7 text-xs" placeholder="Cuota niño"
-                    value={cuotaNino} onChange={(e) => setCuotaNino(e.target.value)}
-                    onKeyDown={(e) => { if (e.key === 'Enter') handleSaveCuota('niño'); if (e.key === 'Escape') setEditingCuota(null); }}
-                    autoFocus />
-                  <Button size="sm" className="h-7 text-xs px-2" onClick={() => handleSaveCuota('niño')}>Guardar</Button>
-                </div>
-              ) : (
-                <button className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors w-full text-left"
-                  onClick={() => setEditingCuota('niño')}>
-                  <Pencil className="w-3 h-3 shrink-0" />
-                  {cuotaNino ? `Niño: ${formatCurrency(parseFloat(cuotaNino))}` : 'Fijar cuota niño'}
                 </button>
               )}
             </div>
