@@ -14,7 +14,7 @@ const corsHeaders = {
 // elige solo según el día del horario elegido: sábado es "sólo niños" (ver DAY_NAMES en
 // src/types/database.ts), el resto son adultos.
 const TEMPLATE_KEYS_ADULTOS = ['msg_preinscripcion_recibida_adultos_1', 'msg_preinscripcion_recibida_adultos_2']
-const TEMPLATE_KEYS_NINOS = ['msg_preinscripcion_recibida_ninos_1', 'msg_preinscripcion_recibida_ninos_2']
+const TEMPLATE_KEYS_NINOS = ['msg_preinscripcion_recibida_ninos_clase_1', 'msg_preinscripcion_recibida_ninos_clase_2']
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {

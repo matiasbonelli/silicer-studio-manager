@@ -11,8 +11,6 @@ export type TemplateKey =
   | 'msg_seguimiento_preinscripcion'
   | 'msg_preinscripcion_recibida_adultos_1'
   | 'msg_preinscripcion_recibida_adultos_2'
-  | 'msg_preinscripcion_recibida_ninos_1'
-  | 'msg_preinscripcion_recibida_ninos_2'
   | 'msg_preinscripcion_recibida_ninos_clase_1'
   | 'msg_preinscripcion_recibida_ninos_clase_2';
 
@@ -157,44 +155,6 @@ export const MESSAGE_TEMPLATES: MessageTemplateDef[] = [
       '📍 Te esperamos en Amadeo Mozart 169, Banda Norte.\n\n' +
       '¡Cualquier duda decime! Estamos con muchas ganas de empezar. 🏺🧉',
     metaTemplateName: 'preinscripcion_recibida_adultos_2',
-    metaTemplateLang: 'es_AR',
-    paramOrder: [],
-  },
-  {
-    key: 'msg_preinscripcion_recibida_ninos_1',
-    title: 'Preinscripción recibida — Niños, sábados, 1/2 (landing pública)',
-    description: 'Primer mensaje (info de pago) al recibir una preinscripción en el horario de sábado (sólo niños).',
-    placeholders: ['nombre'],
-    defaultMessage:
-      '¡Hola {nombre}! Nos alegra mucho que te hayas preinscripto para sumarte a SILICER este año. ✨\n\n' +
-      'Te paso toda la info detallada para concretar tu reserva y que ya tengas un lugar en el taller:\n\n' +
-      '💳 Valor de la cuota mensual: $65.000 (los materiales y las horneadas se abonan aparte).\n\n' +
-      '📅 La cuota se abona del 1 al 10 de cada mes. Pasada esa fecha, se agregarán recargos, sin excepción.\n\n' +
-      '📍 Para reservar tu lugar: Es necesario realizar una seña del 50% ($32.500) o el pago total del mes.\n\n' +
-      'Podés transferir a:\n' +
-      '📌 Alias: silicer\n' +
-      '📌 CVU: 0000003100056515034890\n' +
-      '📌 Nombre: Flavia Carola Del Bel\n' +
-      '📌 Mercado Pago',
-    metaTemplateName: 'preinscripcion_recibida_ninos_1',
-    metaTemplateLang: 'es_AR',
-    paramOrder: ['nombre'],
-  },
-  {
-    key: 'msg_preinscripcion_recibida_ninos_2',
-    title: 'Preinscripción recibida — Niños, sábados, 2/2 (landing pública)',
-    description: 'Segundo mensaje (condiciones y cierre) al recibir una preinscripción en el horario de sábado (sólo niños).',
-    placeholders: [],
-    defaultMessage:
-      '⚠️ Condiciones importantes:\n\n' +
-      'La seña no posee devolución.\n\n' +
-      'El cupo se guarda únicamente por un mes; pasado el mismo y en caso de no asistir, el lugar queda libre para otra persona.\n\n' +
-      'En caso de no asistir más, avisanos con antelación (mínimo 15 días antes de que termine el mes) para poder organizar los materiales y la lista de espera.\n\n' +
-      'Las clases son recuperables durante el mes en curso, y únicamente durante la primera semana del mes siguiente, según disponibilidad. Los días feriados no se dictan clases, así que no cuentan como clase recuperable.\n\n' +
-      '🙏 Por favor, una vez que hagas la transferencia, enviame el comprobante por acá para confirmar tu turno.\n\n' +
-      '📍 Te esperamos en Amadeo Mozart 169, Banda Norte, Río Cuarto.\n\n' +
-      '¡Cualquier duda avisame! Tenemos muchas ganas de encontrarnos en el taller 🏺🧉',
-    metaTemplateName: 'preinscripcion_recibida_ninos_2',
     metaTemplateLang: 'es_AR',
     paramOrder: [],
   },

@@ -124,43 +124,6 @@ export const META_TEMPLATES: Record<string, MetaTemplateDef> = {
       '📍 Te esperamos en Amadeo Mozart 169, Banda Norte.\n\n' +
       '¡Cualquier duda decime! Estamos con muchas ganas de empezar. 🏺🧉',
   },
-  msg_preinscripcion_recibida_ninos_1: {
-    metaTemplateName: 'preinscripcion_recibida_ninos_1',
-    // Quedó aprobada por error bajo el idioma "English (en)" en vez de es_AR (el texto
-    // real sigue siendo en español, es solo la etiqueta de idioma con la que Meta la
-    // registró) — confirmado en WhatsApp Manager. Tiene que coincidir exacto o el envío falla.
-    metaTemplateLang: 'en',
-    // Mismo texto/estilo que adultos_1 → mismo motivo de clasificación como Marketing.
-    category: 'MARKETING',
-    paramOrder: ['nombre'],
-    bodyTemplate:
-      '¡Hola {nombre}! Nos alegra mucho que te hayas preinscripto para sumarte a SILICER este año. ✨\n\n' +
-      'Te paso toda la info detallada para concretar tu reserva y que ya tengas un lugar en el taller:\n\n' +
-      '💳 Valor de la cuota mensual: $65.000 (los materiales y las horneadas se abonan aparte).\n\n' +
-      '📅 La cuota se abona del 1 al 10 de cada mes. Pasada esa fecha, se agregarán recargos, sin excepción.\n\n' +
-      '📍 Para reservar tu lugar: Es necesario realizar una seña del 50% ($32.500) o el pago total del mes.\n\n' +
-      'Podés transferir a:\n' +
-      '📌 Alias: silicer\n' +
-      '📌 CVU: 0000003100056515034890\n' +
-      '📌 Nombre: Flavia Carola Del Bel\n' +
-      '📌 Mercado Pago',
-  },
-  msg_preinscripcion_recibida_ninos_2: {
-    metaTemplateName: 'preinscripcion_recibida_ninos_2',
-    // Mismo caso que ninos_1: aprobada como "en", no es_AR.
-    metaTemplateLang: 'en',
-    category: 'MARKETING',
-    paramOrder: [],
-    bodyTemplate:
-      '⚠️ Condiciones importantes:\n\n' +
-      'La seña no posee devolución.\n\n' +
-      'El cupo se guarda únicamente por un mes; pasado el mismo y en caso de no asistir, el lugar queda libre para otra persona.\n\n' +
-      'En caso de no asistir más, avisanos con antelación (mínimo 15 días antes de que termine el mes) para poder organizar los materiales y la lista de espera.\n\n' +
-      'Las clases son recuperables durante el mes en curso, y únicamente durante la primera semana del mes siguiente, según disponibilidad. Los días feriados no se dictan clases, así que no cuentan como clase recuperable.\n\n' +
-      '🙏 Por favor, una vez que hagas la transferencia, enviame el comprobante por acá para confirmar tu turno.\n\n' +
-      '📍 Te esperamos en Amadeo Mozart 169, Banda Norte, Río Cuarto.\n\n' +
-      '¡Cualquier duda avisame! Tenemos muchas ganas de encontrarnos en el taller 🏺🧉',
-  },
   msg_preinscripcion_recibida_ninos_clase_1: {
     metaTemplateName: 'preinscripcion_recibida_ninos_clase_1',
     metaTemplateLang: 'es_AR',
