@@ -622,7 +622,7 @@ export default function StudentsList({ onStudentClick, refreshTrigger, onStudent
               const paymentMonth = payment?.month ?? null;
               const paymentDate = payment?.payment_date ?? null;
               const receiptUrl = payment?.receipt_url ?? null;
-              const isPendingPayment = !payment || payment.status === 'pending';
+              const isPendingPayment = !student.pays_per_class && (!payment || payment.status === 'pending');
               const isSendingReminder = sendingReminderId === student.id;
               const hasSentReminder = sentReminderIds.has(student.id);
               const isOpeningChat = openingChatId === student.id;

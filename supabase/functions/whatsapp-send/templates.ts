@@ -98,11 +98,11 @@ export const META_TEMPLATES: Record<string, MetaTemplateDef> = {
     category: 'MARKETING',
     paramOrder: ['nombre'],
     bodyTemplate:
-      '¡Hola {nombre}! Nos alegra mucho que te hayas preinscripto para sumarte a SILICER este año. ✨\n\n' +
-      'Te paso toda la info detallada para concretar tu reserva y que ya tengas un lugar en el taller:\n\n' +
+      '¡Hola {nombre}! Nos alegra mucho que te hayas preinscripto para sumarte a SILICER. ✨\n\n' +
+      'Te paso la información y datos bancarios para concretar tu reserva y asegurar tu lugar en el taller:\n\n' +
       '💳 Valor de la cuota mensual: $40.000 (los materiales y las horneadas se abonan aparte).\n\n' +
-      '📅 La cuota se abona del 1 al 10 de cada mes. Pasada esa fecha, se agregarán recargos, sin excepción.\n\n' +
-      '📍 Para reservar tu lugar: Es necesario realizar una seña del 50% ($20.000) o el pago total del mes.\n\n' +
+      '📅 La cuota se abona del 1 al 10 de cada mes. Pasada esa fecha incluye recargo por mora (11 al 15: $44.000 | 16 al 20: $48.000 | 21 en adelante: $52.000).\n\n' +
+      '📍 Para reservar tu lugar: es necesario abonar el 50% de seña ($20.000) o el total de la cuota. La seña no posee devolución.\n\n' +
       'Podés transferir a:\n' +
       '📌 Alias: silicer\n' +
       '📌 CVU: 0000003100056515034890\n' +
@@ -117,50 +117,43 @@ export const META_TEMPLATES: Record<string, MetaTemplateDef> = {
     paramOrder: [],
     bodyTemplate:
       '⚠️ Condiciones importantes:\n\n' +
-      'La seña no posee devolución.\n\n' +
-      'El cupo se guarda únicamente por un mes; pasado el mismo y en caso de no asistir, el lugar queda libre para otra persona.\n\n' +
-      'En caso de no asistir más, avisanos con antelación (mínimo 15 días antes de que termine el mes) para poder organizar los materiales y la lista de espera.\n\n' +
-      'Las clases son recuperables durante el mes en curso, y únicamente durante la primera semana del mes siguiente, según disponibilidad. Los días feriados no se dictan clases, así que no cuentan como clase recuperable.\n\n' +
-      '🙏 Por favor, una vez que hagas la transferencia, enviame el comprobante por acá para confirmar tu turno.\n\n' +
-      '📍 Te esperamos en Amadeo Mozart 169, Banda Norte, Río Cuarto.\n\n' +
-      '¡Cualquier duda avisame! Tenemos muchas ganas de encontrarnos en el taller 🏺🧉',
+      '🔖 Reserva de lugar: si un mes completo no podés asistir pero querés conservar tu lugar y horario para el mes siguiente, debés abonar el 50% de la cuota ($20.000) de ese mes antes de que empiece. Si no, el cupo se libera para la lista de espera.\n\n' +
+      '👋 En caso de no asistir más, avisanos con un mínimo de 15 días de anticipación para organizar la lista de espera.\n\n' +
+      '🔁 Las clases se recuperan dentro del mismo mes en curso, o durante la primera semana del mes siguiente según disponibilidad. Los feriados no se dictan ni se recuperan.\n\n' +
+      '🙏 Por favor, en cuanto hagas la transferencia, enviame el comprobante por acá indicando tu nombre para confirmar la vacante.\n\n' +
+      '📍 Te esperamos en Amadeo Mozart 169, Banda Norte.\n\n' +
+      '¡Cualquier duda decime! Estamos con muchas ganas de empezar. 🏺🧉',
   },
-  msg_preinscripcion_recibida_ninos_1: {
-    metaTemplateName: 'preinscripcion_recibida_ninos_1',
-    // Quedó aprobada por error bajo el idioma "English (en)" en vez de es_AR (el texto
-    // real sigue siendo en español, es solo la etiqueta de idioma con la que Meta la
-    // registró) — confirmado en WhatsApp Manager. Tiene que coincidir exacto o el envío falla.
-    metaTemplateLang: 'en',
-    // Mismo texto/estilo que adultos_1 → mismo motivo de clasificación como Marketing.
+  msg_preinscripcion_recibida_ninos_clase_1: {
+    metaTemplateName: 'preinscripcion_recibida_ninos_clase_1',
+    metaTemplateLang: 'es_AR',
     category: 'MARKETING',
     paramOrder: ['nombre'],
     bodyTemplate:
-      '¡Hola {nombre}! Nos alegra mucho que te hayas preinscripto para sumarte a SILICER este año. ✨\n\n' +
-      'Te paso toda la info detallada para concretar tu reserva y que ya tengas un lugar en el taller:\n\n' +
-      '💳 Valor de la cuota mensual: $65.000 (los materiales y las horneadas se abonan aparte).\n\n' +
-      '📅 La cuota se abona del 1 al 10 de cada mes. Pasada esa fecha, se agregarán recargos, sin excepción.\n\n' +
-      '📍 Para reservar tu lugar: Es necesario realizar una seña del 50% ($32.500) o el pago total del mes.\n\n' +
+      '¡Hola {nombre}! Nos alegra mucho que te hayas preinscripto para sumarte a SILICER. ✨\n\n' +
+      'Te paso la información y datos bancarios para reservar el lugar de tu hijo/a en el taller:\n\n' +
+      '💳 Las clases para niños son los sábados y se abonan por clase: $18.000 cada una (los materiales y horneadas se abonan aparte).\n\n' +
+      '📍 Para reservar el lugar: es necesario abonar $18.000 (el valor de una clase). Con ese pago queda reservado el cupo, sin saldo pendiente.\n\n' +
       'Podés transferir a:\n' +
       '📌 Alias: silicer\n' +
       '📌 CVU: 0000003100056515034890\n' +
       '📌 Nombre: Flavia Carola Del Bel\n' +
       '📌 Mercado Pago',
   },
-  msg_preinscripcion_recibida_ninos_2: {
-    metaTemplateName: 'preinscripcion_recibida_ninos_2',
-    // Mismo caso que ninos_1: aprobada como "en", no es_AR.
-    metaTemplateLang: 'en',
+  msg_preinscripcion_recibida_ninos_clase_2: {
+    metaTemplateName: 'preinscripcion_recibida_ninos_clase_2',
+    metaTemplateLang: 'es_AR',
     category: 'MARKETING',
     paramOrder: [],
     bodyTemplate:
       '⚠️ Condiciones importantes:\n\n' +
-      'La seña no posee devolución.\n\n' +
-      'El cupo se guarda únicamente por un mes; pasado el mismo y en caso de no asistir, el lugar queda libre para otra persona.\n\n' +
-      'En caso de no asistir más, avisanos con antelación (mínimo 15 días antes de que termine el mes) para poder organizar los materiales y la lista de espera.\n\n' +
-      'Las clases son recuperables durante el mes en curso, y únicamente durante la primera semana del mes siguiente, según disponibilidad. Los días feriados no se dictan clases, así que no cuentan como clase recuperable.\n\n' +
-      '🙏 Por favor, una vez que hagas la transferencia, enviame el comprobante por acá para confirmar tu turno.\n\n' +
-      '📍 Te esperamos en Amadeo Mozart 169, Banda Norte, Río Cuarto.\n\n' +
-      '¡Cualquier duda avisame! Tenemos muchas ganas de encontrarnos en el taller 🏺🧉',
+      '🚫 La seña no posee devolución.\n\n' +
+      '🔖 Reserva de lugar: si tu hijo/a va a faltar varias semanas pero querés mantener su horario, podés abonar $18.000 para reservarlo. Si no, el cupo se libera para la lista de espera.\n\n' +
+      '👋 En caso de no asistir más, avisanos con un mínimo de 15 días de anticipación para organizar la lista de espera.\n\n' +
+      '🔁 Los feriados no se dictan clases ni se recuperan.\n\n' +
+      '🙏 Por favor, en cuanto hagas la transferencia, enviame el comprobante por acá indicando tu nombre y el de tu hijo/a para confirmar la vacante.\n\n' +
+      '📍 Te esperamos en Amadeo Mozart 169, Banda Norte.\n\n' +
+      '¡Cualquier duda decime! Estamos con muchas ganas de empezar. 🏺🧉',
   },
 };
 
