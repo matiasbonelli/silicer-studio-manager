@@ -216,12 +216,27 @@ export default function ScheduleGrid({ onStudentClick, refreshTrigger }: Schedul
                                   </Badge>
                                 )}
                                 {student.pays_per_class ? (
-                                  <Badge
-                                    variant="outline"
-                                    className={`text-[10px] border-blue-500 text-blue-500 ${student.is_exception ? '' : 'ml-auto'}`}
-                                  >
-                                    Clase
-                                  </Badge>
+                                  <>
+                                    <Badge
+                                      variant="outline"
+                                      className={`text-[10px] border-blue-500 text-blue-500 ${student.is_exception ? '' : 'ml-auto'}`}
+                                    >
+                                      Clase
+                                    </Badge>
+                                    {student.payment_status === 'partial' && (
+                                      <Badge
+                                        title="Reserva: pago parcial"
+                                        className="text-[10px] bg-yellow-500 hover:bg-yellow-600 text-white flex-shrink-0"
+                                      >
+                                        ½
+                                      </Badge>
+                                    )}
+                                    {student.payment_status === 'paid' && (
+                                      <Badge title="Reserva: pagada" className="text-[10px] flex-shrink-0">
+                                        ✓
+                                      </Badge>
+                                    )}
+                                  </>
                                 ) : student.reserved_month === currentMonth ? (
                                   <Badge
                                     variant="outline"
