@@ -397,7 +397,9 @@ export default function EnrollmentsManager({ onStudentCreated }: EnrollmentsMana
         const time = selectedEnrollment.schedule
           ? `${selectedEnrollment.schedule.start_time.slice(0, 5)} a ${selectedEnrollment.schedule.end_time.slice(0, 5)} hs`
           : '[Completar hora]';
-        if (paymentForm.status === 'paid') {
+        // La reserva de un niño (sábado) es de pago completo — no hay "saldo restante" —,
+        // así que nunca usa el mensaje de seña aunque se haya marcado como Señado.
+        if (paymentForm.status === 'paid' || selectedEnrollment.schedule?.day_of_week === 'saturday') {
           await sendTemplateMessage(
             selectedEnrollment.phone,
             'msg_confirmacion_inscripcion_pago_total',
@@ -1013,10 +1015,17 @@ export default function EnrollmentsManager({ onStudentCreated }: EnrollmentsMana
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="pending">Sin pago</SelectItem>
-                  <SelectItem value="deposit">Señado</SelectItem>
+                  {(selectedEnrollment?.schedule?.day_of_week !== 'saturday' || paymentForm.status === 'deposit') && (
+                    <SelectItem value="deposit">Señado</SelectItem>
+                  )}
                   <SelectItem value="paid">Pagado</SelectItem>
                 </SelectContent>
               </Select>
+              {selectedEnrollment?.schedule?.day_of_week === 'saturday' && (
+                <p className="text-xs text-muted-foreground mt-1">
+                  Los niños pagan por clase: la reserva es un pago único, se marca como Pagado.
+                </p>
+              )}
             </div>
             {(paymentForm.status === 'deposit' || paymentForm.status === 'paid') && (
               <div>

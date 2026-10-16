@@ -657,7 +657,15 @@ export default function StudentModal({ student, isOpen, onClose, onSave, isNew =
             <Label htmlFor="schedule">Día / Horario</Label>
             <Select
               value={formData.schedule_id}
-              onValueChange={(value) => setFormData(prev => ({ ...prev, schedule_id: value }))}
+              onValueChange={(value) => {
+                // El sábado es el único horario "sólo niños" — el resto son adultos.
+                const picked = schedules.find(s => s.id === value);
+                setFormData(prev => ({
+                  ...prev,
+                  schedule_id: value,
+                  categoria: picked ? (picked.day_of_week === 'saturday' ? 'niño' : 'adulto') : prev.categoria,
+                }));
+              }}
             >
               <SelectTrigger>
                 <SelectValue placeholder="Seleccionar horario" />
